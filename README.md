@@ -1,0 +1,2 @@
+# ragit
+RAG for git
