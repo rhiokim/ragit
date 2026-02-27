@@ -1,0 +1,49 @@
+# ragit
+
+ragit는 저장소 로컬에서 동작하는 zvec + git 결속형 RAG CLI입니다.
+AI Agent 개발 과정의 문서/컨텍스트를 수집·구조화·검색하고, commit SHA 기준으로 스냅샷을 관리합니다.
+
+## MVP 범위
+
+- 문서 타입: ADR, PRD, SRS, Plan, DDD, Glossary
+- 핵심 명령: init, config, hooks, ingest, query, context pack, migrate, status, doctor
+- 검색: 벡터 유사도 + 키워드 하이브리드 점수
+- 보안 기본값: secret masking 활성화
+
+## 주요 명령
+
+- `ragit init`
+- `ragit init --yes --output json`
+- `ragit init --yes --git-init`
+- `ragit hooks install`
+- `ragit ingest --all`
+- `ragit query "<question>" --format both`
+- `ragit context pack "<goal>" --budget 1200`
+- `ragit migrate from-sqlitevss --dry-run`
+
+## init 동작
+
+- 기본은 6단계 인터랙티브 위자드
+- 루트 `AGENTS.md`가 없으면 생성, 있으면 읽기 전용 로드
+- `.ragit/guide/templates` 증분 생성(기존 파일 덮어쓰기 없음)
+- `.ragit/guide/guide-index.json` 매 실행 갱신
+
+## 저장 구조
+
+- `.ragit/config.toml`
+- `.ragit/guide/guide-index.json`
+- `.ragit/guide/templates/*.template.md`
+- `.ragit/manifest/<commit-sha>.json`
+- `.ragit/store/index.json` (로컬 전용)
+- `.ragit/cache/` (로컬 전용)
+
+## 개발/검증
+
+- 설치: `pnpm install`
+- 테스트: `pnpm test`
+- 빌드: `pnpm build`
+
+## 참고 문서
+
+- 프로젝트 개요/사용법: `README.md`
+- 에이전트 규약(프로젝트 루트): `AGENTS.md`
