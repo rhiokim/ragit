@@ -25,6 +25,8 @@ pnpm exec ragit --help
 
 ```bash
 ragit init
+ragit init --yes --output json
+ragit init --yes --git-init
 ragit config set retrieval.top_k 8
 ragit hooks install
 ragit ingest --all
@@ -40,6 +42,8 @@ ragit doctor
 ```text
 .ragit/
   config.toml
+  guide/guide-index.json
+  guide/templates/
   manifest/<commit-sha>.json
   store/index.json
   cache/
@@ -48,6 +52,26 @@ ragit doctor
 
 - Git 추적 권장: `.ragit/config.toml`, `.ragit/manifest/**`
 - 로컬 전용(기본 `.gitignore`): `.ragit/store/**`, `.ragit/cache/**`
+
+## init 인터랙티브 가이드
+
+`ragit init`은 기본적으로 6단계 대화형 위자드를 실행합니다.
+
+1. Git 환경 검사 (비저장소면 `git init` 제안)
+2. 초기화 모드 확인
+3. 루트 `AGENTS.md` 로드/생성
+4. 문서 템플릿 범위 확정 (ADR/PRD/SRS/Plan/DDD/Glossary)
+5. `.ragit/guide` 증분 생성 + `guide-index.json` 갱신
+6. 요약 테이블 + 다음 액션 출력
+
+지원 옵션:
+
+```bash
+ragit init --yes                 # 비대화 기본값 실행
+ragit init --non-interactive     # --yes 별칭
+ragit init --git-init            # 비대화에서 git init 자동 허용
+ragit init --output json         # 요약 JSON 출력
+```
 
 ## Hook 전략
 
