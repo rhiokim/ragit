@@ -1,0 +1,27 @@
+---
+title: CLI Reference
+description: Core commands for ragit v0.1
+---
+
+## Core Commands
+
+```bash
+ragit init
+ragit config set <key> <value>
+ragit hooks install|uninstall|status
+ragit ingest --all|--since <sha>|--files <glob>
+ragit query "<question>" --format both
+ragit context pack "<goal>" --budget 1200
+ragit migrate from-sqlitevss --dry-run
+ragit status
+ragit doctor
+```
+
+## Docs Commands
+
+```bash
+pnpm docs:dev
+pnpm docs:check:i18n
+pnpm docs:build
+pnpm docs:serve
+```
