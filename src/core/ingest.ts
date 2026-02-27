@@ -5,6 +5,7 @@ import { loadConfig } from "./config.js";
 import { detectDocType } from "./docType.js";
 import { hashFileContent, listAllDocumentFiles, listDocumentFilesByGlob, listDocumentFilesSince } from "./files.js";
 import { getHeadSha, getParentSha } from "./git.js";
+import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { ensureRagitStructure } from "./project.js";
 import { loadStore, upsertDocumentWithChunks, writeStore } from "./store.js";
@@ -34,6 +35,7 @@ const isSupported = (docType: DocType, supported: DocType[]): boolean =>
 export interface IngestSummary {
   processed: number;
   skipped: number;
+  masked: number;
   commitSha: string;
   manifestPath: string;
 }
@@ -47,10 +49,13 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
   const parentSha = await getParentSha(cwd);
   let processed = 0;
   let skipped = 0;
+  let masked = 0;
 
   for (const absolutePath of candidates) {
     const { content, hash } = await hashFileContent(absolutePath);
-    const detection = detectDocType(absolutePath, content, cwd);
+    const maskedContent = config.security.secret_masking ? maskSecrets(content) : { text: content, maskedCount: 0 };
+    masked += maskedContent.maskedCount;
+    const detection = detectDocType(absolutePath, maskedContent.text, cwd);
     if (!isSupported(detection.docType, config.ingest.supported_types)) {
       skipped += 1;
       continue;
@@ -93,6 +98,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
   return {
     processed,
     skipped,
+    masked,
     commitSha: headSha,
     manifestPath,
   };
