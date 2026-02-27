@@ -5,6 +5,7 @@ import { resolveCwd, runConfigSet, runDoctor, runInit, runStatus } from "./comma
 import { runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
 import { packContext } from "./core/context.js";
 import { runIngest } from "./core/ingest.js";
+import { migrateFromSqliteVss } from "./core/migrate.js";
 import { formatQueryResult, OutputFormat } from "./core/output.js";
 import { searchKnowledge } from "./core/retrieval.js";
 
@@ -121,7 +122,11 @@ program
   .command("from-sqlitevss")
   .description("sqlite-vss 데이터를 zvec 저장소로 변환")
   .option("--dry-run", "미리보기 모드")
-  .action(() => notImplemented("migrate from-sqlitevss"));
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const result = await migrateFromSqliteVss(resolveCwd(options.cwd), Boolean(options.dryRun));
+    console.log(JSON.stringify(result, null, 2));
+  });
 
 program
   .command("status")
