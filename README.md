@@ -1,19 +1,18 @@
 # ragit
 
-`ragit`은 프로젝트 저장소 내부에서 동작하는 **zvec + git 결속형 RAG CLI**입니다.  
-AI Agent와의 구현/개발/유지보수/테스트 과정에서 발생하는 문서를 수집·분석·검색하고,
-커밋 SHA에 결속된 스냅샷으로 버전 관리합니다.
+`ragit` is a **zvec + git bound RAG CLI** that runs inside your project repository.  
+It collects, analyzes, and retrieves documents produced during AI agent workflows, then version-controls snapshots bound to commit SHAs.
 
-## MVP 문서 타입 (v0.1)
+## MVP Document Types (v0.1)
 
 - ADR
 - PRD
 - SRS
 - Plan
 - DDD
-- Glossary(용어집)
+- Glossary
 
-## 설치
+## Installation
 
 ```bash
 pnpm install
@@ -23,17 +22,17 @@ pnpm exec ragit --help
 
 ## Documentation (Fumadocs + GitHub Pages)
 
-- 기본 URL: `https://rhiokim.github.io/ragit/en/`
-- 한국어 URL: `https://rhiokim.github.io/ragit/ko/`
-- 영문이 기준 문서이며, 한국어는 동일 구조로 제공합니다.
+- Primary URL (English): `https://rhiokim.github.io/ragit/en/`
+- Korean URL: `https://rhiokim.github.io/ragit/ko/`
+- English is the source of truth, and Korean is provided in the same structure.
 
-로컬 실행:
+Run locally:
 
 ```bash
 pnpm docs:dev
 ```
 
-정적 빌드 및 미리 확인:
+Build static output and preview:
 
 ```bash
 pnpm docs:check:i18n
@@ -41,13 +40,13 @@ pnpm docs:build
 pnpm docs:serve
 ```
 
-배포:
+Deployment:
 
-- `main` 브랜치 푸시 시 GitHub Actions가 `gh-pages` 브랜치로 자동 발행합니다.
-- 수동 재배포가 필요하면 Actions의 `docs-gh-pages` 워크플로를 `workflow_dispatch`로 실행합니다.
-- Repository Settings > Pages에서 Source를 `gh-pages` / root(`/`)로 설정합니다.
+- GitHub Actions deploys automatically to `gh-pages` when `main` is pushed.
+- For manual redeploy, run `docs-gh-pages` via `workflow_dispatch`.
+- In Repository Settings > Pages, set Source to `gh-pages` / root(`/`).
 
-## 기본 명령
+## Core Commands
 
 ```bash
 ragit init
@@ -56,14 +55,14 @@ ragit init --yes --git-init
 ragit config set retrieval.top_k 8
 ragit hooks install
 ragit ingest --all
-ragit query "DDD 경계 컨텍스트 원칙" --format both
-ragit context pack "이번 스프린트 구현 계획" --budget 1200
+ragit query "DDD bounded context principles" --format both
+ragit context pack "Implementation plan for this sprint" --budget 1200
 ragit migrate from-sqlitevss --dry-run
 ragit status
 ragit doctor
 ```
 
-## 저장 구조
+## Storage Layout
 
 ```text
 .ragit/
@@ -76,47 +75,47 @@ ragit doctor
   hooks/
 ```
 
-- Git 추적 권장: `.ragit/config.toml`, `.ragit/manifest/**`
-- 로컬 전용(기본 `.gitignore`): `.ragit/store/**`, `.ragit/cache/**`
+- Recommended for Git tracking: `.ragit/config.toml`, `.ragit/manifest/**`
+- Local-only (default `.gitignore`): `.ragit/store/**`, `.ragit/cache/**`
 
-## init 인터랙티브 가이드
+## Interactive `init` Guide
 
-`ragit init`은 기본적으로 6단계 대화형 위자드를 실행합니다.
+By default, `ragit init` runs a 6-step interactive wizard:
 
-1. Git 환경 검사 (비저장소면 `git init` 제안)
-2. 초기화 모드 확인
-3. 루트 `AGENTS.md` 로드/생성
-4. 문서 템플릿 범위 확정 (ADR/PRD/SRS/Plan/DDD/Glossary)
-5. `.ragit/guide` 증분 생성 + `guide-index.json` 갱신
-6. 요약 테이블 + 다음 액션 출력
+1. Check Git environment (suggest `git init` if not a repository)
+2. Confirm initialization mode
+3. Load or create root `AGENTS.md`
+4. Confirm document template scope (ADR/PRD/SRS/Plan/DDD/Glossary)
+5. Incrementally generate `.ragit/guide` and refresh `guide-index.json`
+6. Print summary table and next actions
 
-지원 옵션:
+Supported options:
 
 ```bash
-ragit init --yes                 # 비대화 기본값 실행
-ragit init --non-interactive     # --yes 별칭
-ragit init --git-init            # 비대화에서 git init 자동 허용
-ragit init --output json         # 요약 JSON 출력
+ragit init --yes              # non-interactive with defaults
+ragit init --non-interactive  # alias of --yes
+ragit init --git-init         # allow git init in non-interactive mode
+ragit init --output json      # JSON summary output
 ```
 
-## Hook 전략
+## Hook Strategy
 
-- `post-commit`: `HEAD~1..HEAD` 변경분 자동 인덱싱
-- `post-merge`: `${ORIG_HEAD:-HEAD~1}..HEAD` 변경분 자동 인덱싱
-- 실패 시 커밋/머지를 차단하지 않고 경고성으로 동작합니다.
+- `post-commit`: automatically indexes changes from `HEAD~1..HEAD`
+- `post-merge`: automatically indexes changes from `${ORIG_HEAD:-HEAD~1}..HEAD`
+- Failures are warning-only and do not block commit/merge flows.
 
-## 검색 전략
+## Retrieval Strategy
 
-- 1차: zvec 임베딩 유사도
-- 2차: 키워드 점수
-- 최종: `alpha * vector + (1-alpha) * keyword` (기본 `alpha=0.7`)
+- 1st pass: zvec embedding similarity
+- 2nd pass: keyword score
+- Final score: `alpha * vector + (1-alpha) * keyword` (default `alpha=0.7`)
 
-## 보안 기본값
+## Security Defaults
 
-- 수집 시 비밀정보 마스킹 기본 활성화 (`security.secret_masking=true`)
-- OpenAI/GitHub/AWS 키 및 `api_key/token/secret` 패턴을 마스킹합니다.
+- Secret masking is enabled by default during ingestion (`security.secret_masking=true`)
+- OpenAI/GitHub/AWS keys and `api_key/token/secret` patterns are masked.
 
-## 테스트
+## Test
 
 ```bash
 pnpm test
