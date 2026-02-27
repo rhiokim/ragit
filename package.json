@@ -25,7 +25,8 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "commander": "^14.0.1"
+    "commander": "^14.0.1",
+    "fast-glob": "^3.3.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
