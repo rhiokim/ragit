@@ -10,7 +10,11 @@
   "scripts": {
     "build": "tsup src/cli.ts src/index.ts --format esm --dts --out-dir dist --clean",
     "dev": "tsx src/cli.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "docs:dev": "pnpm --filter ./apps/docs... dev",
+    "docs:build": "pnpm --filter ./apps/docs... build",
+    "docs:check:i18n": "pnpm --filter ./apps/docs... check:i18n",
+    "docs:serve": "pnpm --filter ./apps/docs... start"
   },
   "keywords": [
     "rag",
