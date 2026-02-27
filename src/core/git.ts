@@ -19,6 +19,14 @@ export const getGitRoot = async (cwd: string): Promise<string> => execGit(cwd, [
 
 export const getHeadSha = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "HEAD"]);
 
+export const getParentSha = async (cwd: string): Promise<string | null> => {
+  try {
+    return await execGit(cwd, ["rev-parse", "HEAD^"]);
+  } catch {
+    return null;
+  }
+};
+
 export const listChangedFilesSince = async (cwd: string, since: string): Promise<string[]> => {
   const output = await execGit(cwd, ["diff", "--name-only", `${since}..HEAD`]);
   if (!output) return [];
