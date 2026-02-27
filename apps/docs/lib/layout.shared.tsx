@@ -1,16 +1,23 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import { Language } from '@/lib/i18n';
 
-// fill this with your actual GitHub info, for example:
 export const gitConfig = {
-  user: 'fuma-nama',
-  repo: 'fumadocs',
+  user: 'rhiokim',
+  repo: 'ragit',
   branch: 'main',
 };
 
-export function baseOptions(): BaseLayoutProps {
+const labels: Record<Language, string> = {
+  en: 'Documentation',
+  ko: '문서',
+};
+
+export function baseOptions(language: Language): BaseLayoutProps {
+  const docsPath = `/${language}/docs`;
   return {
     nav: {
-      title: 'My App',
+      title: `ragit ${labels[language]}`,
+      url: docsPath,
     },
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
