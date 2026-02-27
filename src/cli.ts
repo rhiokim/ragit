@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { resolveCwd, runConfigSet, runDoctor, runInit, runStatus } from "./commands/bootstrap.js";
 
 const program = new Command();
 
@@ -13,7 +14,13 @@ program
   .description("zvec + git 기반 로컬 RAG CLI")
   .version("0.1.0");
 
-program.command("init").description("프로젝트 초기화").action(() => notImplemented("init"));
+program
+  .command("init")
+  .description("프로젝트 초기화")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runInit(resolveCwd(options.cwd));
+  });
 
 program
   .command("config")
@@ -22,7 +29,10 @@ program
   .description("설정 키 업데이트")
   .argument("<key>")
   .argument("<value>")
-  .action(() => notImplemented("config set"));
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (key, value, options) => {
+    await runConfigSet(resolveCwd(options.cwd), key, value);
+  });
 
 const hooks = program.command("hooks").description("git hook 관리");
 hooks.command("install").description("hook 설치").action(() => notImplemented("hooks install"));
@@ -64,8 +74,21 @@ program
   .option("--dry-run", "미리보기 모드")
   .action(() => notImplemented("migrate from-sqlitevss"));
 
-program.command("status").description("현재 상태").action(() => notImplemented("status"));
-program.command("doctor").description("환경 진단").action(() => notImplemented("doctor"));
+program
+  .command("status")
+  .description("현재 상태")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runStatus(resolveCwd(options.cwd));
+  });
+
+program
+  .command("doctor")
+  .description("환경 진단")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runDoctor(resolveCwd(options.cwd));
+  });
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);

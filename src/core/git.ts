@@ -1,0 +1,28 @@
+import { execFile } from "node:child_process";
+
+const execGit = (cwd: string, args: string[]): Promise<string> =>
+  new Promise((resolve, reject) => {
+    execFile("git", args, { cwd }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr.trim() || error.message));
+        return;
+      }
+      resolve(stdout.trim());
+    });
+  });
+
+export const ensureGitRepository = async (cwd: string): Promise<void> => {
+  await execGit(cwd, ["rev-parse", "--is-inside-work-tree"]);
+};
+
+export const getGitRoot = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "--show-toplevel"]);
+
+export const getHeadSha = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "HEAD"]);
+
+export const listChangedFilesSince = async (cwd: string, since: string): Promise<string[]> => {
+  const output = await execGit(cwd, ["diff", "--name-only", `${since}..HEAD`]);
+  if (!output) return [];
+  return output.split(/\r?\n/).filter(Boolean);
+};
+
+export const currentBranch = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
