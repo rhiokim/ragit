@@ -1,6 +1,6 @@
 import { loadConfig } from "./config.js";
 import { getHeadSha } from "./git.js";
-import { latestSnapshotSha, loadSnapshotManifest } from "./manifest.js";
+import { latestSnapshotSha, loadSnapshotManifest, resolveSnapshotRef } from "./manifest.js";
 import { loadStore } from "./store.js";
 import { ChunkRecord, RetrievalHit } from "./types.js";
 import { cosineSimilarity, embedWithZvec } from "./zvec.js";
@@ -28,9 +28,10 @@ const keywordScore = (query: string, target: string): number => {
 };
 
 const resolveSnapshotSha = async (cwd: string, at?: string): Promise<string> => {
-  if (at) return at;
+  if (at) return resolveSnapshotRef(cwd, at);
   try {
-    return await getHeadSha(cwd);
+    const head = await getHeadSha(cwd);
+    return resolveSnapshotRef(cwd, head);
   } catch {
     const latest = await latestSnapshotSha(cwd);
     if (!latest) throw new Error("사용 가능한 snapshot이 없습니다.");
