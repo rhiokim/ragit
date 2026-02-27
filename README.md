@@ -21,6 +21,32 @@ pnpm build
 pnpm exec ragit --help
 ```
 
+## Documentation (Fumadocs + GitHub Pages)
+
+- 기본 URL: `https://rhiokim.github.io/ragit/en/`
+- 한국어 URL: `https://rhiokim.github.io/ragit/ko/`
+- 영문이 기준 문서이며, 한국어는 동일 구조로 제공합니다.
+
+로컬 실행:
+
+```bash
+pnpm docs:dev
+```
+
+정적 빌드 및 미리 확인:
+
+```bash
+pnpm docs:check:i18n
+pnpm docs:build
+pnpm docs:serve
+```
+
+배포:
+
+- `main` 브랜치 푸시 시 GitHub Actions가 `gh-pages` 브랜치로 자동 발행합니다.
+- 수동 재배포가 필요하면 Actions의 `docs-gh-pages` 워크플로를 `workflow_dispatch`로 실행합니다.
+- Repository Settings > Pages에서 Source를 `gh-pages` / root(`/`)로 설정합니다.
+
 ## 기본 명령
 
 ```bash
