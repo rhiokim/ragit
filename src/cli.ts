@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { resolveCwd, runConfigSet, runDoctor, runInit, runStatus } from "./commands/bootstrap.js";
+import { resolveCwd, runConfigSet, runDoctor, runStatus } from "./commands/bootstrap.js";
 import { runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
+import { formatInitSummaryTable, runInit } from "./commands/init.js";
 import { packContext } from "./core/context.js";
 import { runIngest } from "./core/ingest.js";
 import { migrateFromSqliteVss } from "./core/migrate.js";
@@ -10,10 +11,6 @@ import { formatQueryResult, OutputFormat } from "./core/output.js";
 import { searchKnowledge } from "./core/retrieval.js";
 
 const program = new Command();
-
-const notImplemented = (name: string) => {
-  console.log(`'${name}' 명령은 곧 구현됩니다.`);
-};
 
 program
   .name("ragit")
@@ -24,8 +21,22 @@ program
   .command("init")
   .description("프로젝트 초기화")
   .option("--cwd <path>", "대상 저장소 경로")
+  .option("--yes", "질문 없이 기본값으로 초기화")
+  .option("--non-interactive", "질문 없이 기본값으로 초기화")
+  .option("--output <format>", "table|json", "table")
+  .option("--git-init", "비대화형 모드에서 git 저장소 자동 초기화")
   .action(async (options) => {
-    await runInit(resolveCwd(options.cwd));
+    const outputFormat = options.output === "json" ? "json" : "table";
+    const summary = await runInit(resolveCwd(options.cwd), {
+      nonInteractive: Boolean(options.yes || options.nonInteractive),
+      gitInit: Boolean(options.gitInit),
+      quiet: outputFormat === "json",
+    });
+    if (outputFormat === "json") {
+      console.log(JSON.stringify(summary, null, 2));
+      return;
+    }
+    console.log(formatInitSummaryTable(summary));
   });
 
 program

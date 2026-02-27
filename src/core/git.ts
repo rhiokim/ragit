@@ -15,6 +15,19 @@ export const ensureGitRepository = async (cwd: string): Promise<void> => {
   await execGit(cwd, ["rev-parse", "--is-inside-work-tree"]);
 };
 
+export const isGitRepository = async (cwd: string): Promise<boolean> => {
+  try {
+    await ensureGitRepository(cwd);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const initGitRepository = async (cwd: string): Promise<void> => {
+  await execGit(cwd, ["init"]);
+};
+
 export const getGitRoot = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "--show-toplevel"]);
 
 export const getHeadSha = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "HEAD"]);

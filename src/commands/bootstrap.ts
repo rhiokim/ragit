@@ -2,14 +2,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, setConfigValue, writeConfig } from "../core/config.js";
 import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
-import { ensureGitIgnoreEntries, ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
-
-export const runInit = async (cwd: string): Promise<void> => {
-  await ensureGitRepository(cwd);
-  await ensureRagitStructure(cwd);
-  await ensureGitIgnoreEntries(cwd);
-  console.log("ragit 초기화가 완료되었습니다.");
-};
+import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
 
 export const runConfigSet = async (cwd: string, key: string, value: string): Promise<void> => {
   await ensureRagitStructure(cwd);
