@@ -5,8 +5,13 @@ const withMDX = createMDX();
 /** @type {import('next').NextConfig} */
 const config = {
   serverExternalPackages: ['@takumi-rs/image-response'],
-  
+
+  basePath: '/ragit',
+  trailingSlash: true,
   output: 'export',
+  images: {
+    unoptimized: true,
+  },
   reactStrictMode: true,
 };
 
