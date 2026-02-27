@@ -2,6 +2,7 @@ import { baseOptions } from '@/lib/layout.shared';
 import { normalizeLanguage } from '@/lib/i18n';
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import type { ReactNode } from 'react';
+import { LanguageSwitcher } from '@/components/language-switcher';
 
 type LayoutProps = {
   children: ReactNode;
@@ -13,5 +14,10 @@ type LayoutProps = {
 export default async function Layout({ children, params }: LayoutProps) {
   const { lang } = await params;
   const language = normalizeLanguage(lang);
-  return <HomeLayout {...baseOptions(language)}>{children}</HomeLayout>;
+  return (
+    <>
+      <LanguageSwitcher />
+      <HomeLayout {...baseOptions(language)}>{children}</HomeLayout>
+    </>
+  );
 }
