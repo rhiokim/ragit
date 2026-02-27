@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "serve out",
+    "check:i18n": "node ./scripts/check-i18n.mjs",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",
     "postinstall": "fumadocs-mdx"
   },
