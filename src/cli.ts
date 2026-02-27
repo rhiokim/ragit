@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { resolveCwd, runConfigSet, runDoctor, runInit, runStatus } from "./commands/bootstrap.js";
+import { runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
 import { runIngest } from "./core/ingest.js";
 
 const program = new Command();
@@ -36,9 +37,27 @@ program
   });
 
 const hooks = program.command("hooks").description("git hook 관리");
-hooks.command("install").description("hook 설치").action(() => notImplemented("hooks install"));
-hooks.command("uninstall").description("hook 제거").action(() => notImplemented("hooks uninstall"));
-hooks.command("status").description("hook 상태").action(() => notImplemented("hooks status"));
+hooks
+  .command("install")
+  .description("hook 설치")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runHooksInstall(resolveCwd(options.cwd));
+  });
+hooks
+  .command("uninstall")
+  .description("hook 제거")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runHooksUninstall(resolveCwd(options.cwd));
+  });
+hooks
+  .command("status")
+  .description("hook 상태")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runHooksStatus(resolveCwd(options.cwd));
+  });
 
 program
   .command("ingest")
