@@ -1,13 +1,37 @@
 {
   "name": "ragit",
-  "version": "0.0.1",
-  "description": "RAG for Git",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "version": "0.1.0",
+  "description": "RAG for git-based AI agent workflows",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "ragit": "dist/cli.js"
   },
-  "keywords": [],
-  "author": "",
+  "scripts": {
+    "build": "tsup src/cli.ts src/index.ts --format esm --dts --out-dir dist --clean",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "rag",
+    "git",
+    "cli",
+    "agent"
+  ],
+  "author": "Rhio",
   "license": "ISC",
-  "packageManager": "pnpm@10.13.1"
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "commander": "^14.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.8"
+  }
 }
