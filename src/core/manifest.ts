@@ -46,3 +46,16 @@ export const latestSnapshotSha = async (cwd: string): Promise<string | null> => 
     .sort((a, b) => b.name.localeCompare(a.name));
   return manifests[0]?.sha ?? null;
 };
+
+export const resolveSnapshotRef = async (cwd: string, ref: string): Promise<string> => {
+  const dir = manifestDir(cwd);
+  const files = await readdir(dir);
+  const exact = files.find((name) => name === `${ref}.json`);
+  if (exact) return ref;
+  const byPrefix = files.filter((name) => name.startsWith(ref) && name.endsWith(".json"));
+  if (byPrefix.length === 1) return byPrefix[0].replace(/\.json$/, "");
+  if (byPrefix.length > 1) {
+    throw new Error(`snapshot ref가 모호합니다: ${ref}`);
+  }
+  throw new Error(`snapshot을 찾을 수 없습니다: ${ref}`);
+};
