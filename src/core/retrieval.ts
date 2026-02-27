@@ -27,6 +27,9 @@ const keywordScore = (query: string, target: string): number => {
   return matched / queryTokens.length;
 };
 
+export const calculateHybridScore = (scoreVector: number, scoreKeyword: number, alpha: number): number =>
+  alpha * scoreVector + (1 - alpha) * scoreKeyword;
+
 const resolveSnapshotSha = async (cwd: string, at?: string): Promise<string> => {
   if (at) return resolveSnapshotRef(cwd, at);
   try {
@@ -72,7 +75,7 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
     .map((chunk) => {
       const scoreVector = cosineSimilarity(queryEmbedding, chunk.embedding);
       const scoreKeyword = config.retrieval.keyword_enabled ? keywordScore(query, chunk.text) : 0;
-      const scoreFinal = alpha * scoreVector + (1 - alpha) * scoreKeyword;
+      const scoreFinal = calculateHybridScore(scoreVector, scoreKeyword, alpha);
       const hit: RetrievalHit = {
         chunkId: chunk.id,
         path: chunk.path,
