@@ -1,23 +1,42 @@
-import { docs } from 'fumadocs-mdx:collections/server';
+import { docsEn, docsKo } from 'fumadocs-mdx:collections/server';
 import { type InferPageType, loader } from 'fumadocs-core/source';
+import { Language, normalizeLanguage } from '@/lib/i18n';
 
-// See https://fumadocs.dev/docs/headless/source-api for more info
-export const source = loader({
-  baseUrl: '/docs',
-  source: docs.toFumadocsSource(),
+const sourceEn = loader({
+  baseUrl: '/en/docs',
+  source: docsEn.toFumadocsSource(),
   plugins: [],
 });
 
-export function getPageImage(page: InferPageType<typeof source>) {
+const sourceKo = loader({
+  baseUrl: '/ko/docs',
+  source: docsKo.toFumadocsSource(),
+  plugins: [],
+});
+
+export const sources = {
+  en: sourceEn,
+  ko: sourceKo,
+} as const;
+
+export type SourceByLanguage = (typeof sources)[Language];
+export type SourcePage = InferPageType<typeof sourceEn>;
+
+export const getSource = (language: string): SourceByLanguage => {
+  const normalized = normalizeLanguage(language);
+  return sources[normalized];
+};
+
+export function getPageImage(page: SourcePage, language: Language) {
   const segments = [...page.slugs, 'image.webp'];
 
   return {
     segments,
-    url: `/og/docs/${segments.join('/')}`,
+    url: `/og/${language}/docs/${segments.join('/')}`,
   };
 }
 
-export async function getLLMText(page: InferPageType<typeof source>) {
+export async function getLLMText(page: SourcePage) {
   const processed = await page.data.getText('processed');
 
   return `# ${page.data.title}
