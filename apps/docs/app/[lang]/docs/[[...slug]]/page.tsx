@@ -49,8 +49,8 @@ export default async function Page({ params }: PageParams) {
 
 export async function generateStaticParams() {
   return [
-    ...getSource('en').generateParams().map((entry) => ({ lang: 'en', ...entry })),
-    ...getSource('ko').generateParams().map((entry) => ({ lang: 'ko', ...entry })),
+    ...getSource('en').generateParams().map((entry) => ({ ...entry, lang: 'en' })),
+    ...getSource('ko').generateParams().map((entry) => ({ ...entry, lang: 'ko' })),
   ];
 }
 
