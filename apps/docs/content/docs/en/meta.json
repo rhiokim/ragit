@@ -1,4 +1,11 @@
 {
   "title": "English",
-  "pages": ["index", "test"]
+  "pages": [
+    "index",
+    "quickstart",
+    "cli-reference",
+    "init-guide",
+    "architecture",
+    "release-notes"
+  ]
 }

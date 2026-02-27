@@ -1,0 +1,22 @@
+---
+title: Architecture
+description: Core architecture of ragit CLI
+---
+
+## Runtime
+
+- TypeScript / Node.js CLI
+- Local zvec-style embedding adapter
+- Manifest + chunk store under `.ragit/`
+
+## Retrieval
+
+- Chunk embeddings + keyword scoring
+- Weighted hybrid ranking (`alpha`)
+- Point-in-time query with snapshot SHA
+
+## Binding model
+
+- Every snapshot binds to commit SHA
+- Incremental ingest supports `--since <sha>`
+- Hooks (`post-commit`, `post-merge`) keep index fresh
