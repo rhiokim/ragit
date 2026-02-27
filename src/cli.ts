@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { resolveCwd, runConfigSet, runDoctor, runInit, runStatus } from "./commands/bootstrap.js";
+import { runIngest } from "./core/ingest.js";
 
 const program = new Command();
 
@@ -45,7 +46,15 @@ program
   .option("--all", "전체 문서 인덱싱")
   .option("--since <sha>", "지정 SHA 이후 변경분 인덱싱")
   .option("--files <glob>", "특정 glob 인덱싱")
-  .action(() => notImplemented("ingest"));
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const summary = await runIngest(resolveCwd(options.cwd), {
+      all: options.all,
+      since: options.since,
+      files: options.files,
+    });
+    console.log(JSON.stringify(summary, null, 2));
+  });
 
 program
   .command("query")
