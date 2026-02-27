@@ -3,6 +3,7 @@ import { baseOptions } from '@/lib/layout.shared';
 import { getSource } from '@/lib/source';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import type { ReactNode } from 'react';
+import { LanguageSwitcher } from '@/components/language-switcher';
 
 type LayoutProps = {
   children: ReactNode;
@@ -17,8 +18,11 @@ export default async function Layout({ children, params }: LayoutProps) {
   const source = getSource(language);
 
   return (
-    <DocsLayout tree={source.getPageTree()} {...baseOptions(language)}>
-      {children}
-    </DocsLayout>
+    <>
+      <LanguageSwitcher />
+      <DocsLayout tree={source.getPageTree()} {...baseOptions(language)}>
+        {children}
+      </DocsLayout>
+    </>
   );
 }
