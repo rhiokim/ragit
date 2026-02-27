@@ -1,0 +1,30 @@
+---
+title: Init 가이드
+description: AGENTS 연동 인터랙티브 초기화 흐름
+---
+
+`ragit init`은 기본적으로 6단계 인터랙티브 흐름으로 동작합니다.
+
+1. 환경 검사 (`git init` 선택 포함)
+2. 초기화 모드 확인
+3. 루트 `AGENTS.md` 로드/생성
+4. 문서 템플릿 범위 확인
+5. `.ragit/guide` 증분 생성
+6. 요약 및 다음 액션 출력
+
+## 비대화형 실행
+
+```bash
+ragit init --yes
+ragit init --yes --git-init
+ragit init --yes --output json
+```
+
+## 생성 구조
+
+```text
+.ragit/
+  guide/
+    guide-index.json
+    templates/
+```

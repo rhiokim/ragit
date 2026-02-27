@@ -1,4 +1,11 @@
 {
   "title": "한국어",
-  "pages": ["index", "test"]
+  "pages": [
+    "index",
+    "quickstart",
+    "cli-reference",
+    "init-guide",
+    "architecture",
+    "release-notes"
+  ]
 }
