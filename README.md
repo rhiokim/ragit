@@ -1,27 +1,73 @@
 # ragit
-RAG for git
 
-- 토큰 사용을 줄인다.
-- 더 정교한 에이전트의 동작을 보장한다.
+`ragit`은 프로젝트 저장소 내부에서 동작하는 **zvec + git 결속형 RAG CLI**입니다.  
+AI Agent와의 구현/개발/유지보수/테스트 과정에서 발생하는 문서를 수집·분석·검색하고,
+커밋 SHA에 결속된 스냅샷으로 버전 관리합니다.
 
-## Concept
+## MVP 문서 타입 (v0.1)
 
-- RAG 를 저장소에 함께 구축한다.
-- sqlite-vss 를 이용한다.
+- ADR
+- PRD
+- SRS
+- Plan
+- DDD
+- Glossary(용어집)
 
+## 설치
+
+```bash
+pnpm install
+pnpm build
+pnpm exec ragit --help
 ```
-- domain-drivien-design
-- twelve-factor-app
-- software-requirements-specification
-- product-requirements-documents
-- architecture-decision-records
-- keep-it-simpe-stupid
-- test-driven-development
+
+## 기본 명령
+
+```bash
+ragit init
+ragit config set retrieval.top_k 8
+ragit hooks install
+ragit ingest --all
+ragit query "DDD 경계 컨텍스트 원칙" --format both
+ragit context pack "이번 스프린트 구현 계획" --budget 1200
+ragit migrate from-sqlitevss --dry-run
+ragit status
+ragit doctor
 ```
 
-## Questions
+## 저장 구조
 
-- RAG 파일 시스템은 어떻게 구성되어야 하는가?
-- Agent 들과 어떻게 hooking 할 것인가?
-  - 보내는 시점
-  - 응답을 받는 시점
+```text
+.ragit/
+  config.toml
+  manifest/<commit-sha>.json
+  store/index.json
+  cache/
+  hooks/
+```
+
+- Git 추적 권장: `.ragit/config.toml`, `.ragit/manifest/**`
+- 로컬 전용(기본 `.gitignore`): `.ragit/store/**`, `.ragit/cache/**`
+
+## Hook 전략
+
+- `post-commit`: `HEAD~1..HEAD` 변경분 자동 인덱싱
+- `post-merge`: `${ORIG_HEAD:-HEAD~1}..HEAD` 변경분 자동 인덱싱
+- 실패 시 커밋/머지를 차단하지 않고 경고성으로 동작합니다.
+
+## 검색 전략
+
+- 1차: zvec 임베딩 유사도
+- 2차: 키워드 점수
+- 최종: `alpha * vector + (1-alpha) * keyword` (기본 `alpha=0.7`)
+
+## 보안 기본값
+
+- 수집 시 비밀정보 마스킹 기본 활성화 (`security.secret_masking=true`)
+- OpenAI/GitHub/AWS 키 및 `api_key/token/secret` 패턴을 마스킹합니다.
+
+## 테스트
+
+```bash
+pnpm test
+```
