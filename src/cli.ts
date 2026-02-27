@@ -4,6 +4,8 @@ import { Command } from "commander";
 import { resolveCwd, runConfigSet, runDoctor, runInit, runStatus } from "./commands/bootstrap.js";
 import { runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
 import { runIngest } from "./core/ingest.js";
+import { formatQueryResult, OutputFormat } from "./core/output.js";
+import { searchKnowledge } from "./core/retrieval.js";
 
 const program = new Command();
 
@@ -82,7 +84,17 @@ program
   .option("--top-k <n>", "결과 개수", "5")
   .option("--format <format>", "markdown|json|both", "both")
   .option("--at <sha>", "특정 커밋 시점 조회")
-  .action(() => notImplemented("query"));
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (question, options) => {
+    const format = (options.format as OutputFormat) ?? "both";
+    const result = await searchKnowledge(resolveCwd(options.cwd), question, {
+      topK: Number(options.topK),
+      at: options.at,
+    });
+    const output = formatQueryResult(question, result, format);
+    if (output.markdown) console.log(output.markdown);
+    if (output.json) console.log(output.json);
+  });
 
 program
   .command("context")
