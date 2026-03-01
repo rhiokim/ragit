@@ -1,6 +1,6 @@
-# ragit
+# RAGit
 
-ragit는 저장소 로컬에서 동작하는 zvec + git 결속형 RAG CLI입니다.
+RAGit는 저장소 로컬에서 동작하는 zvec + git 결속형 RAG CLI입니다.
 AI Agent 개발 과정의 문서/컨텍스트를 수집·구조화·검색하고, commit SHA 기준으로 스냅샷을 관리합니다.
 
 ## MVP 범위

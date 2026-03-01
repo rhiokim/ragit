@@ -1,4 +1,4 @@
-# ragit v0.1.0 Release Checklist
+# RAGit v0.1.0 Release Checklist
 
 ## 기능 체크
 - [x] init/config/status/doctor

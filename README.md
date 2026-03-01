@@ -1,6 +1,6 @@
-# ragit
+# RAGit
 
-`ragit` is a **zvec + git bound RAG CLI** that runs inside your project repository.  
+RAGit is a **zvec + git bound RAG CLI** that runs inside your project repository.  
 It collects, analyzes, and retrieves documents produced during AI agent workflows, then version-controls snapshots bound to commit SHAs.
 
 ## MVP Document Types (v0.1)
