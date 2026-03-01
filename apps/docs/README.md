@@ -28,7 +28,18 @@ In the project, you can see:
 | ------------------------- | ------------------------------------------------------ |
 | `app/(home)`              | The route group for your landing page and other pages. |
 | `app/docs`                | The documentation layout and pages.                    |
-| `app/api/search/route.ts` | The Route Handler for search.                          |
+| `app/api/search/en/route.ts` | English search index route handler.                |
+| `app/api/search/ko/route.ts` | Korean search index route handler.                 |
+
+## Search (en/ko split)
+
+- Search uses Fumadocs static indexes and is split by language.
+- Endpoints:
+  - `/api/search/en` (English index)
+  - `/api/search/ko` (Korean index)
+  - `/api/search` (English alias for backward compatibility)
+- The search dialog picks index by current URL language (`/en/*`, `/ko/*`).
+- After static build, run `pnpm check:search-index` in `apps/docs` to verify outputs.
 
 ### Fumadocs MDX
 
