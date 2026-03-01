@@ -44,6 +44,9 @@ jobs:
       - name: Build docs
         run: pnpm docs:build
 
+      - name: Verify search indexes
+        run: pnpm docs:check:search-index
+
       - name: Deploy to gh-pages branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
