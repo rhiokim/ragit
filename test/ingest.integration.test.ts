@@ -32,22 +32,32 @@ type: plan
     await runIngest(temp, { all: true });
 
     await writeFile(
-      path.join(temp, "docs", "domain.md"),
+      path.join(temp, "docs", "cache.spec.md"),
       `---
-type: ddd
+type: spec
 ---
-# Domain
-context`,
+# 상세 명세
+cache adapter`,
+      "utf8",
+    );
+    await writeFile(
+      path.join(temp, "docs", "runtime.pb.md"),
+      `---
+type: pb
+---
+# PB
+phase binding graph`,
       "utf8",
     );
     git(temp, ["add", "."]);
-    git(temp, ["commit", "-m", "add ddd"]);
+    git(temp, ["commit", "-m", "add spec and pb"]);
 
     const summary = await runIngest(temp, { since: baseSha });
-    expect(summary.processed).toBe(1);
+    expect(summary.processed).toBe(2);
     const manifest = await loadSnapshotManifest(temp, summary.commitSha);
     const types = new Set(manifest.docs.map((doc) => doc.docType));
     expect(types.has("plan")).toBe(true);
-    expect(types.has("ddd")).toBe(true);
+    expect(types.has("spec")).toBe(true);
+    expect(types.has("pb")).toBe(true);
   });
 });

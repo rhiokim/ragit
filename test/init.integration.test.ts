@@ -15,6 +15,9 @@ describe("init command integration", () => {
     expect(summary.mode).toBe("non-interactive");
     expect(summary.agents.mode).toBe("created");
     expect(summary.guide.indexPath).toBe(".ragit/guide/guide-index.json");
+    expect(summary.guide.templates).toContain(".ragit/guide/templates/spec.template.md");
+    expect(summary.guide.templates).toContain(".ragit/guide/templates/pb.template.md");
+    expect(summary.steps).toContain("doc-types=adr,prd,srs,spec,plan,ddd,glossary,pb");
   });
 
   it("loads existing AGENTS without mutating source content", async () => {
