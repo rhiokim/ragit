@@ -4,7 +4,7 @@ import { getHeadSha } from "./git.js";
 import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { ensureRagitStructure } from "./project.js";
 import { loadStore, upsertDocumentWithChunks, writeStore } from "./store.js";
-import { ChunkRecord, DocumentRecord, DocType, isKnownDocType } from "./types.js";
+import { ChunkRecord, DocumentRecord, DocType, normalizeKnownDocType } from "./types.js";
 
 interface SqliteVssExport {
   docs: Array<{
@@ -54,7 +54,7 @@ export interface MigrationSummary {
 }
 
 const coerceLegacyDocType = (value?: string): DocType =>
-  value && isKnownDocType(value) ? value : "unknown";
+  normalizeKnownDocType(value) ?? "unknown";
 
 export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> => {
   await ensureRagitStructure(cwd);

@@ -12,11 +12,11 @@ It collects, analyzes, and retrieves documents produced during AI agent workflow
 - Plan
 - DDD
 - Glossary
-- PB
+- PBD
 
 - `SRS`: system-level software requirements
 - `SPEC`: implementation-level functional requirements and interface contracts
-- `PB`: phase and binding topology for understanding implementation structure and coupling
+- `PBD`: phase and binding topology for understanding implementation structure and coupling
 
 ## Installation
 
@@ -91,7 +91,7 @@ By default, `ragit init` runs a 6-step interactive wizard:
 1. Check Git environment (suggest `git init` if not a repository)
 2. Confirm initialization mode
 3. Load or create root `AGENTS.md`
-4. Confirm document template scope (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PB)
+4. Confirm document template scope (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PBD)
 5. Incrementally generate `.ragit/guide` and refresh `guide-index.json`
 6. Print summary table and next actions
 

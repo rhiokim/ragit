@@ -9,7 +9,7 @@ import { migrateFromSqliteVss } from "../src/core/migrate.js";
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
 describe("sqlite-vss migration", () => {
-  it("preserves spec and pb doc types from legacy payload", async () => {
+  it("preserves spec and pbd doc types from legacy payload", async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-migrate-"));
     git(temp, ["init"]);
     git(temp, ["config", "user.email", "ragit@example.com"]);
@@ -32,9 +32,9 @@ describe("sqlite-vss migration", () => {
               sections: [{ id: "s1", title: "Scope", level: 2, content: "cache scope" }],
             },
             {
-              id: "pb-doc",
-              path: "docs/runtime.pb.md",
-              docType: "pb",
+              id: "pbd-doc",
+              path: "docs/runtime.pbd.md",
+              docType: "pbd",
               sections: [{ id: "p1", title: "Bindings", level: 2, content: "binding map" }],
             },
           ],
@@ -50,12 +50,12 @@ describe("sqlite-vss migration", () => {
             },
             {
               id: "chunk-2",
-              documentId: "pb-doc",
-              path: "docs/runtime.pb.md",
+              documentId: "pbd-doc",
+              path: "docs/runtime.pbd.md",
               sectionId: "p1",
               sectionTitle: "Bindings",
               text: "binding map",
-              docType: "pb",
+              docType: "pbd",
             },
           ],
         },
@@ -70,6 +70,6 @@ describe("sqlite-vss migration", () => {
     const manifest = await loadSnapshotManifest(temp, sha);
     const types = new Set(manifest.docs.map((doc) => doc.docType));
     expect(types.has("spec")).toBe(true);
-    expect(types.has("pb")).toBe(true);
+    expect(types.has("pbd")).toBe(true);
   });
 });

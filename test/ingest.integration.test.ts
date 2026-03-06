@@ -41,16 +41,16 @@ cache adapter`,
       "utf8",
     );
     await writeFile(
-      path.join(temp, "docs", "runtime.pb.md"),
+      path.join(temp, "docs", "runtime.pbd.md"),
       `---
-type: pb
+type: pbd
 ---
-# PB
-phase binding graph`,
+# PBD
+phase and binding documents`,
       "utf8",
     );
     git(temp, ["add", "."]);
-    git(temp, ["commit", "-m", "add spec and pb"]);
+    git(temp, ["commit", "-m", "add spec and pbd"]);
 
     const summary = await runIngest(temp, { since: baseSha });
     expect(summary.processed).toBe(2);
@@ -58,6 +58,6 @@ phase binding graph`,
     const types = new Set(manifest.docs.map((doc) => doc.docType));
     expect(types.has("plan")).toBe(true);
     expect(types.has("spec")).toBe(true);
-    expect(types.has("pb")).toBe(true);
+    expect(types.has("pbd")).toBe(true);
   });
 });
