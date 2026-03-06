@@ -1,4 +1,10 @@
-export type DocType = "adr" | "prd" | "srs" | "plan" | "ddd" | "glossary" | "unknown";
+export const KNOWN_DOC_TYPES = ["adr", "prd", "srs", "spec", "plan", "ddd", "glossary", "pb"] as const;
+
+export type KnownDocType = (typeof KNOWN_DOC_TYPES)[number];
+export type DocType = KnownDocType | "unknown";
+
+export const isKnownDocType = (value: string): value is KnownDocType =>
+  KNOWN_DOC_TYPES.includes(value as KnownDocType);
 
 export interface RagitConfig {
   project: {
