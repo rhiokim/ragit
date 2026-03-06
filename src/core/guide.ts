@@ -68,9 +68,11 @@ const templateMapRelative: Record<string, string> = {
   adr: ".ragit/guide/templates/adr.template.md",
   prd: ".ragit/guide/templates/prd.template.md",
   srs: ".ragit/guide/templates/srs.template.md",
+  spec: ".ragit/guide/templates/spec.template.md",
   plan: ".ragit/guide/templates/plan.template.md",
   ddd: ".ragit/guide/templates/ddd.template.md",
   glossary: ".ragit/guide/templates/glossary.template.md",
+  pb: ".ragit/guide/templates/pb.template.md",
 };
 
 const commonTemplateRelativePath = ".ragit/guide/templates/_common.template.md";
@@ -116,6 +118,26 @@ type: srs
 ## Non-Functional Requirements
 - NFR-001
 `,
+  "spec.template.md": `---
+type: spec
+---
+# SPEC: Implementation Specification
+
+## Scope
+- 구현 범위
+
+## Functional Requirements
+- 기능 요구사항
+
+## Interfaces and Contracts
+- 인터페이스 계약
+
+## State and Flow
+- 상태 전이 및 흐름
+
+## Acceptance Criteria
+- [ ] 검증 조건
+`,
   "plan.template.md": `---
 type: plan
 ---
@@ -145,6 +167,29 @@ type: glossary
 
 ## Terms
 - **용어**: 정의
+`,
+  "pb.template.md": `---
+type: pb
+---
+# PB: Phase and Bindings
+
+## Implementation Scope
+- 구현체 범위
+
+## Phase Topology
+- 위상 구조
+
+## Binding Map
+- 결속 관계
+
+## Interaction Paths
+- 상호작용 경로
+
+## Failure and Drift Points
+- 실패 및 드리프트 지점
+
+## Observability Notes
+- 관측 포인트
 `,
   "_common.template.md": `# Common Guide
 
