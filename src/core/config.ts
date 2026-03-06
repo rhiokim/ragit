@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { RagitConfig } from "./types.js";
+import { KNOWN_DOC_TYPES, RagitConfig } from "./types.js";
 
 export const RAGIT_DIR = ".ragit";
 export const CONFIG_PATH = path.join(RAGIT_DIR, "config.toml");
@@ -16,7 +16,7 @@ export const defaultConfig = (): RagitConfig => ({
     vector_dir: ".ragit/store",
   },
   ingest: {
-    supported_types: ["adr", "prd", "srs", "plan", "ddd", "glossary"],
+    supported_types: [...KNOWN_DOC_TYPES],
     type_detection: "frontmatter-first",
     doc_globs: ["**/*.md", "**/*.mdx"],
   },
