@@ -8,7 +8,7 @@
     "ragit": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsup src/cli.ts src/index.ts --format esm --dts --out-dir dist --clean",
+    "build": "tsdown",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "docs:dev": "pnpm --filter ./apps/docs... dev",
@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "tsup": "^8.5.0",
+    "tsdown": "^0.21.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.8"
