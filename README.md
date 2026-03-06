@@ -3,6 +3,17 @@
 RAGit is a **zvec + git bound RAG CLI** that runs inside your project repository.  
 It collects, analyzes, and retrieves documents produced during AI agent workflows, then version-controls snapshots bound to commit SHAs.
 
+## Product Purpose
+
+RAGit is a local-first RAG CLI that turns AI agent project documents and context into commit-bound, reusable knowledge inside the repository.
+
+## Core Value
+
+- Preserve project context across AI agent work
+- Reproduce knowledge at a specific commit state
+- Turn structured docs into agent-ready inputs
+- Automate indexing without adding workflow friction
+
 ## MVP Document Types (v0.1)
 
 - ADR

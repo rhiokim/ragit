@@ -3,6 +3,17 @@
 RAGit는 저장소 로컬에서 동작하는 zvec + git 결속형 RAG CLI입니다.
 AI Agent 개발 과정의 문서/컨텍스트를 수집·구조화·검색하고, commit SHA 기준으로 스냅샷을 관리합니다.
 
+## 프로젝트 목적
+
+RAGit은 AI Agent 프로젝트의 문서와 컨텍스트를 저장소 내부에서 커밋 결속형 재사용 지식으로 전환하는 로컬 우선 RAG CLI입니다.
+
+## 코어 벨류
+
+- 맥락 보존
+- 커밋 결속 재현성
+- 에이전트 친화 구조화
+- 저마찰 자동화
+
 ## MVP 범위
 
 - 문서 타입: ADR, PRD, SRS, SPEC, Plan, DDD, Glossary, PBD
