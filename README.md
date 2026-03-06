@@ -67,12 +67,18 @@ Requirements:
 
 ```bash
 pnpm install
-pnpm build
 pnpm ragit --help
 ```
 
 Inside this repository checkout, run CLI commands with `pnpm ragit <command>`.
 When the package is installed as a published CLI, use `ragit <command>`.
+
+`pnpm build` is optional for repository-local usage.
+Run it only when you need to generate `dist/` artifacts or verify the packaged CLI entrypoint.
+
+```bash
+pnpm build
+```
 
 ## Documentation (Fumadocs + GitHub Pages)
 
