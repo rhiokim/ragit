@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
+import { KNOWN_DOC_TYPES } from "./types.js";
 
 export const BOUNDARY_REGEX_SOURCE = "^#{2,6}\\s*(\\[[A-Z][0-9]+(?:\\.[a-z0-9]+)*\\])\\s+([^\\n]+)$";
 export const GRF_REGEX_SOURCE =
@@ -383,7 +384,7 @@ export const buildGuideIndex = (agents: AgentsInstructionResult, parsed: ReturnT
   defaults: {
     language: "ko",
     profile: "topological",
-    docTypes: ["adr", "prd", "srs", "plan", "ddd", "glossary"],
+    docTypes: [...KNOWN_DOC_TYPES],
   },
 });
 

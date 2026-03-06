@@ -2,6 +2,7 @@ import path from "node:path";
 import { buildGuideIndex, ensureAgentsInstruction, ensureGuideStructure, parseGuideBoundaries, templatePathsForSummary, writeGuideIndex } from "../core/guide.js";
 import { initGitRepository, isGitRepository } from "../core/git.js";
 import { ensureGitIgnoreEntries, ensureRagitStructure } from "../core/project.js";
+import { KNOWN_DOC_TYPES } from "../core/types.js";
 import { confirmStep, printStep } from "../core/wizard.js";
 
 export interface InitOptions {
@@ -104,7 +105,7 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
 
   logStep(4, "문서 템플릿 범위 확정");
   const templates = templatePathsForSummary();
-  stepLogs.push("doc-types=adr,prd,srs,plan,ddd,glossary");
+  stepLogs.push(`doc-types=${KNOWN_DOC_TYPES.join(",")}`);
 
   logStep(5, "가이드 구조 생성 및 인덱스 갱신");
   const guide = await ensureGuideStructure(cwd);
