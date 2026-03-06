@@ -20,6 +20,11 @@ It collects, analyzes, and retrieves documents produced during AI agent workflow
 
 ## Installation
 
+Requirements:
+
+- Node.js `20.19.0` or newer
+- pnpm `10.13.1` or newer
+
 ```bash
 pnpm install
 pnpm build

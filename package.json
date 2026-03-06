@@ -27,7 +27,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.13.1",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.19.0"
   },
   "dependencies": {
     "commander": "^14.0.1",
