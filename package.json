@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "build:verify": "node scripts/verify-build-contract.mjs",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "docs:dev": "pnpm --filter ./apps/docs... dev",
