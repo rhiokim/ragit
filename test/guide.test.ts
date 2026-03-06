@@ -43,9 +43,9 @@ text
     expect(first.createdFiles.length).toBeGreaterThan(0);
     const adrPath = path.join(temp, ".ragit", "guide", "templates", "adr.template.md");
     const specPath = path.join(temp, ".ragit", "guide", "templates", "spec.template.md");
-    const pbPath = path.join(temp, ".ragit", "guide", "templates", "pb.template.md");
+    const pbdPath = path.join(temp, ".ragit", "guide", "templates", "pbd.template.md");
     await expect(readFile(specPath, "utf8")).resolves.toContain("type: spec");
-    await expect(readFile(pbPath, "utf8")).resolves.toContain("type: pb");
+    await expect(readFile(pbdPath, "utf8")).resolves.toContain("type: pbd");
     await writeFile(adrPath, "custom", "utf8");
     const second = await ensureGuideStructure(temp);
     const content = await readFile(adrPath, "utf8");
@@ -54,7 +54,7 @@ text
     expect(second.skippedFiles.length).toBeGreaterThan(0);
   });
 
-  it("emits guide defaults with spec and pb doc types", () => {
+  it("emits guide defaults with spec and pbd doc types", () => {
     const agents = {
       path: "/tmp/repo/AGENTS.md",
       mode: "loaded" as const,
@@ -64,8 +64,8 @@ text
     const parsed = parseGuideBoundaries(agents.content);
     const index = buildGuideIndex(agents, parsed);
     expect(index.defaults.docTypes).toContain("spec");
-    expect(index.defaults.docTypes).toContain("pb");
+    expect(index.defaults.docTypes).toContain("pbd");
     expect(index.templateMap.spec).toBe(".ragit/guide/templates/spec.template.md");
-    expect(index.templateMap.pb).toBe(".ragit/guide/templates/pb.template.md");
+    expect(index.templateMap.pbd).toBe(".ragit/guide/templates/pbd.template.md");
   });
 });

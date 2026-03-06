@@ -42,10 +42,10 @@ type: specification
     expect(result.docType).toBe("srs");
   });
 
-  it("detects pb from korean heading", () => {
+  it("detects pbd from korean heading", () => {
     const source = "# 위상과 결속\n구현체 결속 구조";
     const result = detectDocType(path.join(cwd, "notes.md"), source, cwd);
-    expect(result.docType).toBe("pb");
+    expect(result.docType).toBe("pbd");
   });
 
   it("detects glossary from korean heading", () => {

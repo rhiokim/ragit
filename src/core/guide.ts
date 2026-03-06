@@ -73,7 +73,7 @@ const templateMapRelative: Record<string, string> = {
   plan: ".ragit/guide/templates/plan.template.md",
   ddd: ".ragit/guide/templates/ddd.template.md",
   glossary: ".ragit/guide/templates/glossary.template.md",
-  pb: ".ragit/guide/templates/pb.template.md",
+  pbd: ".ragit/guide/templates/pbd.template.md",
 };
 
 const commonTemplateRelativePath = ".ragit/guide/templates/_common.template.md";
@@ -169,10 +169,10 @@ type: glossary
 ## Terms
 - **용어**: 정의
 `,
-  "pb.template.md": `---
-type: pb
+  "pbd.template.md": `---
+type: pbd
 ---
-# PB: Phase and Bindings
+# PBD: Phase and Binding Documents
 
 ## Implementation Scope
 - 구현체 범위

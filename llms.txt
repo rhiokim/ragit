@@ -5,10 +5,10 @@ AI Agent 개발 과정의 문서/컨텍스트를 수집·구조화·검색하고
 
 ## MVP 범위
 
-- 문서 타입: ADR, PRD, SRS, SPEC, Plan, DDD, Glossary, PB
+- 문서 타입: ADR, PRD, SRS, SPEC, Plan, DDD, Glossary, PBD
 - `SRS`: 시스템 수준 소프트웨어 요구사항
 - `SPEC`: 구현체 단위 상세 기능 요구사항과 인터페이스 계약
-- `PB`: 구현체의 위상 구조와 결속 관계를 설명하는 문서
+- `PBD`: 구현체의 위상 구조와 결속 관계를 설명하는 문서
 - 핵심 명령: init, config, hooks, ingest, query, context pack, migrate, status, doctor
 - 검색: 벡터 유사도 + 키워드 하이브리드 점수
 - 보안 기본값: secret masking 활성화
