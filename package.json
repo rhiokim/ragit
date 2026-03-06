@@ -8,6 +8,7 @@
     "ragit": "dist/cli.js"
   },
   "scripts": {
+    "ragit": "tsx src/cli.ts",
     "build": "tsdown",
     "build:verify": "node scripts/verify-build-contract.mjs",
     "dev": "tsx src/cli.ts",

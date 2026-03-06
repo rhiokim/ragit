@@ -68,8 +68,11 @@ Requirements:
 ```bash
 pnpm install
 pnpm build
-pnpm exec ragit --help
+pnpm ragit --help
 ```
+
+Inside this repository checkout, run CLI commands with `pnpm ragit <command>`.
+When the package is installed as a published CLI, use `ragit <command>`.
 
 ## Documentation (Fumadocs + GitHub Pages)
 
@@ -100,17 +103,17 @@ Deployment:
 ## Core Commands
 
 ```bash
-ragit init
-ragit init --yes --output json
-ragit init --yes --git-init
-ragit config set retrieval.top_k 8
-ragit hooks install
-ragit ingest --all
-ragit query "DDD bounded context principles" --format both
-ragit context pack "Implementation plan for this sprint" --budget 1200
-ragit migrate from-sqlitevss --dry-run
-ragit status
-ragit doctor
+pnpm ragit init
+pnpm ragit init --yes --output json
+pnpm ragit init --yes --git-init
+pnpm ragit config set retrieval.top_k 8
+pnpm ragit hooks install
+pnpm ragit ingest --all
+pnpm ragit query "DDD bounded context principles" --format both
+pnpm ragit context pack "Implementation plan for this sprint" --budget 1200
+pnpm ragit migrate from-sqlitevss --dry-run
+pnpm ragit status
+pnpm ragit doctor
 ```
 
 ## Storage Layout
@@ -131,7 +134,7 @@ ragit doctor
 
 ## Interactive `init` Guide
 
-By default, `ragit init` runs a 6-step interactive wizard:
+By default, `pnpm ragit init` runs a 6-step interactive wizard:
 
 1. Check Git environment (suggest `git init` if not a repository)
 2. Confirm initialization mode
@@ -143,10 +146,10 @@ By default, `ragit init` runs a 6-step interactive wizard:
 Supported options:
 
 ```bash
-ragit init --yes              # non-interactive with defaults
-ragit init --non-interactive  # alias of --yes
-ragit init --git-init         # allow git init in non-interactive mode
-ragit init --output json      # JSON summary output
+pnpm ragit init --yes              # non-interactive with defaults
+pnpm ragit init --non-interactive  # alias of --yes
+pnpm ragit init --git-init         # allow git init in non-interactive mode
+pnpm ragit init --output json      # JSON summary output
 ```
 
 ## Hook Strategy

@@ -14,14 +14,17 @@ description: RAGit 및 문서 워크플로 시작하기
 ```bash
 pnpm install
 pnpm build
+pnpm ragit --help
 ```
+
+저장소 체크아웃 안에서는 CLI 명령을 `pnpm ragit <command>` 형태로 실행합니다.
 
 ## RAGit 초기화
 
 ```bash
-ragit init
-ragit hooks install
-ragit ingest --all
+pnpm ragit init
+pnpm ragit hooks install
+pnpm ragit ingest --all
 ```
 
 ## 문서 사이트 로컬 실행

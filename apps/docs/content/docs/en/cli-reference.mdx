@@ -3,18 +3,20 @@ title: CLI Reference
 description: Core commands for RAGit v0.1
 ---
 
+Inside a repository checkout, use `pnpm ragit <command>`. Published installs use `ragit <command>`.
+
 ## Core Commands
 
 ```bash
-ragit init
-ragit config set <key> <value>
-ragit hooks install|uninstall|status
-ragit ingest --all|--since <sha>|--files <glob>
-ragit query "<question>" --format both
-ragit context pack "<goal>" --budget 1200
-ragit migrate from-sqlitevss --dry-run
-ragit status
-ragit doctor
+pnpm ragit init
+pnpm ragit config set <key> <value>
+pnpm ragit hooks install|uninstall|status
+pnpm ragit ingest --all|--since <sha>|--files <glob>
+pnpm ragit query "<question>" --format both
+pnpm ragit context pack "<goal>" --budget 1200
+pnpm ragit migrate from-sqlitevss --dry-run
+pnpm ragit status
+pnpm ragit doctor
 ```
 
 ## Docs Commands

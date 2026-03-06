@@ -3,7 +3,7 @@ title: Init 가이드
 description: AGENTS 연동 인터랙티브 초기화 흐름
 ---
 
-`ragit init`은 기본적으로 6단계 인터랙티브 흐름으로 동작합니다.
+저장소 체크아웃 안에서 `pnpm ragit init`은 기본적으로 6단계 인터랙티브 흐름으로 동작합니다.
 
 1. 환경 검사 (`git init` 선택 포함)
 2. 초기화 모드 확인
@@ -17,9 +17,9 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 ## 비대화형 실행
 
 ```bash
-ragit init --yes
-ragit init --yes --git-init
-ragit init --yes --output json
+pnpm ragit init --yes
+pnpm ragit init --yes --git-init
+pnpm ragit init --yes --output json
 ```
 
 ## 생성 구조

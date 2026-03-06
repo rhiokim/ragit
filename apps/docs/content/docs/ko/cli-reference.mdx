@@ -3,18 +3,20 @@ title: CLI 레퍼런스
 description: RAGit v0.1 핵심 명령
 ---
 
+저장소 체크아웃 안에서는 `pnpm ragit <command>`를 사용하고, 배포된 CLI 설치본에서는 `ragit <command>`를 사용합니다.
+
 ## 핵심 명령
 
 ```bash
-ragit init
-ragit config set <key> <value>
-ragit hooks install|uninstall|status
-ragit ingest --all|--since <sha>|--files <glob>
-ragit query "<question>" --format both
-ragit context pack "<goal>" --budget 1200
-ragit migrate from-sqlitevss --dry-run
-ragit status
-ragit doctor
+pnpm ragit init
+pnpm ragit config set <key> <value>
+pnpm ragit hooks install|uninstall|status
+pnpm ragit ingest --all|--since <sha>|--files <glob>
+pnpm ragit query "<question>" --format both
+pnpm ragit context pack "<goal>" --budget 1200
+pnpm ragit migrate from-sqlitevss --dry-run
+pnpm ragit status
+pnpm ragit doctor
 ```
 
 ## 문서 명령
