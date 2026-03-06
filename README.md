@@ -7,6 +7,35 @@ It collects, analyzes, and retrieves documents produced during AI agent workflow
 
 RAGit is a local-first RAG CLI that turns AI agent project documents and context into commit-bound, reusable knowledge inside the repository.
 
+## Git vs RAGit
+
+Git version-controls source code states. RAGit version-controls AI-working knowledge states bound to the same commit history.
+
+```mermaid
+sequenceDiagram
+    participant Developer
+    participant Git
+    participant Repository
+    participant RAGit
+    participant Store as ".ragit Store"
+    participant Agent
+
+    Developer->>Git: stage and commit code/docs
+    Git->>Repository: write commit snapshot
+    Note over Git,Repository: Git manages code and file history
+    Git-->>RAGit: trigger post-commit / post-merge hook
+    RAGit->>Repository: detect changed documents since SHA
+    RAGit->>Store: chunk, index, and write manifest bound to commit SHA
+    Note over RAGit,Store: RAGit manages document knowledge and agent context history
+    Agent->>RAGit: query or context pack at HEAD / specific SHA
+    RAGit->>Store: load snapshot + retrieval data
+    RAGit-->>Agent: return commit-bound knowledge/context
+```
+
+- Git answers: "What did the repository look like at this commit?"
+- RAGit answers: "What knowledge and context should an agent use at this commit?"
+- Together they make code state and AI context state reproducible.
+
 ## Core Value
 
 - Preserve project context across AI agent work
