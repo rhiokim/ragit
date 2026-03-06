@@ -4,7 +4,7 @@ import { getHeadSha } from "./git.js";
 import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { ensureRagitStructure } from "./project.js";
 import { loadStore, upsertDocumentWithChunks, writeStore } from "./store.js";
-import { ChunkRecord, DocumentRecord } from "./types.js";
+import { ChunkRecord, DocumentRecord, DocType, isKnownDocType } from "./types.js";
 
 interface SqliteVssExport {
   docs: Array<{
@@ -53,6 +53,9 @@ export interface MigrationSummary {
   snapshotSha?: string;
 }
 
+const coerceLegacyDocType = (value?: string): DocType =>
+  value && isKnownDocType(value) ? value : "unknown";
+
 export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> => {
   await ensureRagitStructure(cwd);
   const payload = await loadLegacyPayload(cwd);
@@ -71,15 +74,7 @@ export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promis
     const doc: DocumentRecord = {
       id,
       path: rawDoc.path,
-      docType:
-        rawDoc.docType === "adr" ||
-        rawDoc.docType === "prd" ||
-        rawDoc.docType === "srs" ||
-        rawDoc.docType === "plan" ||
-        rawDoc.docType === "ddd" ||
-        rawDoc.docType === "glossary"
-          ? rawDoc.docType
-          : "unknown",
+      docType: coerceLegacyDocType(rawDoc.docType),
       commitSha: sha,
       hash: rawDoc.hash ?? "",
       sections: rawDoc.sections ?? [],
@@ -105,15 +100,7 @@ export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promis
       sectionId: rawChunk.sectionId ?? "legacy",
       sectionTitle: rawChunk.sectionTitle ?? "legacy",
       path: rawChunk.path,
-      docType:
-        rawChunk.docType === "adr" ||
-        rawChunk.docType === "prd" ||
-        rawChunk.docType === "srs" ||
-        rawChunk.docType === "plan" ||
-        rawChunk.docType === "ddd" ||
-        rawChunk.docType === "glossary"
-          ? rawChunk.docType
-          : "unknown",
+      docType: coerceLegacyDocType(rawChunk.docType),
       commitSha: sha,
       text: rawChunk.text,
       tokenCount: rawChunk.tokenCount ?? rawChunk.text.split(/\s+/).filter(Boolean).length,
