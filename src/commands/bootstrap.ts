@@ -14,7 +14,25 @@ export const runConfigSet = async (cwd: string, key: string, value: string): Pro
   console.log(`설정이 업데이트되었습니다: ${key}=${value}`);
 };
 
-export const runStatus = async (cwd: string): Promise<void> => {
+export interface StatusResult {
+  branch: string;
+  head: string;
+  backend: string;
+  zvec: {
+    status: "missing" | "loaded";
+    collections: string[];
+    schemaVersion: number | null;
+    searchReady: boolean;
+    migrationRequired: boolean;
+    stats: Record<string, unknown> | null;
+  };
+  supported_types: string[];
+  manifests: number;
+  embedding: Awaited<ReturnType<typeof loadConfig>>["embedding"];
+  format: Awaited<ReturnType<typeof loadConfig>>["output"]["format"];
+}
+
+export const runStatus = async (cwd: string): Promise<StatusResult> => {
   await ensureRagitStructure(cwd);
   const paths = resolveRagitPaths(cwd);
   const config = await loadConfig(cwd);
@@ -58,7 +76,7 @@ export const runStatus = async (cwd: string): Promise<void> => {
     embedding: config.embedding,
     format: config.output.format,
   };
-  console.log(JSON.stringify(status, null, 2));
+  return status;
 };
 
 const checkManifestConsistency = async (
@@ -97,7 +115,18 @@ const checkManifestConsistency = async (
   }
 };
 
-export const runDoctor = async (cwd: string): Promise<void> => {
+export interface DoctorCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface DoctorResult {
+  checks: DoctorCheck[];
+  hasFailure: boolean;
+}
+
+export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
   const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
   try {
     await ensureGitRepository(cwd);
@@ -191,13 +220,7 @@ export const runDoctor = async (cwd: string): Promise<void> => {
     }
   }
   const hasFailure = checks.some((check) => !check.ok);
-  for (const check of checks) {
-    const icon = check.ok ? "✅" : "❌";
-    console.log(`${icon} ${check.name}: ${check.detail}`);
-  }
-  if (hasFailure) {
-    throw new Error("doctor 진단에서 실패가 발견되었습니다.");
-  }
+  return { checks, hasFailure };
 };
 
 export const resolveCwd = (input?: string): string => (input ? path.resolve(input) : process.cwd());

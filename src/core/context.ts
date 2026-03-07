@@ -1,9 +1,20 @@
-import { formatQueryResult } from "./output.js";
+import { CliView } from "./cliContract.js";
+import { formatQueryResultText, projectRetrievalHits } from "./output.js";
+import { RetrievalHit } from "./types.js";
 import { searchKnowledge } from "./retrieval.js";
 
 export interface ContextPackOptions {
   budget?: number;
   at?: string;
+}
+
+export interface ContextPackResult {
+  goal: string;
+  snapshotSha: string;
+  budget: number;
+  usedTokens: number;
+  selectedHits: number;
+  hits: RetrievalHit[];
 }
 
 const countTokens = (text: string): number => text.split(/\s+/).filter(Boolean).length;
@@ -12,7 +23,7 @@ export const packContext = async (
   cwd: string,
   goal: string,
   options: ContextPackOptions,
-): Promise<{ markdown: string; json: string }> => {
+): Promise<ContextPackResult> => {
   const budget = options.budget ?? 1200;
   const result = await searchKnowledge(cwd, goal, { at: options.at, topK: 30 });
   const selected = [];
@@ -24,35 +35,39 @@ export const packContext = async (
     usedTokens += tokens;
     if (usedTokens >= budget) break;
   }
-  const limitedResult = {
+  return {
+    goal,
     snapshotSha: result.snapshotSha,
+    budget,
+    usedTokens,
+    selectedHits: selected.length,
     hits: selected,
   };
-  const output = formatQueryResult(goal, limitedResult, "both");
-  const summary = [
-    `# ragit context pack`,
-    `- goal: ${goal}`,
-    `- snapshot: ${result.snapshotSha}`,
-    `- budget: ${budget}`,
-    `- used_tokens: ${usedTokens}`,
-    `- selected_hits: ${selected.length}`,
-    "",
-    output.markdown ?? "",
-  ].join("\n");
-  const meta = JSON.stringify(
-    {
-      goal,
-      snapshotSha: result.snapshotSha,
-      budget,
-      usedTokens,
-      selectedHits: selected.length,
-      hits: selected,
-    },
-    null,
-    2,
-  );
-  return {
-    markdown: summary,
-    json: meta,
-  };
 };
+
+export const formatContextPackText = (packet: ContextPackResult, view: CliView): string => {
+  const queryText = formatQueryResultText(packet.goal, { snapshotSha: packet.snapshotSha, hits: packet.hits }, view);
+  return [
+    "# ragit context pack",
+    `- goal: ${packet.goal}`,
+    `- snapshot: ${packet.snapshotSha}`,
+    `- budget: ${packet.budget}`,
+    `- used_tokens: ${packet.usedTokens}`,
+    `- selected_hits: ${packet.selectedHits}`,
+    `- view: ${view}`,
+    "",
+    queryText,
+  ].join("\n");
+};
+
+export const projectContextPack = (packet: ContextPackResult, view: CliView): Omit<ContextPackResult, "hits"> & {
+  hits: ReturnType<typeof projectRetrievalHits>;
+} => ({
+  goal: packet.goal,
+  snapshotSha: packet.snapshotSha,
+  budget: packet.budget,
+  usedTokens: packet.usedTokens,
+  selectedHits: packet.selectedHits,
+  hits: projectRetrievalHits(packet.hits, view),
+});
+

@@ -118,6 +118,7 @@ export interface MemoryWrapResult {
   currentPath: string;
   openLoopsPath: string;
   sourceHeadSha: string | null;
+  dryRun: boolean;
   warnings: string[];
 }
 
@@ -129,7 +130,9 @@ export interface PromotionBatchInput {
 
 export interface MemoryPromoteResult {
   createdFiles: string[];
+  plannedFiles: string[];
   sourceHeadSha: string | null;
   ingested: boolean;
+  dryRun: boolean;
   warnings: string[];
 }

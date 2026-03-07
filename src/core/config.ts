@@ -50,6 +50,12 @@ export const defaultConfig = (): RagitConfig => ({
   },
 });
 
+const normalizeOutputFormat = (value: unknown): RagitConfig["output"]["format"] => {
+  if (value === "json" || value === "both" || value === "text") return value;
+  if (value === "markdown" || value === "table") return "text";
+  return defaultConfig().output.format;
+};
+
 const parseValue = (raw: string): string | number | boolean | string[] => {
   const value = raw.trim();
   if (value === "true") return true;
@@ -84,6 +90,8 @@ export const parseToml = (source: string): RagitConfig => {
     const [, key, rawValue] = assignmentMatch;
     result[currentSection][key] = parseValue(rawValue);
   }
+  const output = result.output ?? {};
+  output.format = normalizeOutputFormat(output.format);
   return result as unknown as RagitConfig;
 };
 
@@ -138,7 +146,7 @@ export const setConfigValue = (config: RagitConfig, dottedKey: string, value: st
     }
     container[key] = parsed;
   } else {
-    container[key] = value;
+    container[key] = section === "output" && key === "format" ? normalizeOutputFormat(value) : value;
   }
   return config;
 };
