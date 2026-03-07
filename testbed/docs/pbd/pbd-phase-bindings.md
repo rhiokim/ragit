@@ -43,6 +43,11 @@ If `.ragit/**` is assumed to be searchable corpus, retrieval will fail because c
 If hook validation commits unrelated markdown changes, isolated validation noise increases.
 If a manifest is missing for a target SHA, `query --at <sha>` cannot reconstruct that state.
 
+## Mixed Ingest Binding
+
+Mixed ingest binds the isolated `testbed/docs/` corpus to repository-wide markdown knowledge such as `README.md`, `llms.txt`, and the docs site content.
+This binding is observed to measure whether repository noise displaces the intended top hits from the isolated baseline.
+
 ## Observability Notes
 
 The most important observations are manifest count, top hit path, top-3 stability, and differences between isolated and mixed ingest.
