@@ -19,7 +19,7 @@
    - **Acceptable Top-3**: `testbed/docs/plan/plan-round-1.md`
 
 5. **Question**: What is the difference between Git and RAGit?
-   - **Expected Top-1**: `testbed/docs/prd/prd-self-referential-testbed.md`
+   - **Expected Top-1**: `testbed/docs/ddd/ddd-core-models.md`
    - **Acceptable Top-3**: `testbed/docs/ddd/ddd-core-models.md`
 
 6. **Question**: What does the PBD describe in this project?

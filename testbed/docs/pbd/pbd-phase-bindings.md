@@ -7,6 +7,11 @@ type: pbd
 
 This PBD describes how the round-1 self-referential test bed moves through phases and how each phase binds to the next.
 
+## What PBD Describes
+
+The PBD describes the phase topology and binding structure of this project.
+It explains how `init`, `ingest`, `query`, `context pack`, and hook automation connect to each other.
+
 ## Phase Topology
 
 Phase 1 is baseline verification.
