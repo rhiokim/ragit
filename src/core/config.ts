@@ -15,6 +15,11 @@ export const defaultConfig = (): RagitConfig => ({
     manifest_dir: ".ragit/manifest",
     vector_dir: ".ragit/store",
   },
+  embedding: {
+    provider: "local-placeholder",
+    dimensions: 64,
+    version: "v1",
+  },
   ingest: {
     supported_types: [...KNOWN_DOC_TYPES],
     type_detection: "frontmatter-first",
@@ -55,7 +60,7 @@ const parseValue = (raw: string): string | number | boolean | string[] => {
 };
 
 export const parseToml = (source: string): RagitConfig => {
-  const result = defaultConfig() as Record<string, Record<string, unknown>>;
+  const result = defaultConfig() as unknown as Record<string, Record<string, unknown>>;
   let currentSection: string | null = null;
   for (const line of source.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -107,7 +112,7 @@ export const setConfigValue = (config: RagitConfig, dottedKey: string, value: st
     throw new Error(`지원하지 않는 key 형식입니다: ${dottedKey}`);
   }
   const [section, key] = segments;
-  const container = (config as Record<string, Record<string, unknown>>)[section];
+  const container = (config as unknown as Record<string, Record<string, unknown>>)[section];
   if (!container || !(key in container)) {
     throw new Error(`알 수 없는 설정 키입니다: ${dottedKey}`);
   }

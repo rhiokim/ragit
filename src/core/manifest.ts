@@ -2,6 +2,8 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SnapshotManifest, ChunkRecord, DocumentRecord } from "./types.js";
 
+type SnapshotChunkInput = Pick<ChunkRecord, "id" | "documentId" | "documentVersionId">;
+
 const manifestDir = (cwd: string): string => path.join(cwd, ".ragit", "manifest");
 
 const manifestPath = (cwd: string, sha: string): string => path.join(manifestDir(cwd), `${sha}.json`);
@@ -10,16 +12,17 @@ export const buildSnapshotManifest = (
   commitSha: string,
   parentSha: string | null,
   docs: DocumentRecord[],
-  chunks: ChunkRecord[],
+  chunks: SnapshotChunkInput[],
 ): SnapshotManifest => ({
   commitSha,
   parentSha,
   createdAt: new Date().toISOString(),
-  indexVersion: 1,
+  indexVersion: 2,
   docs,
   chunks: chunks.map((chunk) => ({
     id: chunk.id,
     documentId: chunk.documentId,
+    documentVersionId: chunk.documentVersionId,
   })),
 });
 
@@ -32,6 +35,15 @@ export const loadSnapshotManifest = async (cwd: string, sha: string): Promise<Sn
   const target = manifestPath(cwd, sha);
   const content = await readFile(target, "utf8");
   return JSON.parse(content) as SnapshotManifest;
+};
+
+export const loadSnapshotManifestIfExists = async (cwd: string, sha: string | null | undefined): Promise<SnapshotManifest | null> => {
+  if (!sha) return null;
+  try {
+    return await loadSnapshotManifest(cwd, sha);
+  } catch {
+    return null;
+  }
 };
 
 export const latestSnapshotSha = async (cwd: string): Promise<string | null> => {

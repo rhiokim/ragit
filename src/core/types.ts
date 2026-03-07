@@ -36,6 +36,11 @@ export interface RagitConfig {
     manifest_dir: string;
     vector_dir: string;
   };
+  embedding: {
+    provider: "local-placeholder";
+    dimensions: number;
+    version: string;
+  };
   ingest: {
     supported_types: DocType[];
     type_detection: "frontmatter-first";
@@ -68,6 +73,7 @@ export interface DocumentSection {
 
 export interface DocumentRecord {
   id: string;
+  versionId: string;
   path: string;
   docType: DocType;
   commitSha: string;
@@ -78,6 +84,7 @@ export interface DocumentRecord {
 export interface ChunkRecord {
   id: string;
   documentId: string;
+  documentVersionId: string;
   sectionId: string;
   sectionTitle: string;
   path: string;
@@ -97,6 +104,7 @@ export interface SnapshotManifest {
   chunks: Array<{
     id: string;
     documentId: string;
+    documentVersionId: string;
   }>;
 }
 

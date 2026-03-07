@@ -7,6 +7,11 @@ backend = "zvec"
 manifest_dir = ".ragit/manifest"
 vector_dir = ".ragit/store"
 
+[embedding]
+provider = "local-placeholder"
+dimensions = 64
+version = "v1"
+
 [ingest]
 supported_types = ["adr", "prd", "srs", "spec", "plan", "ddd", "glossary", "pbd"]
 type_detection = "frontmatter-first"
