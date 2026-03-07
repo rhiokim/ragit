@@ -5,23 +5,35 @@ description: Core commands for RAGit v0.1
 
 Inside a repository checkout, use `pnpm ragit <command>`. Published installs use `ragit <command>`.
 
+If you are calling RAGit from an agent, start with <a href="/en/docs/agent-cli">Agent CLI Contract</a>.
+
 ## Core Commands
 
 ```bash
-pnpm ragit init
+pnpm ragit describe query --format json
+pnpm ragit init --output text|json|both
 pnpm ragit config set <key> <value>
-pnpm ragit hooks install|uninstall|status
-pnpm ragit ingest --all|--since <sha>|--files <glob>
-pnpm ragit query "<question>" --format both
-pnpm ragit context pack "<goal>" --budget 1200
-pnpm ragit memory wrap --input <path|-> 
-pnpm ragit memory recall "<goal>" --format both
-pnpm ragit memory promote --input <path|->
+pnpm ragit hooks install|uninstall --dry-run --format json
+pnpm ragit hooks status --format json
+pnpm ragit ingest --all|--since <sha>|--files <glob>|--input <path|-> --dry-run --format json
+pnpm ragit query "<question>" --input <path|-> --view minimal --format both
+pnpm ragit context pack "<goal>" --input <path|-> --budget 1200 --view minimal --format both
+pnpm ragit memory wrap --input <path|-> --dry-run --format json
+pnpm ragit memory recall "<goal>" --view minimal --format both
+pnpm ragit memory promote --input <path|-> --dry-run --format json
 pnpm ragit migrate from-json-store --dry-run
 pnpm ragit migrate from-sqlitevss --dry-run
-pnpm ragit status
-pnpm ragit doctor
+pnpm ragit status --format json
+pnpm ragit doctor --format json
 ```
+
+## Contract Rules
+
+- Prefer `--format json` for machine consumers.
+- Use `ragit describe <command> --format json` before integrating a command for the first time.
+- Prefer `--view minimal` for `query`, `context pack`, and `memory recall` unless the agent truly needs full text.
+- Prefer `--input <path|->` for agent calls so the payload is explicit and reproducible.
+- Run mutating commands with `--dry-run` first: `ingest`, `hooks install`, `hooks uninstall`, `memory wrap`, `memory promote`.
 
 ## Docs Commands
 
