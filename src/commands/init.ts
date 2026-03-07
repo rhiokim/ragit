@@ -1,7 +1,9 @@
+import { loadConfig } from "../core/config.js";
 import path from "node:path";
 import { buildGuideIndex, ensureAgentsInstruction, ensureGuideStructure, parseGuideBoundaries, templatePathsForSummary, writeGuideIndex } from "../core/guide.js";
 import { initGitRepository, isGitRepository } from "../core/git.js";
 import { ensureGitIgnoreEntries, ensureRagitStructure } from "../core/project.js";
+import { bootstrapCanonicalStore, closeCanonicalStore, hasLegacyJsonStore } from "../core/store.js";
 import { KNOWN_DOC_TYPES } from "../core/types.js";
 import { confirmStep, printStep } from "../core/wizard.js";
 
@@ -29,10 +31,17 @@ export interface InitSummary {
     skippedFiles: string[];
     templates: string[];
   };
+  storage: {
+    backend: "zvec";
+    status: "created" | "loaded";
+    collections: string[];
+    searchReady: false;
+    migrationRequired: boolean;
+  };
   nextActions: string[];
 }
 
-const totalSteps = 6;
+const totalSteps = 7;
 
 const ensureInteractiveAvailable = (interactive: boolean): void => {
   if (interactive && !process.stdin.isTTY) {
@@ -90,7 +99,7 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
 
   logStep(2, "초기화 모드 확인");
   if (interactive) {
-    const proceed = await confirmStep("대화형 6단계 초기화를 기본값으로 진행하시겠습니까?", true);
+    const proceed = await confirmStep("대화형 7단계 초기화를 기본값으로 진행하시겠습니까?", true);
     if (!proceed) {
       throw new Error("사용자 요청으로 초기화를 중단했습니다.");
     }
@@ -114,8 +123,28 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
   const indexPath = await writeGuideIndex(cwd, index);
   stepLogs.push(`boundaries=${parsed.boundaries.length}`);
 
-  logStep(6, "결과 요약");
-  const nextActions = ["ragit hooks install", "ragit ingest --all"];
+  logStep(6, "zvec 저장소 bootstrap");
+  const config = await loadConfig(cwd);
+  const storage = await (async () => {
+    const store = await bootstrapCanonicalStore(cwd, config.embedding, false);
+    try {
+      return {
+        backend: "zvec" as const,
+        status: store.status,
+        collections: [store.meta.collections.documents, store.meta.collections.chunks],
+        searchReady: false as const,
+        migrationRequired: await hasLegacyJsonStore(cwd),
+      };
+    } finally {
+      closeCanonicalStore(store);
+    }
+  })();
+  stepLogs.push(`storage=${storage.status}`);
+
+  logStep(7, "결과 요약");
+  const nextActions = storage.migrationRequired
+    ? ["ragit migrate from-json-store", "ragit hooks install", "ragit ingest --all"]
+    : ["ragit hooks install", "ragit ingest --all"];
   stepLogs.push("summary=ready");
 
   return {
@@ -133,6 +162,7 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
       skippedFiles: guide.skippedFiles,
       templates,
     },
+    storage,
     nextActions,
   };
 };
@@ -151,6 +181,9 @@ export const formatInitSummaryTable = (summary: InitSummary): string => {
     `${pad("guide-index", 18)}: ${summary.guide.indexPath}`,
     `${pad("templates", 18)}: created=${created}, skipped=${skipped}`,
     `${pad("boundaries step", 18)}: ${summary.steps.find((entry) => entry.startsWith("boundaries="))?.replace("boundaries=", "") ?? "0"}`,
+    `${pad("zvec", 18)}: ${summary.storage.status} (${summary.storage.collections.join(",")})`,
+    `${pad("search-ready", 18)}: ${summary.storage.searchReady ? "true" : "false"}`,
+    `${pad("migration", 18)}: ${summary.storage.migrationRequired ? "required" : "none"}`,
     "",
     "next actions:",
     ...summary.nextActions.map((action) => `- ${action}`),

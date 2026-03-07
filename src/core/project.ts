@@ -9,6 +9,9 @@ export interface RagitPaths {
   configPath: string;
   manifestDir: string;
   storeDir: string;
+  storeMetaPath: string;
+  documentsCollectionDir: string;
+  chunksCollectionDir: string;
   cacheDir: string;
   hooksDir: string;
 }
@@ -19,6 +22,9 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
   configPath: path.join(cwd, CONFIG_PATH),
   manifestDir: path.join(cwd, ".ragit", "manifest"),
   storeDir: path.join(cwd, ".ragit", "store"),
+  storeMetaPath: path.join(cwd, ".ragit", "store", "meta.json"),
+  documentsCollectionDir: path.join(cwd, ".ragit", "store", "documents"),
+  chunksCollectionDir: path.join(cwd, ".ragit", "store", "chunks"),
   cacheDir: path.join(cwd, ".ragit", "cache"),
   hooksDir: path.join(cwd, ".ragit", "hooks"),
 });

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@zvec/zvec':
+        specifier: 0.2.1
+        version: 0.2.1
       commander:
         specifier: ^14.0.1
         version: 14.0.3
@@ -1397,6 +1400,24 @@ packages:
   '@zeit/schemas@2.36.0':
     resolution: {integrity: sha512-7kjMwcChYEzMKjeex9ZFXkt1AyNov9R5HZtjBKVsmVpw7pa7ZtlCGvCBC2vnnXctaYN+aRI61HjIqeetZW5ROg==}
 
+  '@zvec/bindings-darwin-arm64@0.2.0':
+    resolution: {integrity: sha512-uYlyO7xUwD51SFKq7E0MUYx+KTFiyjOAk9ksCSbPJxyYRCp4f4y827aXpASraf52aaOSIBnv5ZeoErGkRO7Uqw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@zvec/bindings-linux-arm64@0.2.0':
+    resolution: {integrity: sha512-8cRvA7kz2ltZKaBnr1FG0xdNrYuNZNdaf0FDhMA89tl/wmVT5e6VY0l2afysiCqPyFqsedzj6OBKoP7/JJiaFA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@zvec/bindings-linux-x64@0.2.0':
+    resolution: {integrity: sha512-a4f4Lp2lApDyyhW9cFNhsvnwfBQ2GJTcZiMnPEan7G+hx4Sp520xTAJqEcv0xJqxpVETx8pxF8JDiNcl7zOIQQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@zvec/zvec@0.2.1':
+    resolution: {integrity: sha512-sUxoztSHO2tYaohZuHvP+UCu9wn+EAuy/jr871JQD5JDLhL7F39wFnxS60PkgmNy1bnVuTghYNeB7ddbS7+jKQ==}
+
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
     peerDependencies:
@@ -1468,6 +1489,9 @@ packages:
     resolution: {integrity: sha512-lIyg0szRfYbiy67j9KN8IyeD7q7hcmqnJ1ddWmNt19ItGpNN64mnllmxUNFIOdOm6by97jlL6wfpTTJrmnjWAA==}
     engines: {node: '>=6.0.0'}
     hasBin: true
+
+  bindings@1.5.0:
+    resolution: {integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==}
 
   birpc@4.0.0:
     resolution: {integrity: sha512-LShSxJP0KTmd101b6DRyGBj57LZxSDYWKitQNW/mi8GRMvZb078Uf9+pveax1DrVL89vm7mWe+TovdI/UDOuPw==}
@@ -1744,6 +1768,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  file-uri-to-path@1.0.0:
+    resolution: {integrity: sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==}
 
   fill-range@7.1.1:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
@@ -4074,6 +4101,23 @@ snapshots:
 
   '@zeit/schemas@2.36.0': {}
 
+  '@zvec/bindings-darwin-arm64@0.2.0':
+    optional: true
+
+  '@zvec/bindings-linux-arm64@0.2.0':
+    optional: true
+
+  '@zvec/bindings-linux-x64@0.2.0':
+    optional: true
+
+  '@zvec/zvec@0.2.1':
+    dependencies:
+      bindings: 1.5.0
+    optionalDependencies:
+      '@zvec/bindings-darwin-arm64': 0.2.0
+      '@zvec/bindings-linux-arm64': 0.2.0
+      '@zvec/bindings-linux-x64': 0.2.0
+
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
       acorn: 8.16.0
@@ -4128,6 +4172,10 @@ snapshots:
   balanced-match@1.0.2: {}
 
   baseline-browser-mapping@2.10.0: {}
+
+  bindings@1.5.0:
+    dependencies:
+      file-uri-to-path: 1.0.0
 
   birpc@4.0.0: {}
 
@@ -4408,6 +4456,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
       picomatch: 4.0.3
+
+  file-uri-to-path@1.0.0: {}
 
   fill-range@7.1.1:
     dependencies:

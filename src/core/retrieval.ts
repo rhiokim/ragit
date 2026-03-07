@@ -1,9 +1,9 @@
 import { loadConfig } from "./config.js";
 import { getHeadSha } from "./git.js";
 import { latestSnapshotSha, loadSnapshotManifest, resolveSnapshotRef } from "./manifest.js";
-import { loadStore } from "./store.js";
+import { bootstrapCanonicalStore, closeCanonicalStore } from "./store.js";
 import { ChunkRecord, RetrievalHit } from "./types.js";
-import { cosineSimilarity, embedWithZvec } from "./zvec.js";
+import { embedWithLocalPlaceholder, zvecCosineDistanceToSimilarity } from "./embedding.js";
 
 const normalizeText = (text: string): string =>
   text
@@ -52,45 +52,86 @@ export interface QueryResult {
   hits: RetrievalHit[];
 }
 
-const mapChunksById = (chunks: ChunkRecord[]): Map<string, ChunkRecord> => {
-  const map = new Map<string, ChunkRecord>();
-  for (const chunk of chunks) map.set(chunk.id, chunk);
-  return map;
-};
+const escapeFilterLiteral = (value: string): string => value.replaceAll("'", "''");
+
+const buildSnapshotIdFilter = (ids: string[]): string => `id IN (${ids.map((id) => `'${escapeFilterLiteral(id)}'`).join(",")})`;
+
+const hydrateChunk = (raw: { id: string; fields: Record<string, unknown> }): ChunkRecord => ({
+  id: raw.id,
+  documentId: String(raw.fields.documentId),
+  documentVersionId: String(raw.fields.documentVersionId),
+  sectionId: String(raw.fields.sectionId),
+  sectionTitle: String(raw.fields.sectionTitle),
+  path: String(raw.fields.path),
+  docType: String(raw.fields.docType) as ChunkRecord["docType"],
+  commitSha: String(raw.fields.commitSha),
+  text: String(raw.fields.text),
+  tokenCount: Number(raw.fields.tokenCount),
+  embedding: [],
+});
 
 export const searchKnowledge = async (cwd: string, query: string, options: QueryOptions): Promise<QueryResult> => {
   const config = await loadConfig(cwd);
   const snapshotSha = await resolveSnapshotSha(cwd, options.at);
   const snapshot = await loadSnapshotManifest(cwd, snapshotSha);
-  const store = await loadStore(cwd);
-  const allChunks = Object.values(store.chunks);
-  const chunkMap = mapChunksById(allChunks);
-  const scopedChunks = snapshot.chunks
-    .map((entry) => chunkMap.get(entry.id))
-    .filter((chunk): chunk is ChunkRecord => Boolean(chunk));
-  const queryEmbedding = embedWithZvec(query);
   const alpha = config.retrieval.alpha;
   const topK = options.topK ?? config.retrieval.top_k;
-  const hits = scopedChunks
-    .map((chunk) => {
-      const scoreVector = cosineSimilarity(queryEmbedding, chunk.embedding);
-      const scoreKeyword = config.retrieval.keyword_enabled ? keywordScore(query, chunk.text) : 0;
-      const scoreFinal = calculateHybridScore(scoreVector, scoreKeyword, alpha);
-      const hit: RetrievalHit = {
-        chunkId: chunk.id,
-        path: chunk.path,
-        sectionTitle: chunk.sectionTitle,
-        scoreVector,
-        scoreKeyword,
-        scoreFinal,
-        text: chunk.text,
-      };
-      return hit;
-    })
-    .sort((a, b) => b.scoreFinal - a.scoreFinal)
-    .slice(0, topK);
-  return {
-    snapshotSha,
-    hits,
-  };
+  const manifestChunkIds = snapshot.chunks.map((entry) => entry.id);
+  if (manifestChunkIds.length === 0) {
+    return {
+      snapshotSha,
+      hits: [],
+    };
+  }
+  const queryEmbedding = embedWithLocalPlaceholder(query, config.embedding.dimensions);
+  const store = await bootstrapCanonicalStore(cwd, config.embedding, true);
+
+  try {
+    const batchSize = 400;
+    const candidateLimit = Math.min(manifestChunkIds.length, Math.max(topK * 20, 100));
+    const candidates = new Map<string, RetrievalHit>();
+    const scopedChunkIds = new Set(manifestChunkIds);
+
+    for (let cursor = 0; cursor < manifestChunkIds.length; cursor += batchSize) {
+      const slice = manifestChunkIds.slice(cursor, cursor + batchSize);
+      const filter = buildSnapshotIdFilter(slice);
+      const result = store.chunks.querySync({
+        fieldName: "embedding",
+        vector: queryEmbedding,
+        topk: Math.min(candidateLimit, slice.length),
+        filter,
+        outputFields: ["documentId", "documentVersionId", "sectionId", "sectionTitle", "path", "docType", "commitSha", "text", "tokenCount"],
+      });
+      for (const raw of result) {
+        const chunk = hydrateChunk(raw);
+        const scoreVector = zvecCosineDistanceToSimilarity(raw.score);
+        const scoreKeyword = config.retrieval.keyword_enabled ? keywordScore(query, chunk.text) : 0;
+        const scoreFinal = calculateHybridScore(scoreVector, scoreKeyword, alpha);
+        const existing = candidates.get(chunk.id);
+        if (existing && existing.scoreFinal >= scoreFinal) {
+          continue;
+        }
+        candidates.set(chunk.id, {
+          chunkId: chunk.id,
+          path: chunk.path,
+          sectionTitle: chunk.sectionTitle,
+          scoreVector,
+          scoreKeyword,
+          scoreFinal,
+          text: chunk.text,
+        });
+      }
+    }
+
+    const hits = Array.from(candidates.values())
+      .filter((hit) => scopedChunkIds.has(hit.chunkId))
+      .sort((a, b) => b.scoreFinal - a.scoreFinal)
+      .slice(0, topK);
+    return {
+      snapshotSha,
+      hits,
+    };
+  } finally {
+    closeCanonicalStore(store);
+  }
 };
