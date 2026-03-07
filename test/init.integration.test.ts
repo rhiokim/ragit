@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -18,6 +18,9 @@ describe("init command integration", () => {
     expect(summary.guide.templates).toContain(".ragit/guide/templates/spec.template.md");
     expect(summary.guide.templates).toContain(".ragit/guide/templates/pbd.template.md");
     expect(summary.steps).toContain("doc-types=adr,prd,srs,spec,plan,ddd,glossary,pbd");
+    expect(summary.storage.status).toBe("created");
+    expect(summary.storage.collections).toEqual(["documents", "chunks"]);
+    expect(summary.storage.searchReady).toBe(false);
   });
 
   it("loads existing AGENTS without mutating source content", async () => {
@@ -39,5 +42,15 @@ describe("init command integration", () => {
     const summary = await runInit(temp, { nonInteractive: true, gitInit: true });
     expect(summary.git.initialized).toBe(true);
     expect(summary.agents.mode).toBe("created");
+  });
+
+  it("marks migrationRequired when legacy json store exists", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-legacy-"));
+    git(temp, ["init"]);
+    await mkdir(path.join(temp, ".ragit", "store"), { recursive: true });
+    await writeFile(path.join(temp, ".ragit", "store", "index.json"), JSON.stringify({ documents: {}, chunks: {} }, null, 2), "utf8");
+    const summary = await runInit(temp, { nonInteractive: true });
+    expect(summary.storage.migrationRequired).toBe(true);
+    expect(summary.nextActions[0]).toBe("ragit migrate from-json-store");
   });
 });
