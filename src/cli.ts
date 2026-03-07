@@ -63,6 +63,9 @@ const formatDescribeText = (spec: ReturnType<typeof describeCommandPath>): strin
   [
     "# ragit describe",
     `- command: ${spec.path}`,
+    `- group: ${spec.group}`,
+    `- docs: ${spec.docSlug}`,
+    `- stability: ${spec.stability}`,
     `- mutating: ${spec.mutating}`,
     `- raw_json_input: ${spec.supportsRawJsonInput}`,
     `- dry_run: ${spec.supportsDryRun}`,
@@ -79,6 +82,9 @@ const formatDescribeText = (spec: ReturnType<typeof describeCommandPath>): strin
       const defaultText = option.defaultValue === undefined ? "" : ` default=${option.defaultValue}`;
       return `- ${option.name} (${option.type}${suffix}): ${option.description}${defaultText}`;
     }),
+    "",
+    "## Related Commands",
+    ...(spec.relatedCommands.length === 0 ? ["- none"] : spec.relatedCommands.map((command) => `- ${command}`)),
     "",
     "## Examples",
     ...spec.examples.map((example) => `- ${example}`),
