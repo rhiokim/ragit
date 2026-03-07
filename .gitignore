@@ -17,3 +17,5 @@ pnpm-debug.log*
 tests/
 
 AGENTS.md
+.ragit/store/
+.ragit/cache/
