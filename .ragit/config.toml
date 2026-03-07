@@ -1,0 +1,29 @@
+[project]
+name = "ragit-project"
+default_branch = "main"
+
+[storage]
+backend = "zvec"
+manifest_dir = ".ragit/manifest"
+vector_dir = ".ragit/store"
+
+[ingest]
+supported_types = ["adr", "prd", "srs", "spec", "plan", "ddd", "glossary", "pbd"]
+type_detection = "frontmatter-first"
+doc_globs = ["**/*.md", "**/*.mdx"]
+
+[hooks]
+post_commit = true
+post_merge = true
+
+[retrieval]
+alpha = 0.7
+top_k = 5
+keyword_enabled = true
+
+[security]
+secret_masking = true
+
+[output]
+format = "both"
+language = "ko"

@@ -1,0 +1,340 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-03-07T00:13:42.183Z",
+  "source": {
+    "path": "/Users/rhio/Works/my/ragit/AGENTS.md",
+    "mode": "loaded",
+    "sha256": "7ab6e1ae64f3679dd8dd14d34e22aa4b1a3ff4ae5b6be0bcbc93251b00abfcf1"
+  },
+  "parser": {
+    "boundaryRegex": "^#{2,6}\\s*(\\[[A-Z][0-9]+(?:\\.[a-z0-9]+)*\\])\\s+([^\\n]+)$",
+    "grfRegex": "^#{2,6}\\s*\\[?(Ground|Rule|Failure Trajectory|Flow)\\s+([0-9]+)([A-Za-z]+)?\\]?\\s+(.*)$"
+  },
+  "boundaries": [
+    {
+      "id": "[B2.a]",
+      "title": "식별자 탐색용 정규식",
+      "level": 2,
+      "startLine": 18,
+      "endLine": 26,
+      "parentId": null
+    },
+    {
+      "id": "[B2.b]",
+      "title": "대괄호 식별자",
+      "level": 2,
+      "startLine": 27,
+      "endLine": 32,
+      "parentId": null
+    },
+    {
+      "id": "[B2.c]",
+      "title": "섹션 & 블록의 정의",
+      "level": 2,
+      "startLine": 33,
+      "endLine": 39,
+      "parentId": null
+    },
+    {
+      "id": "[B2.d]",
+      "title": "계층적 구조",
+      "level": 2,
+      "startLine": 40,
+      "endLine": 69,
+      "parentId": null
+    },
+    {
+      "id": "[B3.a]",
+      "title": "Attention 공명의 작동 규칙",
+      "level": 2,
+      "startLine": 70,
+      "endLine": 79,
+      "parentId": null
+    },
+    {
+      "id": "[B3.b]",
+      "title": "공명과 규칙의 관계",
+      "level": 3,
+      "startLine": 80,
+      "endLine": 93,
+      "parentId": null
+    },
+    {
+      "id": "[B4.a]",
+      "title": "GRF, Ground, Rule, Flow 정의",
+      "level": 2,
+      "startLine": 94,
+      "endLine": 105,
+      "parentId": null
+    },
+    {
+      "id": "[B4.b]",
+      "title": "GRF 참조 규칙",
+      "level": 2,
+      "startLine": 106,
+      "endLine": 111,
+      "parentId": null
+    },
+    {
+      "id": "[B4.c]",
+      "title": "GRF 탐지 규칙",
+      "level": 2,
+      "startLine": 112,
+      "endLine": 123,
+      "parentId": null
+    },
+    {
+      "id": "[B4.c.1]",
+      "title": "식별자 및 계층 규칙",
+      "level": 3,
+      "startLine": 124,
+      "endLine": 132,
+      "parentId": "[B4.c]"
+    },
+    {
+      "id": "[B4.c.2]",
+      "title": "그룹 판정",
+      "level": 3,
+      "startLine": 133,
+      "endLine": 137,
+      "parentId": "[B4.c]"
+    },
+    {
+      "id": "[B4.d]",
+      "title": "GRF 문서 헤더 및 식별자 템플릿 (Rule)",
+      "level": 2,
+      "startLine": 138,
+      "endLine": 142,
+      "parentId": null
+    },
+    {
+      "id": "[B4.e]",
+      "title": "GRF 간 충돌 해소 지침 (Resonant Resolution)",
+      "level": 2,
+      "startLine": 143,
+      "endLine": 154,
+      "parentId": null
+    },
+    {
+      "id": "Rule 1",
+      "title": "System-Wide Rule Document Structural Protocol",
+      "level": 2,
+      "startLine": 155,
+      "endLine": 164,
+      "parentId": null
+    },
+    {
+      "id": "[R1.1]",
+      "title": "헤더 체계 원칙 (Header Structural System Principle)",
+      "level": 3,
+      "startLine": 165,
+      "endLine": 179,
+      "parentId": null
+    },
+    {
+      "id": "[R1.2]",
+      "title": "헤더 레벨 규칙 (Header-Level Binding Rule)",
+      "level": 3,
+      "startLine": 180,
+      "endLine": 198,
+      "parentId": null
+    },
+    {
+      "id": "[R1.2a]",
+      "title": "파일명 및 규칙명, 헤더 사용에 대한 규칙",
+      "level": 4,
+      "startLine": 199,
+      "endLine": 206,
+      "parentId": null
+    },
+    {
+      "id": "[R1.3]",
+      "title": "인덱스 위상 규칙 (Index Phase Continuity Rules)",
+      "level": 3,
+      "startLine": 207,
+      "endLine": 222,
+      "parentId": null
+    },
+    {
+      "id": "[R1.4]",
+      "title": "제목 규칙 (Title Binding Rules)",
+      "level": 3,
+      "startLine": 223,
+      "endLine": 230,
+      "parentId": null
+    },
+    {
+      "id": "[R1.5]",
+      "title": "문서 헤더 체계 예시 (Standard Structure Example)",
+      "level": 3,
+      "startLine": 231,
+      "endLine": 246,
+      "parentId": null
+    },
+    {
+      "id": "[R1.6]",
+      "title": "적용 범위 (Scope of Application)",
+      "level": 3,
+      "startLine": 247,
+      "endLine": 254,
+      "parentId": null
+    },
+    {
+      "id": "[R1.7]",
+      "title": "헤더-인덱스 강제 정합 규칙 (Mandatory Header-Index Alignment Rule)",
+      "level": 3,
+      "startLine": 255,
+      "endLine": 270,
+      "parentId": null
+    }
+  ],
+  "sections": [
+    {
+      "rootId": "[B2.a]",
+      "blockStartLine": 18,
+      "blockEndLine": 26,
+      "childIds": []
+    },
+    {
+      "rootId": "[B2.b]",
+      "blockStartLine": 27,
+      "blockEndLine": 32,
+      "childIds": []
+    },
+    {
+      "rootId": "[B2.c]",
+      "blockStartLine": 33,
+      "blockEndLine": 39,
+      "childIds": []
+    },
+    {
+      "rootId": "[B2.d]",
+      "blockStartLine": 40,
+      "blockEndLine": 69,
+      "childIds": []
+    },
+    {
+      "rootId": "[B3.a]",
+      "blockStartLine": 70,
+      "blockEndLine": 79,
+      "childIds": []
+    },
+    {
+      "rootId": "[B3.b]",
+      "blockStartLine": 80,
+      "blockEndLine": 93,
+      "childIds": []
+    },
+    {
+      "rootId": "[B4.a]",
+      "blockStartLine": 94,
+      "blockEndLine": 105,
+      "childIds": []
+    },
+    {
+      "rootId": "[B4.b]",
+      "blockStartLine": 106,
+      "blockEndLine": 111,
+      "childIds": []
+    },
+    {
+      "rootId": "[B4.c]",
+      "blockStartLine": 112,
+      "blockEndLine": 137,
+      "childIds": [
+        "[B4.c.1]",
+        "[B4.c.2]"
+      ]
+    },
+    {
+      "rootId": "[B4.d]",
+      "blockStartLine": 138,
+      "blockEndLine": 142,
+      "childIds": []
+    },
+    {
+      "rootId": "[B4.e]",
+      "blockStartLine": 143,
+      "blockEndLine": 154,
+      "childIds": []
+    },
+    {
+      "rootId": "Rule 1",
+      "blockStartLine": 155,
+      "blockEndLine": 164,
+      "childIds": []
+    },
+    {
+      "rootId": "[R1.1]",
+      "blockStartLine": 165,
+      "blockEndLine": 179,
+      "childIds": []
+    },
+    {
+      "rootId": "[R1.2]",
+      "blockStartLine": 180,
+      "blockEndLine": 198,
+      "childIds": []
+    },
+    {
+      "rootId": "[R1.2a]",
+      "blockStartLine": 199,
+      "blockEndLine": 206,
+      "childIds": []
+    },
+    {
+      "rootId": "[R1.3]",
+      "blockStartLine": 207,
+      "blockEndLine": 222,
+      "childIds": []
+    },
+    {
+      "rootId": "[R1.4]",
+      "blockStartLine": 223,
+      "blockEndLine": 230,
+      "childIds": []
+    },
+    {
+      "rootId": "[R1.5]",
+      "blockStartLine": 231,
+      "blockEndLine": 246,
+      "childIds": []
+    },
+    {
+      "rootId": "[R1.6]",
+      "blockStartLine": 247,
+      "blockEndLine": 254,
+      "childIds": []
+    },
+    {
+      "rootId": "[R1.7]",
+      "blockStartLine": 255,
+      "blockEndLine": 270,
+      "childIds": []
+    }
+  ],
+  "templateMap": {
+    "adr": ".ragit/guide/templates/adr.template.md",
+    "prd": ".ragit/guide/templates/prd.template.md",
+    "srs": ".ragit/guide/templates/srs.template.md",
+    "spec": ".ragit/guide/templates/spec.template.md",
+    "plan": ".ragit/guide/templates/plan.template.md",
+    "ddd": ".ragit/guide/templates/ddd.template.md",
+    "glossary": ".ragit/guide/templates/glossary.template.md",
+    "pbd": ".ragit/guide/templates/pbd.template.md"
+  },
+  "defaults": {
+    "language": "ko",
+    "profile": "topological",
+    "docTypes": [
+      "adr",
+      "prd",
+      "srs",
+      "spec",
+      "plan",
+      "ddd",
+      "glossary",
+      "pbd"
+    ]
+  }
+}
