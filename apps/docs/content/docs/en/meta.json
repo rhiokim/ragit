@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "quickstart",
+    "memory-model",
     "cli-reference",
     "init-guide",
     "architecture",
