@@ -20,3 +20,4 @@ RAGit local execution in this repository uses `pnpm ragit <command>` as the cano
 The round-1 test bed must use `pnpm ragit` in all operational commands.
 Golden queries should explicitly confirm that RAGit can run locally without building `dist/`.
 Setup guidance should explain that `pnpm build` is optional, not mandatory, for repository-local usage.
+Hook validation should use a document-only commit so that post-commit indexing can be observed without unrelated markdown noise.
