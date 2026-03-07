@@ -3,6 +3,20 @@ import path from "node:path";
 import { getGitRoot } from "../core/git.js";
 
 const header = "# managed-by-ragit";
+
+export interface HookActionResult {
+  name: "post-commit" | "post-merge";
+  target: string;
+  action: "install" | "uninstall" | "status";
+  state: "installed" | "absent" | "external" | "planned";
+}
+
+export interface HooksMutationResult {
+  dryRun: boolean;
+  root: string;
+  hooks: HookActionResult[];
+}
+
 const hookTemplate = (hookName: "post-commit" | "post-merge"): string => {
   const sinceExpr = hookName === "post-commit" ? "HEAD~1" : "${ORIG_HEAD:-HEAD~1}";
   return `#!/bin/sh
@@ -17,42 +31,82 @@ fi
 
 const hookPath = (root: string, name: "post-commit" | "post-merge"): string => path.join(root, ".git", "hooks", name);
 
-export const runHooksInstall = async (cwd: string): Promise<void> => {
+export const runHooksInstall = async (cwd: string, dryRun = false): Promise<HooksMutationResult> => {
   const root = await getGitRoot(cwd);
+  const hooks: HookActionResult[] = [];
   for (const name of ["post-commit", "post-merge"] as const) {
     const target = hookPath(root, name);
+    hooks.push({
+      name,
+      target: path.relative(cwd, target).replaceAll(path.sep, "/"),
+      action: "install",
+      state: dryRun ? "planned" : "installed",
+    });
+    if (dryRun) continue;
     await writeFile(target, hookTemplate(name), "utf8");
     await chmod(target, 0o755);
   }
-  console.log("ragit hooks 설치가 완료되었습니다.");
+  return { dryRun, root, hooks };
 };
 
-export const runHooksUninstall = async (cwd: string): Promise<void> => {
+export const runHooksUninstall = async (cwd: string, dryRun = false): Promise<HooksMutationResult> => {
   const root = await getGitRoot(cwd);
+  const hooks: HookActionResult[] = [];
   for (const name of ["post-commit", "post-merge"] as const) {
     const target = hookPath(root, name);
+    let state: HookActionResult["state"] = "absent";
     try {
       const content = await readFile(target, "utf8");
-      if (!content.includes(header)) continue;
-      await rm(target, { force: true });
+      state = content.includes(header) ? "installed" : "external";
+      if (!content.includes(header)) {
+        hooks.push({
+          name,
+          target: path.relative(cwd, target).replaceAll(path.sep, "/"),
+          action: "uninstall",
+          state,
+        });
+        continue;
+      }
+      hooks.push({
+        name,
+        target: path.relative(cwd, target).replaceAll(path.sep, "/"),
+        action: "uninstall",
+        state: dryRun ? "planned" : "absent",
+      });
+      if (!dryRun) {
+        await rm(target, { force: true });
+      }
     } catch {
-      continue;
+      hooks.push({
+        name,
+        target: path.relative(cwd, target).replaceAll(path.sep, "/"),
+        action: "uninstall",
+        state,
+      });
     }
   }
-  console.log("ragit hooks 제거가 완료되었습니다.");
+  return { dryRun, root, hooks };
 };
 
-export const runHooksStatus = async (cwd: string): Promise<void> => {
+export const runHooksStatus = async (cwd: string): Promise<HooksMutationResult> => {
   const root = await getGitRoot(cwd);
-  const result: Record<string, "installed" | "absent" | "external"> = {};
+  const hooks: HookActionResult[] = [];
   for (const name of ["post-commit", "post-merge"] as const) {
     const target = hookPath(root, name);
+    let state: HookActionResult["state"] = "absent";
     try {
       const content = await readFile(target, "utf8");
-      result[name] = content.includes(header) ? "installed" : "external";
+      state = content.includes(header) ? "installed" : "external";
     } catch {
-      result[name] = "absent";
+      state = "absent";
     }
+    hooks.push({
+      name,
+      target: path.relative(cwd, target).replaceAll(path.sep, "/"),
+      action: "status",
+      state,
+    });
   }
-  console.log(JSON.stringify(result, null, 2));
+  return { dryRun: false, root, hooks };
 };
+

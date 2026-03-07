@@ -66,7 +66,7 @@ export interface RagitConfig {
     secret_masking: boolean;
   };
   output: {
-    format: "markdown" | "json" | "both";
+    format: "text" | "json" | "both";
     language: "ko" | "en";
   };
 }

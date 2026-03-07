@@ -1,53 +1,55 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { formatRecallPacket, normalizePromotionBatchInput, normalizeSessionWrapInput, promoteMemory, recallMemory, runMemoryWrap } from "../core/memory.js";
-import { OutputFormat } from "../core/output.js";
+import { buildCliEnvelope, CliFormat, CliView, emitCliOutput } from "../core/cliContract.js";
+import { readJsonInput } from "../core/cliInput.js";
+import {
+  formatRecallPacket,
+  normalizePromotionBatchInput,
+  normalizeSessionWrapInput,
+  projectRecallPacket,
+  promoteMemory,
+  recallMemory,
+  runMemoryWrap,
+} from "../core/memory.js";
 
-const readStdin = async (): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    process.stdin.on("data", (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    process.stdin.on("end", () => {
-      resolve(Buffer.concat(chunks).toString("utf8"));
-    });
-    process.stdin.on("error", reject);
-  });
-
-const readJsonInput = async (cwd: string, input: string): Promise<unknown> => {
-  const raw = input === "-" ? await readStdin() : await readFile(path.resolve(cwd, input), "utf8");
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`JSON 입력을 파싱할 수 없습니다: ${message}`);
-  }
+export const runMemoryWrapCommand = async (
+  cwd: string,
+  input: string,
+  format: CliFormat,
+  dryRun = false,
+): Promise<void> => {
+  const payload = normalizeSessionWrapInput(await readJsonInput(cwd, input, "memory wrap"));
+  const result = await runMemoryWrap(cwd, payload, dryRun);
+  const envelope = buildCliEnvelope("memory wrap", cwd, result, result.warnings);
+  const text = [
+    "# ragit memory wrap",
+    `- session_id: ${result.sessionId}`,
+    `- session_path: ${result.sessionPath}`,
+    `- current_path: ${result.currentPath}`,
+    `- open_loops_path: ${result.openLoopsPath}`,
+    `- source_head: ${result.sourceHeadSha ?? "none"}`,
+    `- dry_run: ${result.dryRun}`,
+  ].join("\n");
+  emitCliOutput({ envelope, format, text });
 };
 
-export const runMemoryWrapCommand = async (cwd: string, input: string): Promise<void> => {
-  const payload = normalizeSessionWrapInput(await readJsonInput(cwd, input));
-  const result = await runMemoryWrap(cwd, payload);
-  console.log(JSON.stringify(result, null, 2));
-};
-
-export const runMemoryRecallCommand = async (cwd: string, goal: string, format: OutputFormat = "both"): Promise<void> => {
+export const runMemoryRecallCommand = async (
+  cwd: string,
+  goal: string,
+  format: CliFormat = "both",
+  view: CliView = "default",
+): Promise<void> => {
   const result = await recallMemory(cwd, goal);
-  const formatted = formatRecallPacket(result.packet);
-  if (format === "markdown") {
-    console.log(formatted.markdown);
-    return;
-  }
-  if (format === "json") {
-    console.log(formatted.json);
-    return;
-  }
-  console.log(formatted.markdown);
-  console.log(formatted.json);
+  const formatted = formatRecallPacket(result.packet, view);
+  const envelope = buildCliEnvelope("memory recall", cwd, projectRecallPacket(result.packet, view), result.packet.warnings);
+  emitCliOutput({ envelope, format, text: formatted.markdown });
 };
 
-export const runMemoryPromoteCommand = async (cwd: string, input: string): Promise<void> => {
-  const raw = await readJsonInput(cwd, input);
+export const runMemoryPromoteCommand = async (
+  cwd: string,
+  input: string,
+  format: CliFormat,
+  dryRun = false,
+): Promise<void> => {
+  const raw = await readJsonInput(cwd, input, "memory promote");
   const normalized = normalizePromotionBatchInput(
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? {
@@ -58,6 +60,16 @@ export const runMemoryPromoteCommand = async (cwd: string, input: string): Promi
         }
       : raw,
   );
-  const result = await promoteMemory(cwd, normalized);
-  console.log(JSON.stringify(result, null, 2));
+  const result = await promoteMemory(cwd, normalized, dryRun);
+  const envelope = buildCliEnvelope("memory promote", cwd, result, result.warnings);
+  const text = [
+    "# ragit memory promote",
+    `- dry_run: ${result.dryRun}`,
+    `- planned_files: ${result.plannedFiles.length}`,
+    `- created_files: ${result.createdFiles.length}`,
+    `- ingested: ${result.ingested}`,
+    `- source_head: ${result.sourceHeadSha ?? "none"}`,
+  ].join("\n");
+  emitCliOutput({ envelope, format, text });
 };
+

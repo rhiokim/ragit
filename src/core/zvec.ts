@@ -7,6 +7,9 @@ import { zeroVector } from "./embedding.js";
 import { resolveRagitPaths } from "./project.js";
 import { ChunkRecord, DocumentRecord, RagitConfig } from "./types.js";
 
+const runtimeBinding = ((zvecBinding as typeof zvecBinding & { default?: typeof zvecBinding }).default ??
+  zvecBinding) as typeof zvecBinding;
+
 const {
   ZVecCollectionSchema,
   ZVecCreateAndOpen,
@@ -16,7 +19,7 @@ const {
   ZVecLogLevel,
   ZVecMetricType,
   ZVecOpen,
-} = zvecBinding;
+} = runtimeBinding;
 
 type ZVecCollectionSchemaInstance = InstanceType<typeof zvecBinding.ZVecCollectionSchema>;
 

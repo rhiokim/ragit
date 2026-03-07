@@ -2,6 +2,8 @@ import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { assertAllowedKeys, assertRepoRelativePathArray } from "./cliInput.js";
+import { CliView } from "./cliContract.js";
 import { loadConfig } from "./config.js";
 import { toRepoPath } from "./identity.js";
 import { runIngest } from "./ingest.js";
@@ -21,6 +23,7 @@ import {
 } from "./memoryTypes.js";
 import { ensureRagitStructure } from "./project.js";
 import { QueryResult, searchKnowledge } from "./retrieval.js";
+import { projectRetrievalHits } from "./output.js";
 import { RagitConfig, RetrievalHit } from "./types.js";
 import { getHeadSha } from "./git.js";
 
@@ -78,6 +81,7 @@ const normalizeDecision = (value: unknown): MemoryDecision => {
     throw new Error("memory payload의 decisions 항목은 객체여야 합니다.");
   }
   const raw = value as Record<string, unknown>;
+  assertAllowedKeys(raw, ["id", "title", "summary", "rationale", "alternatives", "consequences", "relatedFiles"], "decisions[]");
   const title = asString(raw.title, "decisions[].title");
   const summary = asString(raw.summary, "decisions[].summary");
   return {
@@ -87,7 +91,7 @@ const normalizeDecision = (value: unknown): MemoryDecision => {
     rationale: asOptionalString(raw.rationale),
     alternatives: asStringArray(raw.alternatives),
     consequences: asStringArray(raw.consequences),
-    relatedFiles: asStringArray(raw.relatedFiles),
+    relatedFiles: assertRepoRelativePathArray(asStringArray(raw.relatedFiles), "decisions[].relatedFiles"),
   };
 };
 
@@ -96,6 +100,7 @@ const normalizeOpenLoop = (value: unknown): MemoryOpenLoop => {
     throw new Error("memory payload의 openLoops 항목은 객체여야 합니다.");
   }
   const raw = value as Record<string, unknown>;
+  assertAllowedKeys(raw, ["id", "title", "status", "nextAction", "blockingConditions", "relatedFiles", "sourceSessionId"], "openLoops[]");
   const title = asString(raw.title, "openLoops[].title");
   const nextAction = asString(raw.nextAction, "openLoops[].nextAction");
   const status = asOptionalString(raw.status);
@@ -107,7 +112,7 @@ const normalizeOpenLoop = (value: unknown): MemoryOpenLoop => {
     status: normalizedStatus,
     nextAction,
     blockingConditions: asStringArray(raw.blockingConditions),
-    relatedFiles: asStringArray(raw.relatedFiles),
+    relatedFiles: assertRepoRelativePathArray(asStringArray(raw.relatedFiles), "openLoops[].relatedFiles"),
     sourceSessionId: asOptionalString(raw.sourceSessionId),
   };
 };
@@ -117,6 +122,26 @@ const normalizePromotionCandidate = (value: unknown): PromotionCandidate => {
     throw new Error("memory payload의 promotionCandidates 항목은 객체여야 합니다.");
   }
   const raw = value as Record<string, unknown>;
+  assertAllowedKeys(
+    raw,
+    [
+      "id",
+      "kind",
+      "title",
+      "summary",
+      "tags",
+      "context",
+      "decision",
+      "consequences",
+      "alternatives",
+      "term",
+      "definition",
+      "aliases",
+      "milestones",
+      "workBreakdown",
+    ],
+    "promotionCandidates[]",
+  );
   const kind = asString(raw.kind, "promotionCandidates[].kind");
   const title = asString(raw.title, "promotionCandidates[].title");
   const summary = asString(raw.summary, "promotionCandidates[].summary");
@@ -161,6 +186,11 @@ export const normalizeSessionWrapInput = (value: unknown): SessionWrapInput => {
     throw new Error("memory wrap 입력은 JSON 객체여야 합니다.");
   }
   const raw = value as Record<string, unknown>;
+  assertAllowedKeys(
+    raw,
+    ["goal", "summary", "constraints", "decisions", "openLoops", "nextActions", "promotionCandidates", "sourceHeadSha", "createdAt"],
+    "memory wrap",
+  );
   return {
     goal: asString(raw.goal, "goal"),
     summary: asString(raw.summary, "summary"),
@@ -186,6 +216,7 @@ export const normalizePromotionBatchInput = (value: unknown): PromotionBatchInpu
     throw new Error("memory promote 입력은 JSON 객체 또는 배열이어야 합니다.");
   }
   const raw = value as Record<string, unknown>;
+  assertAllowedKeys(raw, ["promotionCandidates", "sourceSessionId", "sourceHeadSha", "sessionId"], "memory promote");
   return {
     promotionCandidates: Array.isArray(raw.promotionCandidates)
       ? raw.promotionCandidates.map(normalizePromotionCandidate)
@@ -211,12 +242,17 @@ const resolveMemoryPaths = (cwd: string, config: RagitConfig): ResolvedMemoryPat
   };
 };
 
-const ensureMemoryLayout = async (paths: ResolvedMemoryPaths): Promise<void> => {
+const ensureMemoryLayout = async (
+  paths: ResolvedMemoryPaths,
+  options: { includeCorpus?: boolean } = {},
+): Promise<void> => {
   await mkdir(paths.sessionDir, { recursive: true });
   await mkdir(paths.workingDir, { recursive: true });
-  await mkdir(paths.decisionsDir, { recursive: true });
-  await mkdir(paths.glossaryDir, { recursive: true });
-  await mkdir(paths.plansDir, { recursive: true });
+  if (options.includeCorpus ?? true) {
+    await mkdir(paths.decisionsDir, { recursive: true });
+    await mkdir(paths.glossaryDir, { recursive: true });
+    await mkdir(paths.plansDir, { recursive: true });
+  }
 };
 
 const readJsonIfExists = async <T>(target: string): Promise<T | null> => {
@@ -315,36 +351,58 @@ const renderDecisions = (items: MemoryDecision[]): string[] => {
   ];
 };
 
-const renderRetrievedHits = (hits: RetrievalHit[]): string[] => {
+const renderRetrievedHits = (hits: RetrievalHit[], view: CliView): string[] => {
   if (hits.length === 0) return ["## Retrieved Hits", "- 없음", ""];
   return [
     "## Retrieved Hits",
-    ...hits.flatMap((hit, index) => [
+    ...projectRetrievalHits(hits, view).flatMap((hit, index) => [
       `${index + 1}. \`${hit.path}\` · ${hit.sectionTitle} · score=${hit.scoreFinal.toFixed(4)}`,
-      `   - ${compactText(hit.text)}`,
+      `   - ${hit.text ?? hit.excerpt ?? ""}`,
     ]),
     "",
   ];
 };
 
-export const formatRecallPacket = (packet: RecallPacket): { markdown: string; json: string } => {
+const projectDecision = (item: MemoryDecision, view: CliView): MemoryDecision => {
+  if (view === "full") return item;
+  return {
+    ...item,
+    summary: compactText(item.summary, view === "minimal" ? 120 : 240),
+    rationale: view === "minimal" ? undefined : item.rationale,
+    alternatives: view === "minimal" ? undefined : item.alternatives,
+    consequences: view === "minimal" ? undefined : item.consequences,
+  };
+};
+
+export const projectRecallPacket = (packet: RecallPacket, view: CliView): Omit<RecallPacket, "retrievedHits" | "relatedDecisions"> & {
+  retrievedHits: ReturnType<typeof projectRetrievalHits>;
+  relatedDecisions: MemoryDecision[];
+} => ({
+  ...packet,
+  retrievedHits: projectRetrievalHits(packet.retrievedHits, view),
+  relatedDecisions: packet.relatedDecisions.map((item) => projectDecision(item, view)),
+});
+
+export const formatRecallPacket = (packet: RecallPacket, view: CliView = "default"): { markdown: string; json: string } => {
+  const projected = projectRecallPacket(packet, view);
   const markdown = [
     "# ragit memory recall",
-    `- goal: ${packet.goal}`,
-    `- latest_session: ${packet.latestSessionId ?? "none"}`,
-    `- snapshot: ${packet.snapshotSha ?? "none"}`,
-    `- source_head: ${packet.sourceHeadSha ?? "none"}`,
+    `- goal: ${projected.goal}`,
+    `- latest_session: ${projected.latestSessionId ?? "none"}`,
+    `- snapshot: ${projected.snapshotSha ?? "none"}`,
+    `- source_head: ${projected.sourceHeadSha ?? "none"}`,
+    `- view: ${view}`,
     "",
-    ...renderStringList("Constraints", packet.constraints),
-    ...renderOpenLoops(packet.openLoops),
-    ...renderDecisions(packet.relatedDecisions),
-    ...renderRetrievedHits(packet.retrievedHits),
-    ...renderStringList("Next Actions", packet.nextActions),
-    ...renderStringList("Warnings", packet.warnings),
+    ...renderStringList("Constraints", projected.constraints),
+    ...renderOpenLoops(projected.openLoops),
+    ...renderDecisions(projected.relatedDecisions),
+    ...renderRetrievedHits(packet.retrievedHits, view),
+    ...renderStringList("Next Actions", projected.nextActions),
+    ...renderStringList("Warnings", projected.warnings),
   ].join("\n");
   return {
     markdown,
-    json: JSON.stringify(packet, null, 2),
+    json: JSON.stringify(projected, null, 2),
   };
 };
 
@@ -367,7 +425,7 @@ export const loadWorkingMemoryState = async (cwd: string): Promise<WorkingMemory
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const paths = resolveMemoryPaths(cwd, config);
-  await ensureMemoryLayout(paths);
+  await ensureMemoryLayout(paths, { includeCorpus: false });
   return readJsonIfExists<WorkingMemoryState>(paths.currentPath);
 };
 
@@ -375,7 +433,7 @@ export const loadOpenLoopRegistry = async (cwd: string): Promise<OpenLoopRegistr
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const paths = resolveMemoryPaths(cwd, config);
-  await ensureMemoryLayout(paths);
+  await ensureMemoryLayout(paths, { includeCorpus: false });
   return readJsonIfExists<OpenLoopRegistry>(paths.openLoopsPath);
 };
 
@@ -383,7 +441,7 @@ export const loadLatestSessionWrap = async (cwd: string): Promise<SessionWrapRec
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const paths = resolveMemoryPaths(cwd, config);
-  await ensureMemoryLayout(paths);
+  await ensureMemoryLayout(paths, { includeCorpus: false });
   const files = (await readdir(paths.sessionDir))
     .filter((name) => name.endsWith(".json"))
     .sort((left, right) => right.localeCompare(left));
@@ -392,11 +450,11 @@ export const loadLatestSessionWrap = async (cwd: string): Promise<SessionWrapRec
   return readJsonIfExists<SessionWrapRecord>(path.join(paths.sessionDir, latest));
 };
 
-export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput): Promise<MemoryWrapResult> => {
+export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryRun = false): Promise<MemoryWrapResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const paths = resolveMemoryPaths(cwd, config);
-  await ensureMemoryLayout(paths);
+  await ensureMemoryLayout(paths, { includeCorpus: false });
 
   const createdAt = payload.createdAt ?? new Date().toISOString();
   const currentHeadSha = await safeHeadSha(cwd);
@@ -424,9 +482,11 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput): Pro
     items: working.openLoops,
   };
 
-  await writeJson(sessionPath, record);
-  await writeJson(paths.currentPath, working);
-  await writeJson(paths.openLoopsPath, registry);
+  if (!dryRun) {
+    await writeJson(sessionPath, record);
+    await writeJson(paths.currentPath, working);
+    await writeJson(paths.openLoopsPath, registry);
+  }
 
   const warnings = currentHeadSha ? [] : ["HEAD commit이 없어 sourceHeadSha를 null로 저장했습니다."];
   return {
@@ -435,6 +495,7 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput): Pro
     currentPath: toRepoPath(cwd, paths.currentPath),
     openLoopsPath: toRepoPath(cwd, paths.openLoopsPath),
     sourceHeadSha,
+    dryRun,
     warnings,
   };
 };
@@ -463,7 +524,7 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const paths = resolveMemoryPaths(cwd, config);
-  await ensureMemoryLayout(paths);
+  await ensureMemoryLayout(paths, { includeCorpus: false });
 
   const working = await readJsonIfExists<WorkingMemoryState>(paths.currentPath);
   const latestSession = await loadLatestSessionWrap(cwd);
@@ -594,32 +655,36 @@ const targetDirectoryForCandidate = (paths: ResolvedMemoryPaths, candidate: Prom
   return paths.plansDir;
 };
 
-export const promoteMemory = async (cwd: string, input: PromotionBatchInput): Promise<MemoryPromoteResult> => {
+export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dryRun = false): Promise<MemoryPromoteResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const paths = resolveMemoryPaths(cwd, config);
-  await ensureMemoryLayout(paths);
+  await ensureMemoryLayout(paths, { includeCorpus: !dryRun });
 
   const promotedAt = new Date().toISOString();
+  const plannedFiles: string[] = [];
   const createdFiles: string[] = [];
   for (const candidate of input.promotionCandidates) {
     const baseName = slugify(candidate.id ?? candidate.title);
     const target = await uniqueTargetPath(targetDirectoryForCandidate(paths, candidate), baseName);
     const content = renderPromotionDocument(candidate, promotedAt, input.sourceSessionId);
+    const repoPath = toRepoPath(cwd, target);
+    plannedFiles.push(repoPath);
+    if (dryRun) continue;
     await writeFile(target, content, "utf8");
-    createdFiles.push(toRepoPath(cwd, target));
+    createdFiles.push(repoPath);
   }
 
   const currentHeadSha = await safeHeadSha(cwd);
   const sourceHeadSha = input.sourceHeadSha ?? currentHeadSha;
   const warnings: string[] = [];
 
-  if (createdFiles.length === 0) {
+  if (plannedFiles.length === 0) {
     warnings.push("promotionCandidates가 비어 있어 생성된 문서가 없습니다.");
   }
 
   let ingested = false;
-  if (createdFiles.length > 0 && config.memory.auto_ingest_promotions) {
+  if (!dryRun && createdFiles.length > 0 && config.memory.auto_ingest_promotions) {
     if (currentHeadSha) {
       await runIngest(cwd, { files: createdFiles.join(",") });
       ingested = true;
@@ -627,11 +692,16 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput): Pr
       warnings.push("HEAD commit이 없어 promotion 문서 인덱싱을 건너뛰었습니다.");
     }
   }
+  if (dryRun && plannedFiles.length > 0 && config.memory.auto_ingest_promotions && !currentHeadSha) {
+    warnings.push("HEAD commit이 없어 dry-run 이후 실제 promote 시 인덱싱이 건너뛰어집니다.");
+  }
 
   return {
     createdFiles,
+    plannedFiles,
     sourceHeadSha,
     ingested,
+    dryRun,
     warnings,
   };
 };
