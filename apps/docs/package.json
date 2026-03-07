@@ -6,6 +6,7 @@
     "build": "next build && node ./scripts/create-search-alias.mjs",
     "dev": "next dev",
     "start": "serve out",
+    "check:commands": "node --import tsx ./scripts/check-command-docs.mjs",
     "check:i18n": "node ./scripts/check-i18n.mjs",
     "check:search-index": "node ./scripts/check-search-index.mjs",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",

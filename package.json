@@ -15,6 +15,7 @@
     "test": "vitest run",
     "docs:dev": "pnpm --filter ./apps/docs... dev",
     "docs:build": "pnpm --filter ./apps/docs... build",
+    "docs:check:commands": "pnpm --filter ./apps/docs... check:commands",
     "docs:check:i18n": "pnpm --filter ./apps/docs... check:i18n",
     "docs:check:search-index": "pnpm --filter ./apps/docs... check:search-index",
     "docs:serve": "pnpm --filter ./apps/docs... start"
