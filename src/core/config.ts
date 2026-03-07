@@ -34,6 +34,13 @@ export const defaultConfig = (): RagitConfig => ({
     top_k: 5,
     keyword_enabled: true,
   },
+  memory: {
+    corpus_dir: "docs/memory",
+    session_dir: ".ragit/memory/sessions",
+    working_dir: ".ragit/memory/working",
+    auto_ingest_promotions: true,
+    recall_top_k: 8,
+  },
   security: {
     secret_masking: true,
   },

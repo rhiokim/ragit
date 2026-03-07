@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { resolveCwd, runConfigSet, runDoctor, runStatus } from "./commands/bootstrap.js";
 import { runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
 import { formatInitSummaryTable, runInit } from "./commands/init.js";
+import { runMemoryPromoteCommand, runMemoryRecallCommand, runMemoryWrapCommand } from "./commands/memory.js";
 import { packContext } from "./core/context.js";
 import { runIngest } from "./core/ingest.js";
 import { migrateFromJsonStore, migrateFromSqliteVss } from "./core/migrate.js";
@@ -125,6 +126,37 @@ program
     });
     console.log(packed.markdown);
     console.log(packed.json);
+  });
+
+const memory = program.command("memory").description("메모리 운영");
+
+memory
+  .command("wrap")
+  .description("세션 요약을 working memory에 기록")
+  .requiredOption("--input <path|->", "JSON 입력 파일 경로 또는 - (stdin)")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runMemoryWrapCommand(resolveCwd(options.cwd), options.input);
+  });
+
+memory
+  .command("recall")
+  .description("목표 기준 복원 패킷 생성")
+  .argument("<goal>")
+  .option("--format <format>", "markdown|json|both", "both")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (goal, options) => {
+    const format = (options.format as OutputFormat) ?? "both";
+    await runMemoryRecallCommand(resolveCwd(options.cwd), goal, format);
+  });
+
+memory
+  .command("promote")
+  .description("promotion candidate를 검색 가능한 장기기억 문서로 승격")
+  .requiredOption("--input <path|->", "JSON 입력 파일 경로 또는 - (stdin)")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runMemoryPromoteCommand(resolveCwd(options.cwd), options.input);
   });
 
 const migrate = program.command("migrate").description("레거시 마이그레이션");
