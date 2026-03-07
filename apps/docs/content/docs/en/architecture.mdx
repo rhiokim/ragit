@@ -6,8 +6,9 @@ description: Core architecture of RAGit CLI
 ## Runtime
 
 - TypeScript / Node.js CLI
-- Local zvec-style embedding adapter
-- Manifest + chunk store under `.ragit/`
+- zvec canonical store under `.ragit/store/`
+- Local placeholder embedding provider for v1
+- Git-tracked manifests under `.ragit/manifest/`
 
 ## Retrieval
 

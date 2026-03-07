@@ -3,16 +3,88 @@ title: Init Guide
 description: Interactive AGENTS-aware initialization flow
 ---
 
-`pnpm ragit init` runs a 6-step interactive flow by default when you are inside the repository checkout.
+`pnpm ragit init` runs a 7-step interactive flow by default when you are inside the repository checkout.
 
 1. Environment check (and optional `git init`)
 2. Mode confirmation
 3. Load/create root `AGENTS.md`
 4. Confirm docs template scope (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PBD)
 5. Build `.ragit/guide` incrementally
-6. Print summary + next actions
+6. Bootstrap the zvec store
+7. Print summary + next actions
 
 `SPEC` templates are used for implementation-level functional specifications, while `PBD` templates describe phase topology and binding structure.
+
+## What `init` prepares
+
+- Git-aware control-plane preparation for `.ragit/`
+- Load or create flow for the root `AGENTS.md`
+- `.ragit/config.toml`
+- `.ragit/guide/templates/*`
+- `.ragit/guide/guide-index.json`
+- `.ragit/store/meta.json`
+- Empty zvec collections for `documents` and `chunks`
+
+## What `init` does not prepare
+
+- No searchable corpus
+- No chunk records or manifests
+- No repository document scan or chunk generation
+- No vector upsert into the empty zvec collections
+
+`init` makes the repository **control-plane ready** and **zvec-store ready**.
+It does **not** make the repository **search-ready**.
+Searchable knowledge appears only after `pnpm ragit ingest ...`.
+
+`storage.backend = "zvec"` now means the canonical backend, and `init` bootstraps an empty store without indexing repository documents.
+
+## Representative User Scenarios
+
+### U1. New local bootstrap
+
+Use this flow when the current directory is not a Git repository and neither `AGENTS.md` nor `.ragit/` exists yet.
+
+1. Run `pnpm ragit init`
+2. RAGit detects that Git is missing
+3. Interactive mode proposes `git init`
+4. RAGit creates `AGENTS.md`
+5. RAGit creates `.ragit/config.toml`, `.ragit/guide/templates/*`, `guide-index.json`, and the empty zvec store
+6. RAGit prints the next actions: `ragit hooks install`, `ragit ingest --all`
+
+The important outcome is that initialization is complete, but searchable knowledge is not created yet.
+
+### U2. Existing Git repository with existing `AGENTS.md`
+
+Use this flow when the repository already has Git history and a root `AGENTS.md`.
+
+1. Run `pnpm ragit init`
+2. RAGit loads `AGENTS.md` in read-only mode
+3. RAGit creates only the missing `.ragit` control-plane files and bootstraps zvec if needed
+4. RAGit refreshes `guide-index.json`
+
+The important outcome is that the existing instruction file stays unchanged while the standard guide structure is incrementally attached.
+
+### U3. Re-running on a partially initialized repository
+
+Use this flow when `.ragit/` already exists but some templates or index files are missing.
+
+1. Run `pnpm ragit init`
+2. Existing files are preserved
+3. Missing templates are added
+4. `guide-index.json` is regenerated
+
+The important outcome is that `init` behaves incrementally and can be re-run safely.
+
+### U4. Non-interactive or CI initialization
+
+Use this flow when TTY is unavailable or when automation requires defaults.
+
+1. Run `pnpm ragit init --yes`
+2. If the directory is already a Git repository, initialization proceeds immediately
+3. If it is not a Git repository, `--git-init` is required for automatic initialization
+4. RAGit returns the same guide + zvec-store summary with table or JSON output
+
+The important outcome is that CI can prepare guide/control-plane state and an empty canonical store, but indexing still belongs to a later `ingest` step.
 
 ## Non-interactive
 
@@ -26,7 +98,12 @@ pnpm ragit init --yes --output json
 
 ```text
 .ragit/
+  config.toml
   guide/
     guide-index.json
     templates/
+  store/
+    meta.json
+    documents/
+    chunks/
 ```

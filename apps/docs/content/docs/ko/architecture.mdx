@@ -6,8 +6,9 @@ description: RAGit CLI 핵심 아키텍처
 ## 런타임
 
 - TypeScript / Node.js CLI
-- 로컬 임베딩 어댑터
-- `.ragit/` 하위 manifest + chunk 저장소
+- `.ragit/store/` 기준 zvec canonical store
+- v1 로컬 placeholder 임베딩 provider
+- `.ragit/manifest/` Git 추적 스냅샷
 
 ## 검색
 

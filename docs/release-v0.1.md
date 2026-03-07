@@ -6,6 +6,7 @@
 - [x] hooks install/uninstall/status
 - [x] query (markdown/json/both)
 - [x] context pack
+- [x] migrate from-json-store
 - [x] migrate from-sqlitevss
 
 ## 품질 체크
