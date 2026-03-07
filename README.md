@@ -117,6 +117,7 @@ pnpm ragit hooks install
 pnpm ragit ingest --all
 pnpm ragit query "DDD bounded context principles" --format both
 pnpm ragit context pack "Implementation plan for this sprint" --budget 1200
+pnpm ragit migrate from-json-store --dry-run
 pnpm ragit migrate from-sqlitevss --dry-run
 pnpm ragit status
 pnpm ragit doctor
@@ -130,7 +131,9 @@ pnpm ragit doctor
   guide/guide-index.json
   guide/templates/
   manifest/<commit-sha>.json
-  store/index.json
+  store/meta.json
+  store/documents/
+  store/chunks/
   cache/
   hooks/
 ```
@@ -140,14 +143,34 @@ pnpm ragit doctor
 
 ## Interactive `init` Guide
 
-By default, `pnpm ragit init` runs a 6-step interactive wizard:
+By default, `pnpm ragit init` runs a 7-step interactive wizard:
 
 1. Check Git environment (suggest `git init` if not a repository)
 2. Confirm initialization mode
 3. Load or create root `AGENTS.md`
 4. Confirm document template scope (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PBD)
 5. Incrementally generate `.ragit/guide` and refresh `guide-index.json`
-6. Print summary table and next actions
+6. Bootstrap the zvec canonical store
+7. Print summary table and next actions
+
+What `init` prepares:
+
+- Git-aware control-plane setup for `.ragit/`
+- Root `AGENTS.md` load-or-create flow
+- `.ragit/config.toml`, `.ragit/guide/templates/*`, and `.ragit/guide/guide-index.json`
+- Empty zvec collections under `.ragit/store/`
+- Store metadata for canonical backend, schema version, and embedding contract
+- Next-action guidance for `hooks install` and `ingest`
+
+What `init` does not prepare:
+
+- No searchable corpus, chunk records, or manifests
+- No document scan, chunk generation, or vector upsert
+- No query-ready knowledge state during `init`
+- No query-ready knowledge state until `pnpm ragit ingest ...` runs
+
+In other words, `init` makes the repository **guide-ready** and **zvec-store-ready**, not **search-ready**.
+`storage.backend = "zvec"` now means the canonical backend, and `init` bootstraps empty collections without indexing repository documents.
 
 Supported options:
 
@@ -158,6 +181,14 @@ pnpm ragit init --git-init         # allow git init in non-interactive mode
 pnpm ragit init --output json      # JSON summary output
 ```
 
+Recommended flow after `init`:
+
+```bash
+pnpm ragit migrate from-json-store   # only if summary says migrationRequired=true
+pnpm ragit hooks install
+pnpm ragit ingest --all
+```
+
 ## Hook Strategy
 
 - `post-commit`: automatically indexes changes from `HEAD~1..HEAD`
@@ -166,7 +197,7 @@ pnpm ragit init --output json      # JSON summary output
 
 ## Retrieval Strategy
 
-- 1st pass: zvec embedding similarity
+- 1st pass: zvec vector search scoped to the snapshot manifest
 - 2nd pass: keyword score
 - Final score: `alpha * vector + (1-alpha) * keyword` (default `alpha=0.7`)
 
