@@ -117,6 +117,9 @@ pnpm ragit hooks install
 pnpm ragit ingest --all
 pnpm ragit query "DDD bounded context principles" --format both
 pnpm ragit context pack "Implementation plan for this sprint" --budget 1200
+pnpm ragit memory wrap --input session-wrap.json
+pnpm ragit memory recall "resume auth flow" --format both
+pnpm ragit memory promote --input promotion-batch.json
 pnpm ragit migrate from-json-store --dry-run
 pnpm ragit migrate from-sqlitevss --dry-run
 pnpm ragit status
@@ -131,15 +134,33 @@ pnpm ragit doctor
   guide/guide-index.json
   guide/templates/
   manifest/<commit-sha>.json
+  memory/sessions/
+  memory/working/
   store/meta.json
   store/documents/
   store/chunks/
   cache/
   hooks/
+docs/
+  memory/
+    decisions/
+    glossary/
+    plans/
 ```
 
-- Recommended for Git tracking: `.ragit/config.toml`, `.ragit/manifest/**`
+- Recommended for Git tracking: `.ragit/config.toml`, `.ragit/manifest/**`, `.ragit/memory/**`, `docs/memory/**`
 - Local-only (default `.gitignore`): `.ragit/store/**`, `.ragit/cache/**`
+
+## Memory OS MVP
+
+- `memory wrap`: save a session summary into `.ragit/memory/sessions/` and refresh working state in `.ragit/memory/working/`
+- `memory recall`: combine working state and snapshot-scoped retrieval into an agent-ready recall packet
+- `memory promote`: crystallize promotion candidates into searchable long-term docs under `docs/memory/**` and ingest them immediately when `HEAD` exists
+
+This split is intentional:
+
+- `.ragit/memory/**` is the tracked control plane for working state and session history
+- `docs/memory/**` is the searchable long-term memory corpus that participates in normal ingest/query flows
 
 ## Interactive `init` Guide
 
