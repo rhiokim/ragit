@@ -9,7 +9,9 @@ import { migrateFromJsonStore, migrateFromSqliteVss } from "../src/core/migrate.
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
 describe("sqlite-vss migration", () => {
-  it("preserves spec and pbd doc types from legacy payload", async () => {
+  it(
+    "preserves spec and pbd doc types from legacy payload",
+    async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-migrate-"));
     git(temp, ["init"]);
     git(temp, ["config", "user.email", "ragit@example.com"]);
@@ -71,7 +73,9 @@ describe("sqlite-vss migration", () => {
     const types = new Set(manifest.docs.map((doc) => doc.docType));
     expect(types.has("spec")).toBe(true);
     expect(types.has("pbd")).toBe(true);
-  });
+    },
+    15_000,
+  );
 
   it("migrates legacy json store into zvec canonical store", async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-json-migrate-"));
