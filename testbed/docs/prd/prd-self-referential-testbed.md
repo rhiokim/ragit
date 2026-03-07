@@ -14,12 +14,10 @@ Users should understand that Git and RAGit solve adjacent but different problems
 Git version-controls source code states.
 RAGit version-controls AI-working knowledge states bound to the same commit history.
 
-Users should also be able to answer the following product questions:
-
-- What is the product purpose of RAGit?
-- What are the core values of RAGit?
-- How do I run RAGit locally without building dist?
-- What changed after build became optional?
+Users should be able to explain the product purpose and core value of RAGit from repository-local knowledge.
+Users should understand that local repository usage runs through `pnpm ragit`, while `pnpm build` is optional for repository-local execution.
+Users should understand the difference between Git code history and RAGit commit-bound knowledge history.
+Users should understand that PBD explains the phase topology and binding structure of the round-1 test bed.
 
 ## Success Criteria
 
