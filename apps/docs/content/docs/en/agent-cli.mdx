@@ -31,6 +31,8 @@ Most major commands can now return a shared envelope:
 
 That envelope is meant to stay stable even when the human text output changes.
 
+For per-command syntax, payload shapes, and failure notes, use <a href="/en/docs/commands">Commands</a> as the detailed reference.
+
 ## Read Commands
 
 - `query` supports positional input or `--input <path|->` JSON payloads.
@@ -70,4 +72,3 @@ Do not confuse the two memory surfaces:
 - `docs/memory/**` is the searchable corpus that participates in ingest and snapshot retrieval.
 
 That means agents should use `memory wrap` and `memory recall` to manage active work, and `memory promote` only when knowledge is stable enough to become searchable project memory.
-

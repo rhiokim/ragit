@@ -1,0 +1,67 @@
+---
+title: memory recall
+description: 작업 재개를 위한 최소-충분 패킷을 복원합니다
+command_path: memory recall
+---
+
+## 무엇을 하는 명령인가
+
+`memory recall`은 작업을 다시 이어가기 위해 필요한 패킷을 복원합니다. 현재 working memory에서 시작한 뒤, 관련 snapshot-scoped retrieval hit를 덧붙입니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- 중단된 작업을 다시 시작할 때
+- open loop, constraint, related decision, next action을 한 패킷으로 보고 싶을 때
+
+### 언제 쓰지 않는가
+
+- 일반 저장소 검색만 필요할 때. <a href="/ko/docs/commands/query">`query`</a>를 사용하십시오.
+- working state 없이 retrieval pack만 필요할 때. <a href="/ko/docs/commands/context/pack">`context pack`</a>을 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit memory recall <goal> [--view minimal|default|full] [--format text|json|both] [--cwd <path>]
+```
+
+## 인자와 옵션
+
+- `<goal>`: 다시 이어갈 작업 목표입니다.
+- `--view minimal|default|full`: retrieval detail 투영 수준을 조절합니다.
+- `--format text|json|both`: 출력 형식을 선택합니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+- 입력은 positional 인자만 사용합니다.
+- JSON 출력에는 `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, `nextActions`가 포함됩니다.
+- `--view minimal`은 에이전트 재개 흐름의 기본값으로 가장 적합합니다.
+- `--view default`는 읽기성과 상세의 균형을 맞춥니다.
+- `--view full`은 retrieval hit의 richer text가 꼭 필요할 때만 사용하십시오.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit memory recall "resume auth flow"
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit memory recall "resume auth flow" --view minimal --format json
+```
+
+## 실패/주의 사항
+
+- `memory recall` 품질은 working memory 품질에 크게 의존합니다. wrap이 빈약하면 recall도 약해집니다.
+- 이 명령은 전체 세션 로그를 재생하지 않습니다. 의도적으로 선택된 패킷만 복원합니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/memory/wrap">`memory wrap`</a>
+- <a href="/ko/docs/commands/query">`query`</a>
+- <a href="/ko/docs/commands/context/pack">`context pack`</a>

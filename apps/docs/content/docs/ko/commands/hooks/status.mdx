@@ -1,0 +1,61 @@
+---
+title: hooks status
+description: 관리형과 외부 git hook 상태를 확인합니다
+command_path: hooks status
+---
+
+## 무엇을 하는 명령인가
+
+`hooks status`는 기대하는 `post-commit`, `post-merge` hook이 설치되었는지, 없는지, 외부 hook인지 보고합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- install 또는 uninstall 전에 hook 상태를 확인하고 싶을 때
+- hook 소유권을 기계적으로 판별하고 싶을 때
+
+### 언제 쓰지 않는가
+
+- hook 상태를 바꾸고 싶을 때. <a href="/ko/docs/commands/hooks/install">`hooks install`</a> 또는 <a href="/ko/docs/commands/hooks/uninstall">`hooks uninstall`</a>을 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit hooks status [--format text|json|both] [--cwd <path>]
+```
+
+## 인자와 옵션
+
+- `--format text|json|both`: 출력 형식을 선택합니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+- 입력은 플래그 기반만 지원합니다.
+- JSON 출력에는 `dryRun`, `root`, `hooks`가 포함됩니다.
+- 각 hook 항목은 `name`, `target`, `action`, `state`를 보고합니다.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit hooks status
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit hooks status --format json
+```
+
+## 실패/주의 사항
+
+- external hook은 그 자체로 오류는 아니지만, 파괴적 자동화를 피해야 한다는 신호입니다.
+- `hooks status`는 과거 hook 실행 결과까지 보장하지는 않습니다. 파일 상태만 검사합니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/hooks/install">`hooks install`</a>
+- <a href="/ko/docs/commands/hooks/uninstall">`hooks uninstall`</a>

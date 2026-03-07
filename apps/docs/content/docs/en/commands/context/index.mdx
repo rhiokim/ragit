@@ -1,0 +1,16 @@
+---
+title: context
+description: Build prompt-sized context packets from indexed knowledge
+---
+
+The `context` family is for assembling prompt-ready packets instead of raw retrieval hits.
+
+## Choose A Subcommand
+
+- Use <a href="/en/docs/commands/context/pack">`context pack`</a> when you know the goal and want a bounded packet.
+
+## Family Boundary
+
+- `query` gives direct hits.
+- `context pack` turns relevant hits into a budgeted packet.
+- `memory recall` adds working-memory state on top of retrieval when you are resuming an active task.

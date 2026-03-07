@@ -1,0 +1,40 @@
+---
+title: Commands
+description: Detailed command guides for every executable RAGit CLI command
+---
+
+The `commands` group is the new home for detailed command documentation.
+Each leaf page explains one executable CLI command from the user point of view and the agent integration point of view.
+
+## Start Here
+
+- Read <a href="/en/docs/commands/init">`init`</a> when you are setting up RAGit in a repository.
+- Read <a href="/en/docs/commands/query">`query`</a> when you want direct retrieval hits from indexed knowledge.
+- Read <a href="/en/docs/commands/context/pack">`context pack`</a> when you want a compact prompt packet for the next agent step.
+- Read <a href="/en/docs/commands/memory/recall">`memory recall`</a> when you want to resume active work instead of doing a general search.
+
+## Command Families
+
+- Top-level commands: <a href="/en/docs/commands/init">`init`</a>, <a href="/en/docs/commands/describe">`describe`</a>, <a href="/en/docs/commands/ingest">`ingest`</a>, <a href="/en/docs/commands/query">`query`</a>, <a href="/en/docs/commands/status">`status`</a>, <a href="/en/docs/commands/doctor">`doctor`</a>
+- Config: <a href="/en/docs/commands/config">`config`</a>
+- Context: <a href="/en/docs/commands/context">`context`</a>
+- Hooks: <a href="/en/docs/commands/hooks">`hooks`</a>
+- Memory: <a href="/en/docs/commands/memory">`memory`</a>
+- Migrate: <a href="/en/docs/commands/migrate">`migrate`</a>
+
+## How To Read These Pages
+
+- Every leaf page uses the same structure so you can find syntax, options, payload examples, and cautions quickly.
+- Commands that support `--input <path|->` include a JSON payload example.
+- Commands that support `--view` explain the difference between `minimal`, `default`, and `full`.
+- Commands that support `--dry-run` explain what is validated before any real mutation happens.
+
+## Fast Mappings
+
+- `query` answers: "What indexed knowledge matches this question?"
+- `context pack` answers: "What is the smallest useful prompt packet for this goal?"
+- `memory wrap` answers: "What should I record before stopping?"
+- `memory recall` answers: "What should I load before resuming?"
+- `memory promote` answers: "What should become durable project knowledge?"
+
+If you still prefer the old entry point, the legacy <a href="/en/docs/cli-reference">CLI Reference</a> page now redirects you into this group.

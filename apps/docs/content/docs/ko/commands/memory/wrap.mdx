@@ -1,0 +1,86 @@
+---
+title: memory wrap
+description: 세션 요약을 working memory에 기록합니다
+command_path: memory wrap
+---
+
+## 무엇을 하는 명령인가
+
+`memory wrap`은 현재 세션 상태를 `.ragit/memory/**`에 기록합니다. session wrap을 저장하고, current working state를 갱신하며, open-loops registry를 업데이트합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- 작업을 멈추기 전에 내일 이어받을 시작점을 남기고 싶을 때
+- 현재 goal, constraint, open loop, next action을 working memory에 기록하고 싶을 때
+
+### 언제 쓰지 않는가
+
+- 안정된 프로젝트 지식을 검색하고 싶을 때. <a href="/ko/docs/commands/query">`query`</a> 또는 <a href="/ko/docs/commands/context/pack">`context pack`</a>을 사용하십시오.
+- 안정된 지식을 searchable memory로 승격하고 싶을 때. <a href="/ko/docs/commands/memory/promote">`memory promote`</a>를 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit memory wrap --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+## 인자와 옵션
+
+- `--input <path|->`: 세션 wrap을 설명하는 필수 JSON payload입니다.
+- `--dry-run`: 파일을 쓰지 않고 검증과 계획만 수행합니다.
+- `--format text|json|both`: 출력 형식을 선택합니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+```json
+{
+  "goal": "finish auth migration",
+  "summary": "Refined refresh token boundaries and left one open loop.",
+  "constraints": ["Do not break snapshot contracts."],
+  "decisions": ["Keep refresh handling outside manifest mutation."],
+  "openLoops": [
+    {
+      "id": "auth-refresh",
+      "title": "Finish refresh token handling",
+      "status": "open",
+      "nextAction": "Update the adapter tests"
+    }
+  ],
+  "nextActions": ["Update adapter tests", "Run pnpm test"],
+  "promotionCandidates": [],
+  "sourceHeadSha": "HEAD",
+  "createdAt": "2026-03-08T10:00:00.000Z"
+}
+```
+
+- JSON 출력에는 `sessionId`, `sessionPath`, `currentPath`, `openLoopsPath`, `sourceHeadSha`, `dryRun`이 포함됩니다.
+- `--dry-run`은 payload 형식을 검증하고 타깃 파일만 보여주며 실제 쓰기는 하지 않습니다.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit memory wrap --input session-wrap.json
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit memory wrap --input - --dry-run --format json
+```
+
+## 실패/주의 사항
+
+- payload는 wrap schema를 따라야 합니다. 예상하지 않은 필드나 잘못된 형식은 거부됩니다.
+- `memory wrap`은 searchable retrieval에 아무것도 ingest하지 않습니다.
+- `HEAD`가 없어도 state 자체는 기록할 수 있지만, source reference는 그 상태에 맞게 기록됩니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/memory/recall">`memory recall`</a>
+- <a href="/ko/docs/commands/memory/promote">`memory promote`</a>
+- <a href="/ko/docs/memory-model">Memory Model Guide</a>

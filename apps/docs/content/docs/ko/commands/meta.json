@@ -1,0 +1,17 @@
+{
+  "title": "명령어",
+  "pages": [
+    "index",
+    "init",
+    "describe",
+    "ingest",
+    "query",
+    "status",
+    "doctor",
+    "config",
+    "context",
+    "hooks",
+    "memory",
+    "migrate"
+  ]
+}
