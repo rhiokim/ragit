@@ -41,6 +41,9 @@ jobs:
       - name: i18n completeness check (warn-only)
         run: pnpm docs:check:i18n
 
+      - name: Verify command docs coverage
+        run: pnpm docs:check:commands
+
       - name: Build docs
         run: pnpm docs:build
 
