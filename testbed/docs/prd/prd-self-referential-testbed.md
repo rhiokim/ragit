@@ -8,6 +8,10 @@ type: prd
 The product goal of this round is to use the RAGit repository as a self-referential test bed.
 The test bed should prove that RAGit can initialize itself, ingest project knowledge, answer questions, and reconstruct commit-bound context.
 
+## Product Purpose
+
+The product purpose of RAGit in this test bed is to turn repository-local AI agent documents and context into commit-bound, reusable knowledge.
+
 ## User Value
 
 Users should understand that Git and RAGit solve adjacent but different problems.
@@ -17,7 +21,6 @@ RAGit version-controls AI-working knowledge states bound to the same commit hist
 Users should be able to explain the product purpose and core value of RAGit from repository-local knowledge.
 Users should understand that local repository usage runs through `pnpm ragit`, while `pnpm build` is optional for repository-local execution.
 Users should understand the difference between Git code history and RAGit commit-bound knowledge history.
-Users should understand that PBD explains the phase topology and binding structure of the round-1 test bed.
 
 ## Success Criteria
 
