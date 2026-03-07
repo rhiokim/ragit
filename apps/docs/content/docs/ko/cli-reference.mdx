@@ -5,23 +5,35 @@ description: RAGit v0.1 핵심 명령
 
 저장소 체크아웃 안에서는 `pnpm ragit <command>`를 사용하고, 배포된 CLI 설치본에서는 `ragit <command>`를 사용합니다.
 
+에이전트에서 RAGit을 호출한다면 먼저 <a href="/ko/docs/agent-cli">Agent CLI Contract</a>를 읽으세요.
+
 ## 핵심 명령
 
 ```bash
-pnpm ragit init
+pnpm ragit describe query --format json
+pnpm ragit init --output text|json|both
 pnpm ragit config set <key> <value>
-pnpm ragit hooks install|uninstall|status
-pnpm ragit ingest --all|--since <sha>|--files <glob>
-pnpm ragit query "<question>" --format both
-pnpm ragit context pack "<goal>" --budget 1200
-pnpm ragit memory wrap --input <path|->
-pnpm ragit memory recall "<goal>" --format both
-pnpm ragit memory promote --input <path|->
+pnpm ragit hooks install|uninstall --dry-run --format json
+pnpm ragit hooks status --format json
+pnpm ragit ingest --all|--since <sha>|--files <glob>|--input <path|-> --dry-run --format json
+pnpm ragit query "<question>" --input <path|-> --view minimal --format both
+pnpm ragit context pack "<goal>" --input <path|-> --budget 1200 --view minimal --format both
+pnpm ragit memory wrap --input <path|-> --dry-run --format json
+pnpm ragit memory recall "<goal>" --view minimal --format both
+pnpm ragit memory promote --input <path|-> --dry-run --format json
 pnpm ragit migrate from-json-store --dry-run
 pnpm ragit migrate from-sqlitevss --dry-run
-pnpm ragit status
-pnpm ragit doctor
+pnpm ragit status --format json
+pnpm ragit doctor --format json
 ```
+
+## 계약 규칙
+
+- 기계 호출에서는 기본적으로 `--format json`을 우선합니다.
+- 처음 붙이는 명령이라면 `ragit describe <command> --format json`으로 계약을 먼저 읽습니다.
+- `query`, `context pack`, `memory recall`은 특별한 이유가 없으면 `--view minimal`을 우선합니다.
+- 에이전트 호출은 `--input <path|->`를 우선해 payload를 명시적으로 남깁니다.
+- mutating 명령은 먼저 `--dry-run`으로 검증합니다: `ingest`, `hooks install`, `hooks uninstall`, `memory wrap`, `memory promote`.
 
 ## 문서 명령
 

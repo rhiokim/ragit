@@ -109,21 +109,22 @@ Deployment:
 ## Core Commands
 
 ```bash
+pnpm ragit describe query --format json
 pnpm ragit init
 pnpm ragit init --yes --output json
 pnpm ragit init --yes --git-init
 pnpm ragit config set retrieval.top_k 8
-pnpm ragit hooks install
-pnpm ragit ingest --all
-pnpm ragit query "DDD bounded context principles" --format both
-pnpm ragit context pack "Implementation plan for this sprint" --budget 1200
-pnpm ragit memory wrap --input session-wrap.json
-pnpm ragit memory recall "resume auth flow" --format both
-pnpm ragit memory promote --input promotion-batch.json
+pnpm ragit hooks install --dry-run --format json
+pnpm ragit ingest --all --dry-run --format json
+pnpm ragit query "DDD bounded context principles" --view minimal --format both
+pnpm ragit context pack "Implementation plan for this sprint" --budget 1200 --view minimal --format both
+pnpm ragit memory wrap --input session-wrap.json --dry-run --format json
+pnpm ragit memory recall "resume auth flow" --view minimal --format both
+pnpm ragit memory promote --input promotion-batch.json --dry-run --format json
 pnpm ragit migrate from-json-store --dry-run
 pnpm ragit migrate from-sqlitevss --dry-run
-pnpm ragit status
-pnpm ragit doctor
+pnpm ragit status --format json
+pnpm ragit doctor --format json
 ```
 
 ## Storage Layout
@@ -161,6 +162,14 @@ This split is intentional:
 
 - `.ragit/memory/**` is the tracked control plane for working state and session history
 - `docs/memory/**` is the searchable long-term memory corpus that participates in normal ingest/query flows
+
+## Agent CLI Contract
+
+- Prefer `--format json` for machine consumers.
+- Use `ragit describe <command> --format json` before integrating a command for the first time.
+- Prefer `--view minimal` for `query`, `context pack`, and `memory recall`.
+- Prefer `--input <path|->` for structured agent payloads.
+- Run mutating commands with `--dry-run` first: `ingest`, `hooks install`, `hooks uninstall`, `memory wrap`, `memory promote`.
 
 ## Interactive `init` Guide
 
