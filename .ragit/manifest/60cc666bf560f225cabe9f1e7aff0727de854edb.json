@@ -1,0 +1,432 @@
+{
+  "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+  "parentSha": "f5df72d6a7d2cd4942ed039472ec5111d4301c2c",
+  "createdAt": "2026-03-07T00:17:17.221Z",
+  "indexVersion": 1,
+  "docs": [
+    {
+      "id": "cc19ce2aa23988769fda149e318c422438a321ba",
+      "path": "testbed/docs/adr/adr-local-pnpm-runner.md",
+      "docType": "adr",
+      "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+      "hash": "4d20f9e51b844813a837786ea9ff507068c7ec2c0df8deb984e9c6fbd297695f",
+      "sections": [
+        {
+          "id": "447cb63f540b10e81fdebd1983027d238bc40241",
+          "title": "Context",
+          "level": 2,
+          "content": "This repository is the first self-referential test bed for RAGit.\nThe local developer workflow should run the CLI without a global install.\nRecent repository changes added a `pnpm ragit` script that executes `tsx src/cli.ts`.\nRecent repository changes also made `pnpm build` optional for repository-local usage."
+        },
+        {
+          "id": "c0fff742709e9da96dd97004eb9f70ecb9de90b5",
+          "title": "Decision",
+          "level": 2,
+          "content": "RAGit local execution in this repository uses `pnpm ragit <command>` as the canonical runner.\n`pnpm build` remains optional and is used only when `dist/` artifacts or packaged CLI validation are needed."
+        },
+        {
+          "id": "558711208098aeeaae210ea1458b5daf1bce4c36",
+          "title": "Consequences",
+          "level": 2,
+          "content": "The round-1 test bed must use `pnpm ragit` in all operational commands.\nGolden queries should explicitly confirm that RAGit can run locally without building `dist/`.\nSetup guidance should explain that `pnpm build` is optional, not mandatory, for repository-local usage."
+        }
+      ]
+    },
+    {
+      "id": "a248fbcf7f4b3677c13adc42bc09a8c7ffe71247",
+      "path": "testbed/docs/ddd/ddd-core-models.md",
+      "docType": "ddd",
+      "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+      "hash": "421115c05315f2a8ae2e0073a8e85cd8ddf8b7da785f38efdf341c4c3b2a8c9c",
+      "sections": [
+        {
+          "id": "68ca2880a10f04dbe9d83804842a7cc9ca4956a5",
+          "title": "Bounded Context",
+          "level": 2,
+          "content": "The bounded context is commit-bound retrieval for repository-local AI working knowledge."
+        },
+        {
+          "id": "29b3a200f2fa88d6afc117d7b6590a06fd00c6d6",
+          "title": "Commit",
+          "level": 3,
+          "content": "A Commit is the source-of-truth boundary shared by Git and RAGit.\nGit stores the code state of the commit.\nRAGit stores the knowledge snapshot bound to the same commit SHA."
+        },
+        {
+          "id": "a62af487ed7316a487692e485650922d3f44828a",
+          "title": "Snapshot",
+          "level": 3,
+          "content": "A Snapshot is the retrieval state recorded in `.ragit/manifest/<commit-sha>.json`.\nIt references the set of documents and chunks that define searchable knowledge for a commit."
+        },
+        {
+          "id": "9880075964e11767572d5051afe93ca7ccd1f1a6",
+          "title": "Document",
+          "level": 3,
+          "content": "A Document is a typed markdown artifact such as ADR, PRD, SRS, SPEC, Plan, DDD, Glossary, or PBD.\nIn the test bed, each document belongs to the `testbed/docs/` corpus."
+        },
+        {
+          "id": "b1e87cf1e44258a170c3c75789cc2185e90ae141",
+          "title": "Chunk",
+          "level": 3,
+          "content": "A Chunk is a searchable section fragment derived from a document.\nQuery ranking combines vector similarity and keyword score over chunks."
+        },
+        {
+          "id": "732605cf0a5962e94151a22d9e3e756a1c229b0c",
+          "title": "Query",
+          "level": 3,
+          "content": "A Query asks for knowledge at HEAD or at a specific snapshot SHA.\nThe result is meaningful only if the bound snapshot reflects the intended commit state."
+        }
+      ]
+    },
+    {
+      "id": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4",
+      "path": "testbed/docs/glossary/glossary-testbed.md",
+      "docType": "glossary",
+      "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+      "hash": "c7188274cf848d87b8d0c103c1ab37955c74ec968c2b3318f0a75ac859250886",
+      "sections": [
+        {
+          "id": "3291bbfdf8ac99050010f1c72408c24d6df82516",
+          "title": "Control Plane",
+          "level": 2,
+          "content": "The control plane is the `.ragit/` area that stores config, guide files, manifests, store, cache, and hooks."
+        },
+        {
+          "id": "0133ef1c27f3afcb6ba6ae07ec937d17cef16e24",
+          "title": "Isolated Ingest",
+          "level": 2,
+          "content": "Isolated ingest is an ingest run limited to `testbed/docs/**/*.md`."
+        },
+        {
+          "id": "527eb768edf0e39a626db56975d01c25801a6dce",
+          "title": "Mixed Ingest",
+          "level": 2,
+          "content": "Mixed ingest is an ingest run across the whole repository with `pnpm ragit ingest --all`."
+        },
+        {
+          "id": "82650582b889451462d19bb64ca2494a0344872d",
+          "title": "Manifest",
+          "level": 2,
+          "content": "A manifest in the round-1 test bed is a snapshot index file stored at `.ragit/manifest/<commit-sha>.json`.\nThe manifest binds documents and chunks to one commit SHA."
+        },
+        {
+          "id": "9943377686b87e261828793765a5a6cc18920f8a",
+          "title": "Snapshot",
+          "level": 2,
+          "content": "A snapshot in the round-1 test bed is the commit-bound retrieval state used by `query` and `context pack`.\nThe snapshot answers what knowledge should be used at a specific commit."
+        },
+        {
+          "id": "33fc8185d4ba16fc60c879a8a860eb27e0e67af7",
+          "title": "Context Pack",
+          "level": 2,
+          "content": "A context pack is a budget-limited collection of relevant retrieval hits prepared for an AI agent task."
+        },
+        {
+          "id": "6fefbaa32739c0b8ef250ff486288b8d31deebed",
+          "title": "Hook Validation",
+          "level": 2,
+          "content": "Hook validation is verification that `post-commit` automatically creates a new manifest after a document-only commit."
+        },
+        {
+          "id": "c3b9e0fd7756d87f6e5dc2f49b1d13b4712988e5",
+          "title": "Time-Travel Query",
+          "level": 2,
+          "content": "A time-travel query is a `query --at <sha>` call that reconstructs knowledge for an older commit state."
+        }
+      ]
+    },
+    {
+      "id": "ba8c5a98687a93321cc302db314a87f58c8baa68",
+      "path": "testbed/docs/pbd/pbd-phase-bindings.md",
+      "docType": "pbd",
+      "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+      "hash": "35b759b57d1f28ca695d882bf37a0be80dfc030d9fdbfcd3492a4491f5dde9e6",
+      "sections": [
+        {
+          "id": "52779fa87badfd04ff7c8b5e07e60803f48eb5ce",
+          "title": "Implementation Scope",
+          "level": 2,
+          "content": "This PBD describes how the round-1 self-referential test bed moves through phases and how each phase binds to the next."
+        },
+        {
+          "id": "a4b5eba5bb18fac4e76244c501e3f02c8753b1ea",
+          "title": "Phase Topology",
+          "level": 2,
+          "content": "Phase 1 is baseline verification.\nPhase 2 is `init` normalization of the `.ragit` control plane.\nPhase 3 is isolated corpus materialization under `testbed/docs/`.\nPhase 4 is isolated ingest and golden retrieval validation.\nPhase 5 is hook validation through a document-only commit.\nPhase 6 is time-travel validation with `query --at <sha>`.\nPhase 7 is mixed ingest validation across the whole repository."
+        },
+        {
+          "id": "8831dc46af4e7864d759bb87c48aedc2e3c545f5",
+          "title": "Binding Map",
+          "level": 2,
+          "content": "`init` binds `AGENTS.md` to `.ragit/guide/guide-index.json`.\n`ingest` binds documents to chunks and binds chunks to a manifest at a commit SHA.\n`query` binds a user question to a specific snapshot.\n`context pack` binds a goal to a selected subset of retrieval hits.\n`post-commit` binds a new commit event to automatic incremental ingest."
+        },
+        {
+          "id": "d0927efc3253c2ece78ee40dfda77afc9bd82775",
+          "title": "Interaction Paths",
+          "level": 2,
+          "content": "Git produces a commit.\nRAGit observes the commit SHA.\nRAGit indexes changed markdown knowledge.\nRAGit returns commit-bound knowledge for queries and agent context."
+        },
+        {
+          "id": "b3083871fd74d69315b080c5ccb7f0ac755d3d52",
+          "title": "Failure and Drift Points",
+          "level": 2,
+          "content": "If `.ragit/**` is assumed to be searchable corpus, retrieval will fail because current ingest ignores `.ragit/**`.\nIf hook validation commits unrelated markdown changes, isolated validation noise increases.\nIf a manifest is missing for a target SHA, `query --at <sha>` cannot reconstruct that state."
+        },
+        {
+          "id": "28a01f3c017cc4d068f93ce30f6c8aaf2d3cece5",
+          "title": "Observability Notes",
+          "level": 2,
+          "content": "The most important observations are manifest count, top hit path, top-3 stability, and differences between isolated and mixed ingest."
+        }
+      ]
+    },
+    {
+      "id": "a79f40e3a68c3ac11f2324a7bd4b8e5e0b17eebd",
+      "path": "testbed/docs/plan/plan-round-1.md",
+      "docType": "plan",
+      "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+      "hash": "005fc006095a9da8c4a6e58502e9500fa2dcc699db6b65469f98006f6a8218d9",
+      "sections": [
+        {
+          "id": "4731db36af9dd7fcc7c3f40145b9f88f3a0525a9",
+          "title": "Milestones",
+          "level": 2,
+          "content": "M1. Normalize `.ragit/` with `pnpm ragit init`.\nM2. Materialize the isolated test corpus under `testbed/docs/`.\nM3. Run isolated ingest and golden queries.\nM4. Validate hook automation and commit-bound time travel.\nM5. Run mixed ingest and publish the round-1 report."
+        },
+        {
+          "id": "7a82edac7d3ff1cae19cb049946255da2cdeba3e",
+          "title": "Work Breakdown",
+          "level": 2,
+          "content": "Task 1. Verify baseline with `pnpm test` and `pnpm ragit --help`.\nTask 2. Create eight documents and a golden query file.\nTask 3. Run isolated validation and capture acceptance metrics.\nTask 4. Run hook validation with a single-document commit.\nTask 5. Run time-travel validation with `--at <sha>`.\nTask 6. Run mixed validation and summarize noise patterns."
+        }
+      ]
+    },
+    {
+      "id": "84fbc826bb61259de9161318a536caaf7e052269",
+      "path": "testbed/docs/srs/srs-round-1-testbed.md",
+      "docType": "srs",
+      "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+      "hash": "b898cc6a936b25b837a6ba41611489bcc8bd4de1eb0d02152b7664f1feb94113",
+      "sections": [
+        {
+          "id": "20a652d2b2a411b4ae20446db5a66e016f696a38",
+          "title": "Functional Requirements",
+          "level": 2,
+          "content": "FR-001: The test bed must start from `pnpm ragit init --yes --output json`.\nFR-002: The test bed must create eight test documents, one per supported document type.\nFR-003: The isolated ingest phase must use `pnpm ragit ingest --files \"testbed/docs/**/*.md\"`.\nFR-004: The test bed must validate `query`, `context pack`, `hooks install`, and `query --at <sha>`.\nFR-005: The test bed must record results in a round-1 report document."
+        },
+        {
+          "id": "c0375ba5089fcc78931940ee8582e96e86a2ce3e",
+          "title": "Non-Functional Requirements",
+          "level": 2,
+          "content": "NFR-001: The test corpus must use only facts already present in this repository.\nNFR-002: The control plane stays in `.ragit/`, while searchable corpus stays outside `.ragit/`.\nNFR-003: Golden queries should be specific enough to be checked repeatedly across isolated and mixed ingest runs."
+        }
+      ]
+    },
+    {
+      "id": "d427c5227656b25118c6c972f5f92be155bbf134",
+      "path": "testbed/docs/spec/spec-round-1-execution.md",
+      "docType": "spec",
+      "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+      "hash": "a74525a7a0e42624d022a16564ba69db26f76fa49fd78b3599b7aae43f823be2",
+      "sections": [
+        {
+          "id": "37f0d6b5b4d1e642cf00627f200dc53c3212c1f4",
+          "title": "Scope",
+          "level": 2,
+          "content": "This specification defines the execution contract for the first RAGit self-referential test bed.\nIt covers initialization, isolated ingest, golden query validation, hook validation, time-travel validation, and mixed ingest validation."
+        },
+        {
+          "id": "4d9a871d9bf62194183e20f13a89d83e30e0d286",
+          "title": "Functional Requirements",
+          "level": 2,
+          "content": "The round-1 operator runs RAGit locally with `pnpm ragit`.\nThe round-1 operator does not require `pnpm build` for repository-local usage.\nThe isolated ingest command is `pnpm ragit ingest --files \"testbed/docs/**/*.md\"`.\nThe mixed ingest command is `pnpm ragit ingest --all`."
+        },
+        {
+          "id": "8c1b9c70437d52ebf68cd928b032a696097ac95b",
+          "title": "Interfaces and Contracts",
+          "level": 2,
+          "content": "The isolated test corpus lives under `testbed/docs/`.\nThe control plane lives under `.ragit/`.\n`.ragit` is not itself a searchable document source because the current ingest implementation ignores `.ragit/**`."
+        },
+        {
+          "id": "9c46b4c7e9d06fab92532d3c16835212dce77ddc",
+          "title": "State and Flow",
+          "level": 2,
+          "content": "State A is the baseline test-bed corpus commit.\nState B is the hook validation commit with a meaningful document update.\nState C is the time-travel validation commit with a second meaningful document update.\nQueries without `--at` use the latest available snapshot.\nQueries with `--at <sha>` must reproduce the knowledge state of the referenced commit."
+        },
+        {
+          "id": "5905cf26703a259cf295c1569f57a31a211d92e3",
+          "title": "Acceptance Criteria",
+          "level": 2,
+          "content": "- At least 8 of 10 golden queries return the expected top-1 hit during isolated validation.\n- All 10 golden queries return the expected answer within top-3 during isolated validation.\n- Mixed validation keeps at least 7 of 10 golden queries within top-3."
+        }
+      ]
+    },
+    {
+      "id": "f2f91fb7b3096aeb26572b2c4f6c6430a510414a",
+      "path": "testbed/docs/prd/prd-self-referential-testbed.md",
+      "docType": "prd",
+      "commitSha": "60cc666bf560f225cabe9f1e7aff0727de854edb",
+      "hash": "6539c80f996bed7f709fc2d98dcd811b9c5dfa3b178ff0e10cbe2e5af7d6c89d",
+      "sections": [
+        {
+          "id": "4296f47e24745cb130e3a523510e7a71c99b263f",
+          "title": "Goal",
+          "level": 2,
+          "content": "The product goal of this round is to use the RAGit repository as a self-referential test bed.\nThe test bed should prove that RAGit can initialize itself, ingest project knowledge, answer questions, and reconstruct commit-bound context."
+        },
+        {
+          "id": "0ba04edc8cf540a66e383f853be5767c9e952ecb",
+          "title": "User Value",
+          "level": 2,
+          "content": "Users should understand that Git and RAGit solve adjacent but different problems.\nGit version-controls source code states.\nRAGit version-controls AI-working knowledge states bound to the same commit history.\n\nUsers should be able to explain the product purpose and core value of RAGit from repository-local knowledge.\nUsers should understand that local repository usage runs through `pnpm ragit`, while `pnpm build` is optional for repository-local execution.\nUsers should understand the difference between Git code history and RAGit commit-bound knowledge history.\nUsers should understand that PBD explains the phase topology and binding structure of the round-1 test bed."
+        },
+        {
+          "id": "9577e06a38002233e8dd335b8e7c9cb21083320c",
+          "title": "Success Criteria",
+          "level": 2,
+          "content": "The isolated test corpus should return correct answers for golden queries.\nTime-travel queries with `--at <sha>` should reflect old and new document states.\nMixed ingest with repository-wide documents should still keep core test-bed questions inside the top three hits."
+        }
+      ]
+    }
+  ],
+  "chunks": [
+    {
+      "id": "59c03a4690b7327a899b58067e68ca01c4824236",
+      "documentId": "cc19ce2aa23988769fda149e318c422438a321ba"
+    },
+    {
+      "id": "14a4212d8ea046701d9f1489a8cd287d7dd198ad",
+      "documentId": "cc19ce2aa23988769fda149e318c422438a321ba"
+    },
+    {
+      "id": "f84ccac46d9e083562420da618cde8a482e30227",
+      "documentId": "cc19ce2aa23988769fda149e318c422438a321ba"
+    },
+    {
+      "id": "3abcf245d209308e5f770446ad7a57d7134e0349",
+      "documentId": "a248fbcf7f4b3677c13adc42bc09a8c7ffe71247"
+    },
+    {
+      "id": "0a53139236bee1d6d76b8655267281d32f7ac4a1",
+      "documentId": "a248fbcf7f4b3677c13adc42bc09a8c7ffe71247"
+    },
+    {
+      "id": "b2938696d4039a4799b4a93ef4645c45db2665f4",
+      "documentId": "a248fbcf7f4b3677c13adc42bc09a8c7ffe71247"
+    },
+    {
+      "id": "eb51cd0b59878522365a4e91e4a1e1e5e7ad7c47",
+      "documentId": "a248fbcf7f4b3677c13adc42bc09a8c7ffe71247"
+    },
+    {
+      "id": "3df0ad17af70ffece957c41319bdb6ba92c10bc7",
+      "documentId": "a248fbcf7f4b3677c13adc42bc09a8c7ffe71247"
+    },
+    {
+      "id": "fb8d31e90f98bcb5b6337f6295a6c4901ece0852",
+      "documentId": "a248fbcf7f4b3677c13adc42bc09a8c7ffe71247"
+    },
+    {
+      "id": "1cd0c4eed24a81cedd77c6de47450ab914b1e5cc",
+      "documentId": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4"
+    },
+    {
+      "id": "821397aa61b0e900723fed5bfd9ac8c75ce69ba9",
+      "documentId": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4"
+    },
+    {
+      "id": "3eb3b5dbd3d056fc7484ede70836f95f25763d64",
+      "documentId": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4"
+    },
+    {
+      "id": "7a977a0d9452a7819a70060223d9c7719e170c1f",
+      "documentId": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4"
+    },
+    {
+      "id": "37399af5a95c70abc33ce78c016efe9fcc2e40a6",
+      "documentId": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4"
+    },
+    {
+      "id": "890d63079f52ff884e0d0573b321635d9f46a9ce",
+      "documentId": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4"
+    },
+    {
+      "id": "9386fdb57e21a2268d8e566e66adeaf038e94458",
+      "documentId": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4"
+    },
+    {
+      "id": "a09f9fc3afdaae4ea11c302b5d2b29e8b42b0e7f",
+      "documentId": "e0d7a68b52757ca4aadaaa6c1a6583610d6e0ac4"
+    },
+    {
+      "id": "3025b14d154ce1a302b6845ef92ab01fdeb06489",
+      "documentId": "a79f40e3a68c3ac11f2324a7bd4b8e5e0b17eebd"
+    },
+    {
+      "id": "c28a01952490896bdf18491a8d7dfe8148cd9800",
+      "documentId": "a79f40e3a68c3ac11f2324a7bd4b8e5e0b17eebd"
+    },
+    {
+      "id": "75bb6a38be15108807dd9a93c184f599c9849dd1",
+      "documentId": "ba8c5a98687a93321cc302db314a87f58c8baa68"
+    },
+    {
+      "id": "3ccdf108038d3161e68efbf16046b4efac3b87bc",
+      "documentId": "ba8c5a98687a93321cc302db314a87f58c8baa68"
+    },
+    {
+      "id": "673e28404cc45b8c252cf2f356264c98fe8d4e6f",
+      "documentId": "ba8c5a98687a93321cc302db314a87f58c8baa68"
+    },
+    {
+      "id": "e175003947af7895832f21219e447059e9579e93",
+      "documentId": "ba8c5a98687a93321cc302db314a87f58c8baa68"
+    },
+    {
+      "id": "314321ce72711dda5b4c1d25d2d9939f257291d1",
+      "documentId": "ba8c5a98687a93321cc302db314a87f58c8baa68"
+    },
+    {
+      "id": "317394cd3f3bddd54aa87e6b78f27170f30c0fe5",
+      "documentId": "ba8c5a98687a93321cc302db314a87f58c8baa68"
+    },
+    {
+      "id": "8082f0b542c46407ad56dc48c03db272db55e792",
+      "documentId": "84fbc826bb61259de9161318a536caaf7e052269"
+    },
+    {
+      "id": "23a26d0a9d877cdfb6a106b8a5dc5f9709bb8746",
+      "documentId": "84fbc826bb61259de9161318a536caaf7e052269"
+    },
+    {
+      "id": "92b32cfe3c14ea6fcbc4bb87717f881523ada565",
+      "documentId": "d427c5227656b25118c6c972f5f92be155bbf134"
+    },
+    {
+      "id": "70ed2f336cd96ac1730b726728047e1f789b7e1a",
+      "documentId": "d427c5227656b25118c6c972f5f92be155bbf134"
+    },
+    {
+      "id": "5093bf5fbf7672f36a151b5ef6b41f44be263861",
+      "documentId": "d427c5227656b25118c6c972f5f92be155bbf134"
+    },
+    {
+      "id": "524bad909f8efcd41d1427687396750fcd2ada05",
+      "documentId": "d427c5227656b25118c6c972f5f92be155bbf134"
+    },
+    {
+      "id": "9a500e3493bdba996936ddcd425995942d70aba2",
+      "documentId": "d427c5227656b25118c6c972f5f92be155bbf134"
+    },
+    {
+      "id": "10266263d676a89813dec7754fa99c84be4c2b99",
+      "documentId": "f2f91fb7b3096aeb26572b2c4f6c6430a510414a"
+    },
+    {
+      "id": "a74ef99342fff8b521a69b82adc8e77633293dca",
+      "documentId": "f2f91fb7b3096aeb26572b2c4f6c6430a510414a"
+    },
+    {
+      "id": "dfdc28f42a1ed1861dcc93538df41e93e79007e1",
+      "documentId": "f2f91fb7b3096aeb26572b2c4f6c6430a510414a"
+    }
+  ]
+}
