@@ -7,6 +7,8 @@ description: Core architecture of RAGit CLI
 
 - TypeScript / Node.js CLI
 - zvec canonical store under `.ragit/store/`
+- Memory control plane under `.ragit/memory/`
+- Searchable long-term memory corpus under `docs/memory/`
 - Local placeholder embedding provider for v1
 - Git-tracked manifests under `.ragit/manifest/`
 
@@ -21,3 +23,5 @@ description: Core architecture of RAGit CLI
 - Every snapshot binds to commit SHA
 - Incremental ingest supports `--since <sha>`
 - Hooks (`post-commit`, `post-merge`) keep index fresh
+- `memory wrap` updates working state without changing snapshot contracts
+- `memory promote` writes tracked docs into `docs/memory/**` and can ingest them against the current `HEAD`
