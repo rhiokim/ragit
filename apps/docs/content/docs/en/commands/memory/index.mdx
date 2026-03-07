@@ -1,0 +1,18 @@
+---
+title: Memory
+description: Manage working memory and durable memory promotion
+---
+
+The `memory` family separates active continuity from durable searchable knowledge.
+
+## Choose A Subcommand
+
+- <a href="/en/docs/commands/memory/wrap">`memory wrap`</a>: record the current session state.
+- <a href="/en/docs/commands/memory/recall">`memory recall`</a>: rebuild the next-session packet.
+- <a href="/en/docs/commands/memory/promote">`memory promote`</a>: crystallize stable knowledge into searchable docs.
+
+## Family Boundary
+
+- `wrap` writes control-plane state into `.ragit/memory/**`.
+- `recall` reads working state and combines it with retrieval.
+- `promote` writes durable docs into `docs/memory/**` and can trigger targeted ingest.

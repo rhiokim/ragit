@@ -1,0 +1,65 @@
+---
+title: describe
+description: Inspect machine-readable command contracts
+command_path: describe
+---
+
+## What It Does
+
+`describe` returns the current command contract for a specific CLI path. It is the runtime source of truth for command purpose, arguments, options, examples, output fields, and doc metadata.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You are integrating RAGit into an agent or automation.
+- You want to confirm whether a command supports `--input`, `--dry-run`, or `--view`.
+- You want to detect contract drift before hard-coding a command call.
+
+### When not to use it
+
+- You already know the command and only want a quick human explanation. Read the corresponding command page instead.
+- You want actual project data, not command metadata. Use the target command directly.
+
+## Syntax
+
+```bash
+pnpm ragit describe <command-path...> [--format text|json|both]
+```
+
+## Arguments And Options
+
+- `<command-path...>`: The full command path. Multi-word commands are passed as separate words, for example `memory promote` or `hooks install`.
+- `--format text|json|both`: Return a text summary, a JSON envelope, or both.
+
+## Input And Output Contract
+
+- Input is positional only.
+- JSON output includes `command`, `availableCommands`, and a `spec` object.
+- The `spec` object includes `group`, `docSlug`, `relatedCommands`, `stability`, input capabilities, and output fields.
+
+## Examples
+
+Human terminal flow:
+
+```bash
+pnpm ragit describe query
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit describe memory promote --format json
+```
+
+## Failures And Cautions
+
+- The command fails if the requested path is not in the describable leaf-command set.
+- Use the exact command path. `memory` alone is a family, not a leaf command.
+
+## Related Commands
+
+- <a href="/en/docs/agent-cli">Agent CLI Contract</a>
+- <a href="/en/docs/commands/query">`query`</a>
+- <a href="/en/docs/commands/context/pack">`context pack`</a>
+- <a href="/en/docs/commands/memory/promote">`memory promote`</a>

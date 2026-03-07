@@ -1,0 +1,17 @@
+---
+title: hooks
+description: 저장소 변경과 인덱싱을 더 가깝게 묶는 git hook을 관리합니다
+---
+
+`hooks` 패밀리는 `.git/hooks` 아래에 설치되는 RAGit 관리 hook을 다룹니다.
+
+## 어떤 하위 명령을 선택하는가
+
+- <a href="/ko/docs/commands/hooks/install">`hooks install`</a>: 관리 hook을 설치합니다.
+- <a href="/ko/docs/commands/hooks/uninstall">`hooks uninstall`</a>: 외부 hook은 건드리지 않고 관리 hook만 제거합니다.
+- <a href="/ko/docs/commands/hooks/status">`hooks status`</a>: 현재 hook 상태를 확인합니다.
+
+## 패밀리 경계
+
+- hook은 ingest 트리거를 자동화합니다.
+- 그러나 전체 refresh가 필요하면 여전히 명시적 <a href="/ko/docs/commands/ingest">`ingest`</a> 호출이 필요할 수 있습니다.

@@ -1,0 +1,63 @@
+---
+title: migrate from-json-store
+description: 레거시 JSON store를 canonical zvec 레이아웃으로 변환합니다
+command_path: migrate from-json-store
+---
+
+## 무엇을 하는 명령인가
+
+`migrate from-json-store`는 예전 JSON 기반 store를 읽어 현재 canonical storage layout으로 문서, chunk, snapshot 데이터를 다시 기록합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- `status` 또는 `init`이 legacy JSON store 존재를 알려줄 때
+- 오래된 저장소 레이아웃을 현재 store contract로 업그레이드할 때
+
+### 언제 쓰지 않는가
+
+- 이미 canonical store를 사용 중일 때
+- 소스가 sqlite-vss export일 때. <a href="/ko/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>를 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit migrate from-json-store [--dry-run] [--cwd <path>]
+```
+
+## 인자와 옵션
+
+- `--dry-run`: canonical store를 쓰지 않고 변환 대상 개수만 계산합니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+- 입력은 플래그 기반만 지원합니다.
+- 출력은 `mode`, `docs`, `chunks`, 선택적 `snapshotSha`를 담은 raw JSON 객체입니다.
+- 자동화에서는 `--dry-run`을 먼저 실행하는 편이 안전합니다.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit migrate from-json-store --dry-run
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit migrate from-json-store --dry-run
+```
+
+## 실패/주의 사항
+
+- legacy JSON store 파일이 없으면 실패합니다.
+- shared CLI envelope 대신 raw JSON을 출력하지만, 여전히 mutating command로 취급해야 합니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>
+- <a href="/ko/docs/commands/status">`status`</a>
+- <a href="/ko/docs/commands/ingest">`ingest`</a>

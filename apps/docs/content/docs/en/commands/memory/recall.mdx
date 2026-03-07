@@ -1,0 +1,67 @@
+---
+title: memory recall
+description: Rebuild the smallest useful packet for resuming work
+command_path: memory recall
+---
+
+## What It Does
+
+`memory recall` reconstructs the packet you need to continue active work. It starts from current working memory and then supplements it with relevant snapshot-scoped retrieval hits.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You are resuming an interrupted task.
+- You want open loops, constraints, related decisions, and next actions in one packet.
+
+### When not to use it
+
+- You only want a general repository search. Use <a href="/en/docs/commands/query">`query`</a>.
+- You only want a prompt-sized retrieval pack with no working state. Use <a href="/en/docs/commands/context/pack">`context pack`</a>.
+
+## Syntax
+
+```bash
+pnpm ragit memory recall <goal> [--view minimal|default|full] [--format text|json|both] [--cwd <path>]
+```
+
+## Arguments And Options
+
+- `<goal>`: The task you want to resume.
+- `--view minimal|default|full`: Control how much retrieved detail is projected into the packet.
+- `--format text|json|both`: Choose text, JSON, or both.
+- `--cwd <path>`: Run against another repository.
+
+## Input And Output Contract
+
+- Input is positional only.
+- JSON output includes `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, and `nextActions`.
+- `--view minimal` is the best default for agent resumes.
+- `--view default` balances readability and detail.
+- `--view full` is only for cases where the restored packet must carry richer text from retrieval hits.
+
+## Examples
+
+Human terminal flow:
+
+```bash
+pnpm ragit memory recall "resume auth flow"
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit memory recall "resume auth flow" --view minimal --format json
+```
+
+## Failures And Cautions
+
+- `memory recall` depends on working-memory state quality. If wraps are poor, recall quality drops too.
+- This command does not replay the entire session history. It intentionally produces a selective packet.
+
+## Related Commands
+
+- <a href="/en/docs/commands/memory/wrap">`memory wrap`</a>
+- <a href="/en/docs/commands/query">`query`</a>
+- <a href="/en/docs/commands/context/pack">`context pack`</a>

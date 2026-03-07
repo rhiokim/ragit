@@ -1,0 +1,63 @@
+---
+title: migrate from-sqlitevss
+description: sqlite-vss export 데이터를 canonical zvec 레이아웃으로 변환합니다
+command_path: migrate from-sqlitevss
+---
+
+## 무엇을 하는 명령인가
+
+`migrate from-sqlitevss`는 sqlite-vss export 레코드를 읽어 현재 RAGit canonical document, chunk, snapshot layout으로 변환합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- 지원되는 sqlite-vss export 파일이 저장소 안에 있을 때
+- 과거 vector-storage 실험 레이아웃을 현재 구조로 옮기고 싶을 때
+
+### 언제 쓰지 않는가
+
+- 레거시 소스가 JSON store일 때. <a href="/ko/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>를 사용하십시오.
+- 이미 현재 canonical store를 사용하고 있을 때
+
+## 기본 구문
+
+```bash
+pnpm ragit migrate from-sqlitevss [--dry-run] [--cwd <path>]
+```
+
+## 인자와 옵션
+
+- `--dry-run`: 실제 쓰기 없이 변환 가능한 docs/chunks 개수만 계산합니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+- 입력은 플래그 기반만 지원합니다.
+- 출력은 `mode`, `docs`, `chunks`, 선택적 `snapshotSha`를 담은 raw JSON 객체입니다.
+- 에이전트 자동화에서는 `--dry-run`을 기본으로 두는 편이 좋습니다.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit migrate from-sqlitevss --dry-run
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit migrate from-sqlitevss --dry-run
+```
+
+## 실패/주의 사항
+
+- 지원되는 sqlite-vss export 파일을 찾지 못하면 실패합니다.
+- JSON store migration과 마찬가지로 output이 raw JSON이어도 mutating command입니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>
+- <a href="/ko/docs/commands/status">`status`</a>
+- <a href="/ko/docs/commands/ingest">`ingest`</a>

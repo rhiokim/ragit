@@ -1,0 +1,79 @@
+---
+title: context pack
+description: 목표 기준 컨텍스트 패킷을 토큰 예산 안에서 구성합니다
+command_path: context pack
+---
+
+## 무엇을 하는 명령인가
+
+`context pack`은 검색된 지식을 특정 목표를 위한 bounded packet으로 바꿉니다. 다음 소비자가 사람이 아니라 에이전트 프롬프트일 때 사용하는 명령입니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- 목표가 이미 있고 압축된 컨텍스트 handoff가 필요할 때
+- 토큰 예산이 중요할 때
+- 구조화된 입력을 안정적으로 에이전트에 넘기고 싶을 때
+
+### 언제 쓰지 않는가
+
+- raw retrieval hit만 보고 싶을 때. <a href="/ko/docs/commands/query">`query`</a>를 사용하십시오.
+- open loop와 working state까지 포함해 작업을 이어받고 싶을 때. <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit context pack [goal] [--input <path|->] [--budget <tokens>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+```
+
+## 인자와 옵션
+
+- `goal`: 컨텍스트 선택을 이끌 목표입니다.
+- `--input <path|->`: `goal`, 선택적 `budget`, 선택적 `at`를 담은 JSON payload를 전달합니다.
+- `--budget <tokens>`: 선택된 패킷의 토큰 예산입니다.
+- `--at <sha>`: 현재 HEAD 대신 특정 snapshot을 사용합니다.
+- `--view minimal|default|full`: 패킷 투영의 상세 수준을 조절합니다.
+- `--format text|json|both`: 출력 형식을 선택합니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+```json
+{
+  "goal": "implementation plan for auth",
+  "budget": 1200,
+  "at": "HEAD"
+}
+```
+
+- JSON 출력에는 `goal`, `snapshotSha`, `budget`, `usedTokens`, `selectedHits`, `hits`가 포함됩니다.
+- `--view minimal`은 에이전트 context window에 가장 안전한 기본값입니다.
+- `--view default`는 읽기성과 상세의 균형을 맞춥니다.
+- `--view full`은 downstream reasoning에 richer text가 꼭 필요할 때만 쓰는 편이 좋습니다.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit context pack "implementation plan for auth" --budget 1200
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit context pack --input context-pack.json --view minimal --format json
+```
+
+## 실패/주의 사항
+
+- `--input`과 positional `goal`, `--budget`, `--at`를 함께 쓰면 안 됩니다.
+- `goal`이 비어 있으면 거부됩니다.
+- 이 명령은 여전히 snapshot-bound입니다. working memory까지 합친 복원이 필요하면 <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/query">`query`</a>
+- <a href="/ko/docs/commands/memory/recall">`memory recall`</a>
+- <a href="/ko/docs/commands/describe">`describe`</a>

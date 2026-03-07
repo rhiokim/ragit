@@ -1,0 +1,8 @@
+{
+  "title": "Migrate",
+  "pages": [
+    "index",
+    "from-json-store",
+    "from-sqlitevss"
+  ]
+}

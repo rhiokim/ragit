@@ -1,0 +1,81 @@
+---
+title: ingest
+description: 저장소 문서를 인덱싱하고 snapshot manifest를 갱신합니다
+command_path: ingest
+---
+
+## 무엇을 하는 명령인가
+
+`ingest`는 지원되는 문서를 스캔하고 canonical store에 임베딩과 레코드를 기록한 뒤, 현재 커밋에 결속된 snapshot manifest를 생성합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- 프로젝트 문서를 추가하거나 변경해서 검색 결과에 반영하고 싶을 때
+- `docs/memory/**`에 장기기억 문서를 승격한 뒤 검색 가능하게 만들고 싶을 때
+- 실제 변경 전에 어떤 파일이 인덱싱될지 미리 보고 싶을 때
+
+### 언제 쓰지 않는가
+
+- 기존 인덱스만 검색하고 싶을 때. <a href="/ko/docs/commands/query">`query`</a>를 사용하십시오.
+- 현재 작업 상태만 복원하고 싶을 때. <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit ingest [--all | --since <sha> | --files <glob> | --input <path|->] [--dry-run] [--format text|json|both]
+```
+
+## 인자와 옵션
+
+- `--all`: 전체 지원 문서를 인덱싱합니다.
+- `--since <sha>`: 특정 커밋 이후 변경분만 인덱싱합니다.
+- `--files <glob>`: 특정 glob만 대상으로 인덱싱합니다.
+- `--input <path|->`: 플래그 대신 구조화된 JSON payload를 전달합니다.
+- `--dry-run`: store와 manifest를 쓰지 않고 계획만 검증합니다.
+- `--format text|json|both`: 출력 형식을 선택합니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+- 사람은 보통 `--all`, `--since`, `--files` 중 하나를 직접 씁니다.
+- 에이전트는 조건 조합이 있을 때 `--input <path|->`를 우선 사용하는 편이 안전합니다.
+
+```json
+{
+  "all": false,
+  "since": "HEAD~1",
+  "files": "docs/**/*.md"
+}
+```
+
+- JSON 출력에는 `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`가 포함됩니다.
+- `--dry-run`은 같은 계획면을 반환하되 실제 변경은 하지 않습니다.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit ingest --all --format both
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit ingest --input ingest.json --dry-run --format json
+```
+
+## 실패/주의 사항
+
+- `--input`과 선택 플래그를 한 호출에 섞으면 안 됩니다.
+- 잘못된 glob나 안전하지 않은 경로 패턴은 인덱싱 전에 거부됩니다.
+- `.ragit/memory/**` control plane 파일은 searchable corpus가 아니므로 `ingest` 대상이 아닙니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/query">`query`</a>
+- <a href="/ko/docs/commands/context/pack">`context pack`</a>
+- <a href="/ko/docs/commands/memory/promote">`memory promote`</a>
+- <a href="/ko/docs/commands/hooks/install">`hooks install`</a>

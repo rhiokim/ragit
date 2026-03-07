@@ -1,0 +1,64 @@
+---
+title: hooks install
+description: Install managed RAGit git hooks
+command_path: hooks install
+---
+
+## What It Does
+
+`hooks install` writes managed `post-commit` and `post-merge` hooks that trigger incremental ingestion.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You want indexing to stay closer to repository changes automatically.
+- You just finished `init`.
+
+### When not to use it
+
+- You only want to inspect the hook state. Use <a href="/en/docs/commands/hooks/status">`hooks status`</a>.
+- You are removing managed hooks. Use <a href="/en/docs/commands/hooks/uninstall">`hooks uninstall`</a>.
+
+## Syntax
+
+```bash
+pnpm ragit hooks install [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+## Arguments And Options
+
+- `--dry-run`: Show what would be installed without writing files.
+- `--format text|json|both`: Choose text, JSON, or both.
+- `--cwd <path>`: Run against another repository.
+
+## Input And Output Contract
+
+- Input is flag-based only.
+- JSON output includes `dryRun`, `root`, and `hooks`.
+- `--dry-run` verifies paths and returns planned hook states without mutation.
+
+## Examples
+
+Human terminal flow:
+
+```bash
+pnpm ragit hooks install
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit hooks install --dry-run --format json
+```
+
+## Failures And Cautions
+
+- Hooks are written into `.git/hooks`, so the repository must have a valid git root.
+- The installed hooks are managed-by-ragit hooks, not arbitrary shell automation.
+
+## Related Commands
+
+- <a href="/en/docs/commands/hooks/status">`hooks status`</a>
+- <a href="/en/docs/commands/hooks/uninstall">`hooks uninstall`</a>
+- <a href="/en/docs/commands/ingest">`ingest`</a>

@@ -1,0 +1,16 @@
+---
+title: context
+description: 인덱싱된 지식에서 프롬프트 크기의 컨텍스트 패킷을 만듭니다
+---
+
+`context` 패밀리는 raw retrieval hit가 아니라 prompt-ready packet을 만들기 위한 명령군입니다.
+
+## 어떤 하위 명령을 선택하는가
+
+- <a href="/ko/docs/commands/context/pack">`context pack`</a>: 목표를 알고 있고, 예산 안에 들어오는 패킷이 필요할 때 사용합니다.
+
+## 패밀리 경계
+
+- `query`는 직접 hit를 반환합니다.
+- `context pack`은 관련 hit를 예산 기반 패킷으로 바꿉니다.
+- `memory recall`은 작업 복원을 위해 working memory를 retrieval 위에 덧붙입니다.

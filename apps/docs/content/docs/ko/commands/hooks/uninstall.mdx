@@ -1,0 +1,63 @@
+---
+title: hooks uninstall
+description: RAGit 관리 git hook만 안전하게 제거합니다
+command_path: hooks uninstall
+---
+
+## 무엇을 하는 명령인가
+
+`hooks uninstall`은 RAGit이 설치하고 표시한 hook만 제거합니다. 외부 hook은 건드리지 않고 external로 보고합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- 자동 ingest hook이 더 이상 필요 없을 때
+- 실제 제거 전 어떤 managed hook이 제거될지 확인하고 싶을 때
+
+### 언제 쓰지 않는가
+
+- hook 가시성만 필요할 때. <a href="/ko/docs/commands/hooks/status">`hooks status`</a>를 사용하십시오.
+- hook을 설치하고 싶을 때. <a href="/ko/docs/commands/hooks/install">`hooks install`</a>을 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit hooks uninstall [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+## 인자와 옵션
+
+- `--dry-run`: 어떤 managed hook이 제거될지 미리 보여줍니다.
+- `--format text|json|both`: 출력 형식을 선택합니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+- 입력은 플래그 기반만 지원합니다.
+- JSON 출력에는 `dryRun`, `root`, `hooks`가 포함됩니다.
+- `--dry-run`은 external hook이 지워지지 않는지 확인하는 안전 모드입니다.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit hooks uninstall --dry-run
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit hooks uninstall --dry-run --format json
+```
+
+## 실패/주의 사항
+
+- RAGit header가 없는 hook은 external로 분류되어 보존됩니다.
+- 기존 저장소에 사용자 정의 hook이 있었다면 실제 제거 전에 `state`를 확인하는 편이 안전합니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/hooks/status">`hooks status`</a>
+- <a href="/ko/docs/commands/hooks/install">`hooks install`</a>

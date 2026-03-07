@@ -1,0 +1,81 @@
+---
+title: ingest
+description: Index repository docs and refresh the snapshot manifest
+command_path: ingest
+---
+
+## What It Does
+
+`ingest` scans supported documents, writes embeddings and records into the canonical store, and produces a snapshot manifest bound to the current commit.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You added or changed project docs and want retrieval to see them.
+- You promoted durable memory into `docs/memory/**`.
+- You want to preview which files would be indexed before running a real mutation.
+
+### When not to use it
+
+- You only need to search existing indexed data. Use <a href="/en/docs/commands/query">`query`</a>.
+- You only need the current working state. Use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+
+## Syntax
+
+```bash
+pnpm ragit ingest [--all | --since <sha> | --files <glob> | --input <path|->] [--dry-run] [--format text|json|both]
+```
+
+## Arguments And Options
+
+- `--all`: Index all supported repository documents.
+- `--since <sha>`: Index only changes since a commit.
+- `--files <glob>`: Index a targeted glob.
+- `--input <path|->`: Provide a structured JSON payload instead of flags.
+- `--dry-run`: Validate inputs and compute the plan without writing the store or manifest.
+- `--format text|json|both`: Choose the result envelope form.
+- `--cwd <path>`: Run against another repository.
+
+## Input And Output Contract
+
+- Human mode normally uses `--all`, `--since`, or `--files`.
+- Agent mode should prefer `--input <path|->` when multiple selectors are involved.
+
+```json
+{
+  "all": false,
+  "since": "HEAD~1",
+  "files": "docs/**/*.md"
+}
+```
+
+- JSON output reports `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, and `deletedDocumentIds`.
+- `--dry-run` returns the same planned surface without mutating the store.
+
+## Examples
+
+Human terminal flow:
+
+```bash
+pnpm ragit ingest --all --format both
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit ingest --input ingest.json --dry-run --format json
+```
+
+## Failures And Cautions
+
+- Do not mix `--input` with selector flags in the same call.
+- Invalid globs and unsafe path patterns are rejected before indexing begins.
+- `ingest` only sees searchable corpus docs, not `.ragit/memory/**` control-plane files.
+
+## Related Commands
+
+- <a href="/en/docs/commands/query">`query`</a>
+- <a href="/en/docs/commands/context/pack">`context pack`</a>
+- <a href="/en/docs/commands/memory/promote">`memory promote`</a>
+- <a href="/en/docs/commands/hooks/install">`hooks install`</a>

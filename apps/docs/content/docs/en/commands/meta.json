@@ -1,0 +1,17 @@
+{
+  "title": "Commands",
+  "pages": [
+    "index",
+    "init",
+    "describe",
+    "ingest",
+    "query",
+    "status",
+    "doctor",
+    "config",
+    "context",
+    "hooks",
+    "memory",
+    "migrate"
+  ]
+}

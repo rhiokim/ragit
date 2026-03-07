@@ -3,8 +3,8 @@
   "pages": [
     "index",
     "quickstart",
+    "commands",
     "memory-model",
-    "cli-reference",
     "agent-cli",
     "init-guide",
     "architecture",

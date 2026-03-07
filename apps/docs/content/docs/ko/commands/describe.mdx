@@ -1,0 +1,65 @@
+---
+title: describe
+description: 명령 계약을 기계 친화적으로 조회합니다
+command_path: describe
+---
+
+## 무엇을 하는 명령인가
+
+`describe`는 특정 CLI 경로의 현재 명령 계약을 반환합니다. 명령 목적, 인자, 옵션, 예시, 출력 필드, 문서 메타데이터까지 런타임 기준으로 확인할 수 있습니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- RAGit을 에이전트나 자동화에 연동할 때
+- 어떤 명령이 `--input`, `--dry-run`, `--view`를 지원하는지 확인할 때
+- 명령 호출을 코드에 고정하기 전에 계약 변동 여부를 확인할 때
+
+### 언제 쓰지 않는가
+
+- 이미 명령을 알고 있고 빠른 설명만 필요할 때. 해당 명령 상세 문서를 읽으십시오.
+- 실제 프로젝트 데이터를 원할 때. 대상 명령을 직접 실행하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit describe <command-path...> [--format text|json|both]
+```
+
+## 인자와 옵션
+
+- `<command-path...>`: 설명할 전체 명령 경로입니다. `memory promote`, `hooks install`처럼 다단어 명령은 공백으로 구분해 전달합니다.
+- `--format text|json|both`: 텍스트 요약, JSON envelope, 둘 다 중 하나를 선택합니다.
+
+## 입력/출력 계약
+
+- 입력은 positional 인자만 사용합니다.
+- JSON 출력에는 `command`, `availableCommands`, `spec`가 포함됩니다.
+- `spec` 안에는 `group`, `docSlug`, `relatedCommands`, `stability`, 입력 지원 여부, 출력 필드가 담깁니다.
+
+## 대표 사용 예시
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit describe query
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit describe memory promote --format json
+```
+
+## 실패/주의 사항
+
+- 요청한 경로가 설명 가능한 leaf command 집합에 없으면 실패합니다.
+- `memory`처럼 패밀리 이름만 주면 안 됩니다. 반드시 leaf command 전체 경로를 사용하십시오.
+
+## 관련 명령
+
+- <a href="/ko/docs/agent-cli">Agent CLI Contract</a>
+- <a href="/ko/docs/commands/query">`query`</a>
+- <a href="/ko/docs/commands/context/pack">`context pack`</a>
+- <a href="/ko/docs/commands/memory/promote">`memory promote`</a>

@@ -1,0 +1,63 @@
+---
+title: migrate from-sqlitevss
+description: Convert sqlite-vss export data into the canonical zvec layout
+command_path: migrate from-sqlitevss
+---
+
+## What It Does
+
+`migrate from-sqlitevss` reads exported sqlite-vss records and converts them into the canonical document, chunk, and snapshot layout used by current RAGit.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You have one of the supported sqlite-vss export files in the repository.
+- You are upgrading from an older vector-storage experiment to the current layout.
+
+### When not to use it
+
+- Your legacy source is the JSON store instead. Use <a href="/en/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>.
+- The repository already uses the current canonical store.
+
+## Syntax
+
+```bash
+pnpm ragit migrate from-sqlitevss [--dry-run] [--cwd <path>]
+```
+
+## Arguments And Options
+
+- `--dry-run`: Count convertible docs and chunks without writing.
+- `--cwd <path>`: Run against another repository.
+
+## Input And Output Contract
+
+- Input is flag-based only.
+- Output is a raw JSON object with `mode`, `docs`, `chunks`, and optional `snapshotSha`.
+- `--dry-run` is the right default for agent automation.
+
+## Examples
+
+Human terminal flow:
+
+```bash
+pnpm ragit migrate from-sqlitevss --dry-run
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit migrate from-sqlitevss --dry-run
+```
+
+## Failures And Cautions
+
+- The command fails if no supported sqlite-vss export file can be found.
+- Like the JSON-store migration, this is a mutating command even though its output is raw JSON.
+
+## Related Commands
+
+- <a href="/en/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>
+- <a href="/en/docs/commands/status">`status`</a>
+- <a href="/en/docs/commands/ingest">`ingest`</a>
