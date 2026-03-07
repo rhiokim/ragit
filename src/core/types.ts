@@ -55,6 +55,13 @@ export interface RagitConfig {
     top_k: number;
     keyword_enabled: boolean;
   };
+  memory: {
+    corpus_dir: string;
+    session_dir: string;
+    working_dir: string;
+    auto_ingest_promotions: boolean;
+    recall_top_k: number;
+  };
   security: {
     secret_masking: boolean;
   };
