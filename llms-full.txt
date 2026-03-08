@@ -1,0 +1,3563 @@
+# Agent CLI Contract
+
+
+
+RAGit now keeps a clearer split between human-readable CLI output and machine-safe command contracts.
+If you are integrating it into an agent workflow, use these rules first.
+
+Default Rules [#default-rules]
+
+* Prefer `--format json` for machine consumers.
+* Use `ragit describe <command> --format json` before integrating a command for the first time.
+* Prefer `--view minimal` for `query`, `context pack`, and `memory recall`.
+* Prefer `--input <path|->` for agent calls that carry structured payloads.
+* Run mutating commands with `--dry-run` first.
+
+Contract Shape [#contract-shape]
+
+Most major commands can now return a shared envelope:
+
+```json
+{
+  "command": "query",
+  "ok": true,
+  "version": "0.1.0",
+  "cwd": "/repo/path",
+  "data": {},
+  "warnings": []
+}
+```
+
+That envelope is meant to stay stable even when the human text output changes.
+
+For per-command syntax, payload shapes, and failure notes, use <a href="/en/docs/commands">Commands</a> as the detailed reference.
+
+Read Commands [#read-commands]
+
+* `query` supports positional input or `--input <path|->` JSON payloads.
+* `context pack` supports positional input or `--input <path|->` JSON payloads.
+* `memory recall` accepts a goal and can shrink output with `--view minimal|default|full`.
+
+For agents, start small:
+
+```bash
+ragit query --input query.json --view minimal --format json
+ragit context pack --input context-pack.json --view minimal --format json
+ragit memory recall "resume auth flow" --view minimal --format json
+```
+
+Mutating Commands [#mutating-commands]
+
+These commands now support `--dry-run` so an agent can validate intent before writing:
+
+* `ingest`
+* `hooks install`
+* `hooks uninstall`
+* `memory wrap`
+* `memory promote`
+
+Typical pattern:
+
+```bash
+ragit memory promote --input promote.json --dry-run --format json
+ragit memory promote --input promote.json --format json
+```
+
+Memory Caveat [#memory-caveat]
+
+Do not confuse the two memory surfaces:
+
+* `.ragit/memory/**` is the control plane for working state and session history.
+* `docs/memory/**` is the searchable corpus that participates in ingest and snapshot retrieval.
+
+That means agents should use `memory wrap` and `memory recall` to manage active work, and `memory promote` only when knowledge is stable enough to become searchable project memory.
+
+
+# Architecture
+
+
+
+Runtime [#runtime]
+
+* TypeScript / Node.js CLI
+* zvec canonical store under `.ragit/store/`
+* Memory control plane under `.ragit/memory/`
+* Searchable long-term memory corpus under `docs/memory/`
+* Local placeholder embedding provider for v1
+* Git-tracked manifests under `.ragit/manifest/`
+
+Retrieval [#retrieval]
+
+* Chunk embeddings + keyword scoring
+* Weighted hybrid ranking (`alpha`)
+* Point-in-time query with snapshot SHA
+
+Binding model [#binding-model]
+
+* Every snapshot binds to commit SHA
+* Incremental ingest supports `--since <sha>`
+* Hooks (`post-commit`, `post-merge`) keep index fresh
+* `memory wrap` updates working state without changing snapshot contracts
+* `memory promote` writes tracked docs into `docs/memory/**` and can ingest them against the current `HEAD`
+
+If you are reading this as a user rather than an implementer, the conceptual explanation lives in <a href="/en/docs/memory-model">Memory Model Guide</a>.
+
+
+# CLI Reference
+
+
+
+The detailed CLI reference moved to <a href="/en/docs/commands">Commands</a>.
+
+Use this page only as a stable redirect target for older links and bookmarks.
+
+Where To Go Now [#where-to-go-now]
+
+* Start with <a href="/en/docs/commands">Commands</a> for command families and leaf-command guides.
+* Read <a href="/en/docs/agent-cli">Agent CLI Contract</a> for machine-safe integration rules.
+* Read <a href="/en/docs/memory-model">Memory Model Guide</a> if you need the philosophy behind `memory wrap`, `memory recall`, and `memory promote`.
+
+
+# Overview
+
+
+
+RAGit is a local-first RAG CLI for git-based AI agent workflows.
+It captures project documents and context, then binds retrieval snapshots to commit SHA.
+
+Product Purpose [#product-purpose]
+
+RAGit is a local-first RAG CLI that turns AI agent project documents and context into commit-bound, reusable knowledge inside the repository.
+
+Core Value [#core-value]
+
+* Preserve project context across AI agent work
+* Reproduce knowledge at a specific commit state
+* Turn structured docs into agent-ready inputs
+* Automate indexing without adding workflow friction
+
+What You Get [#what-you-get]
+
+* Commit-bound retrieval snapshots
+* Hybrid search (vector + keyword)
+* Agent-friendly context packing
+* A split memory model for active work and durable knowledge
+* Secure ingestion with secret masking
+
+Supported Document Types [#supported-document-types]
+
+* ADR
+* PRD
+* SRS
+* SPEC
+* Plan
+* DDD
+* Glossary
+* PBD
+
+`SRS` captures system-level requirements, `SPEC` captures implementation-level functional requirements and contracts, and `PBD` explains phase topology and bindings inside an implementation.
+
+Next [#next]
+
+Read <a href="/en/docs/quickstart">Quickstart</a> to run the docs and CLI workflows.
+If you want command-by-command guidance with examples and option details, start at <a href="/en/docs/commands">Commands</a>.
+If you want to understand why memory is split across control-plane state and searchable docs, read <a href="/en/docs/memory-model">Memory Model Guide</a>.
+If you are integrating RAGit into an agent workflow, read <a href="/en/docs/agent-cli">Agent CLI Contract</a> for `--format json`, `--view minimal`, `--input`, and `--dry-run` rules.
+
+
+# Init Guide
+
+
+
+`pnpm ragit init` runs a 7-step interactive flow by default when you are inside the repository checkout.
+
+1. Environment check (and optional `git init`)
+2. Mode confirmation
+3. Load/create root `AGENTS.md`
+4. Confirm docs template scope (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PBD)
+5. Build `.ragit/guide` incrementally
+6. Bootstrap the zvec store
+7. Print summary + next actions
+
+`SPEC` templates are used for implementation-level functional specifications, while `PBD` templates describe phase topology and binding structure.
+
+What init prepares [#what-init-prepares]
+
+* Git-aware control-plane preparation for `.ragit/`
+* Load or create flow for the root `AGENTS.md`
+* `.ragit/config.toml`
+* `.ragit/guide/templates/*`
+* `.ragit/guide/guide-index.json`
+* `.ragit/store/meta.json`
+* Empty zvec collections for `documents` and `chunks`
+
+What init does not prepare [#what-init-does-not-prepare]
+
+* No searchable corpus
+* No chunk records or manifests
+* No repository document scan or chunk generation
+* No vector upsert into the empty zvec collections
+
+`init` makes the repository **control-plane ready** and **zvec-store ready**.
+It does **not** make the repository **search-ready**.
+Searchable knowledge appears only after `pnpm ragit ingest ...`.
+
+`storage.backend = "zvec"` now means the canonical backend, and `init` bootstraps an empty store without indexing repository documents.
+
+Representative User Scenarios [#representative-user-scenarios]
+
+U1. New local bootstrap [#u1-new-local-bootstrap]
+
+Use this flow when the current directory is not a Git repository and neither `AGENTS.md` nor `.ragit/` exists yet.
+
+1. Run `pnpm ragit init`
+2. RAGit detects that Git is missing
+3. Interactive mode proposes `git init`
+4. RAGit creates `AGENTS.md`
+5. RAGit creates `.ragit/config.toml`, `.ragit/guide/templates/*`, `guide-index.json`, and the empty zvec store
+6. RAGit prints the next actions: `ragit hooks install`, `ragit ingest --all`
+
+The important outcome is that initialization is complete, but searchable knowledge is not created yet.
+
+U2. Existing Git repository with existing AGENTS.md [#u2-existing-git-repository-with-existing-agentsmd]
+
+Use this flow when the repository already has Git history and a root `AGENTS.md`.
+
+1. Run `pnpm ragit init`
+2. RAGit loads `AGENTS.md` in read-only mode
+3. RAGit creates only the missing `.ragit` control-plane files and bootstraps zvec if needed
+4. RAGit refreshes `guide-index.json`
+
+The important outcome is that the existing instruction file stays unchanged while the standard guide structure is incrementally attached.
+
+U3. Re-running on a partially initialized repository [#u3-re-running-on-a-partially-initialized-repository]
+
+Use this flow when `.ragit/` already exists but some templates or index files are missing.
+
+1. Run `pnpm ragit init`
+2. Existing files are preserved
+3. Missing templates are added
+4. `guide-index.json` is regenerated
+
+The important outcome is that `init` behaves incrementally and can be re-run safely.
+
+U4. Non-interactive or CI initialization [#u4-non-interactive-or-ci-initialization]
+
+Use this flow when TTY is unavailable or when automation requires defaults.
+
+1. Run `pnpm ragit init --yes`
+2. If the directory is already a Git repository, initialization proceeds immediately
+3. If it is not a Git repository, `--git-init` is required for automatic initialization
+4. RAGit returns the same guide + zvec-store summary with table or JSON output
+
+The important outcome is that CI can prepare guide/control-plane state and an empty canonical store, but indexing still belongs to a later `ingest` step.
+
+Non-interactive [#non-interactive]
+
+```bash
+pnpm ragit init --yes
+pnpm ragit init --yes --git-init
+pnpm ragit init --yes --output json
+```
+
+Generated structure [#generated-structure]
+
+```text
+.ragit/
+  config.toml
+  guide/
+    guide-index.json
+    templates/
+  store/
+    meta.json
+    documents/
+    chunks/
+```
+
+
+# Memory Model Guide
+
+
+
+RAGit does not treat memory as one giant transcript. It separates memory by purpose so that an agent can resume work without dragging every raw note, tool output, or past conversation back into the prompt.
+
+The Problem [#the-problem]
+
+Agents do not naturally remember your project the way a teammate does. A raw session log can tell you everything that happened, but it is bad at telling you what matters right now.
+
+For a user, the real question is simpler:
+
+* What was I trying to do?
+* Which constraints still matter?
+* What is still open?
+* What knowledge is now stable enough to reuse later?
+
+RAGit splits memory so it can answer those questions directly instead of replaying the entire past.
+
+The Mental Model [#the-mental-model]
+
+Think about memory in three layers:
+
+* **Short-term memory** is scratch space. It holds temporary notes, rough ideas, and in-progress observations inside a session.
+* **Working memory** is the active state you want to resume tomorrow. It should tell you the goal, constraints, open loops, and next actions.
+* **Long-term memory** is reusable project knowledge. It contains things that have become stable enough to search and reuse across future work.
+
+In the current MVP, RAGit emphasizes the second and third layers. Working memory helps you continue a task. Long-term memory helps you find durable knowledge again later. Short-term memory still exists conceptually, but it remains transient scratch space rather than a first-class searchable layer.
+
+Why Two Places Exist [#why-two-places-exist]
+
+RAGit uses two places because the project needs two different kinds of memory behavior.
+
+* `.ragit/memory/**` is the **control plane**. It stores session wraps and current working state. This area is good for resuming work, but it is not meant to be your general searchable knowledge base.
+* `docs/memory/**` is the **searchable corpus**. It stores promoted decisions, glossary entries, and plans as normal documents that can participate in ingest and snapshot-scoped retrieval.
+
+This split protects signal quality. Working memory stays focused on “what is active now,” while long-term memory stays focused on “what should remain findable later.”
+
+Command Flow [#command-flow]
+
+```text
+CONTROL PLANE (.ragit/memory/**)             SEARCHABLE CORPUS (docs/memory/**)
+
+session work
+   |
+   +--> memory wrap ------> sessions/ + working/
+   |
+goal for next session
+   |
+   +--> memory recall <--- working/ + snapshot retrieval
+   |                     --> recall packet
+   |
+stable knowledge
+   |
+   +--> memory promote --------------------> decisions/ glossary/ plans
+                                              |
+                                              +--> ingest --> searchable snapshot hits
+```
+
+How Commands Map [#how-commands-map]
+
+* `memory wrap` records the state of the work you want to resume. It writes session history and refreshes the current working state.
+* `memory recall` reconstructs the smallest useful packet for continuing work. It starts from what is active now in working memory and then supplements it with relevant snapshot-scoped retrieval results rather than replaying the full past.
+* `memory promote` turns stable knowledge into searchable documents. It is how an important conclusion stops being a session detail and becomes project memory. In the current MVP, promoted documents are ingested immediately when `HEAD` is available.
+
+The key idea is that wrap is for continuity, recall is for restoration, and promote is for crystallization.
+
+A Simple Example [#a-simple-example]
+
+Imagine you stop work on an auth migration at the end of the day.
+
+You use `memory wrap` to save the current goal, the rule that snapshot contracts must stay intact, the open loop about token refresh, and the next action for tomorrow. That state lives in `.ragit/memory/**`.
+
+The next morning, you do not want to reread every note. You use `memory recall`. RAGit pulls the current working state and combines it with relevant retrieved knowledge, such as earlier decisions about auth boundaries or plans stored in the repository. You get a recall packet that tells you where to restart.
+
+Later, once a rule becomes stable, such as “refresh token handling must remain outside snapshot mutation,” you use `memory promote`. That rule becomes a durable document in `docs/memory/**`, where future sessions can search it like any other project knowledge.
+
+Common Misunderstandings [#common-misunderstandings]
+
+Why not search .ragit/memory/** directly? [#why-not-search-ragitmemory-directly]
+
+Because working state changes often and exists to help you resume active work. It is operational state, not automatically durable knowledge.
+
+Why is promote separate from wrap? [#why-is-promote-separate-from-wrap]
+
+Because not every session note deserves to become long-term memory. Promotion is the deliberate step that keeps the searchable corpus clean.
+
+When should I promote something? [#when-should-i-promote-something]
+
+Promote it when you expect a future session to benefit from finding it without reopening the original session history. In the current MVP, that usually means a stable decision, a reusable term, or a plan worth searching later.
+
+Is working memory the same as a snapshot? [#is-working-memory-the-same-as-a-snapshot]
+
+No. A snapshot answers, “What knowledge is searchable for this commit?” Working memory answers, “What am I actively trying to continue right now?”
+
+Why keep both working memory and long-term memory? [#why-keep-both-working-memory-and-long-term-memory]
+
+Because they solve different recovery problems. Working memory restores momentum. Long-term memory restores durable knowledge.
+
+
+# Quickstart
+
+
+
+Requirements [#requirements]
+
+* Node.js 20+
+* pnpm 10+
+* Git repository
+
+Install [#install]
+
+```bash
+pnpm install
+pnpm ragit --help
+```
+
+Inside a repository checkout, run CLI commands with `pnpm ragit <command>`.
+`pnpm build` is optional and only needed when you want to generate the `dist/` bundle locally.
+
+```bash
+pnpm build
+```
+
+Initialize RAGit [#initialize-ragit]
+
+```bash
+pnpm ragit init
+pnpm ragit hooks install
+pnpm ragit ingest --all
+```
+
+At this point you can start using commit-bound retrieval. If you want the philosophy behind `memory wrap`, `memory recall`, and `memory promote`, read <a href="/en/docs/memory-model">Memory Model Guide</a> before you add memory workflows to your project.
+If you want detailed command syntax and per-command examples, continue with <a href="/en/docs/commands">Commands</a>.
+
+Run docs locally [#run-docs-locally]
+
+```bash
+pnpm docs:dev
+```
+
+Then open `/en/docs` and `/ko/docs`.
+
+
+# Release Notes
+
+
+
+v0.1 Highlights [#v01-highlights]
+
+* Full CLI command surface for MVP
+* 8 document types including SPEC/PBD
+* `SPEC` documents implementation-level functional requirements and contracts
+* `PBD` documents implementation phase topology and binding architecture
+* Interactive `init` with AGENTS parsing
+* Hybrid retrieval and context pack
+* sqlite-vss compatibility migration path
+
+Verification [#verification]
+
+* Unit tests for doc type, masking, hybrid score
+* Integration tests for incremental ingest and init flows
+* Build/test checks pass on CI baseline
+
+
+# describe
+
+
+
+What It Does [#what-it-does]
+
+`describe` returns the current command contract for a specific CLI path. It is the runtime source of truth for command purpose, arguments, options, examples, output fields, and doc metadata.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You are integrating RAGit into an agent or automation.
+* You want to confirm whether a command supports `--input`, `--dry-run`, or `--view`.
+* You want to detect contract drift before hard-coding a command call.
+
+When not to use it [#when-not-to-use-it]
+
+* You already know the command and only want a quick human explanation. Read the corresponding command page instead.
+* You want actual project data, not command metadata. Use the target command directly.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit describe <command-path...> [--format text|json|both]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `<command-path...>`: The full command path. Multi-word commands are passed as separate words, for example `memory promote` or `hooks install`.
+* `--format text|json|both`: Return a text summary, a JSON envelope, or both.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is positional only.
+* JSON output includes `command`, `availableCommands`, and a `spec` object.
+* The `spec` object includes `group`, `docSlug`, `relatedCommands`, `stability`, input capabilities, and output fields.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit describe query
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit describe memory promote --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* The command fails if the requested path is not in the describable leaf-command set.
+* Use the exact command path. `memory` alone is a family, not a leaf command.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/agent-cli">
+    Agent CLI Contract
+  </a>
+* <a href="/en/docs/commands/query">
+    `query`
+  </a>
+* <a href="/en/docs/commands/context/pack">
+    `context pack`
+  </a>
+* <a href="/en/docs/commands/memory/promote">
+    `memory promote`
+  </a>
+
+
+# doctor
+
+
+
+What It Does [#what-it-does]
+
+`doctor` runs a multi-check diagnosis across git setup, RAGit structure, config, zvec runtime, schema layout, and manifest consistency.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* A command is failing and you need a structured diagnostic view.
+* You suspect a store, schema, or manifest mismatch.
+* You want a CI-friendly health check that can exit non-zero on failure.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want a quick current-state summary. Use <a href="/en/docs/commands/status">`status`</a>.
+* You already know the issue and need to reindex. Use <a href="/en/docs/commands/ingest">`ingest`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit doctor [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--format text|json|both`: Choose human text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* There is no positional input and no JSON payload input.
+* JSON output includes `checks` and `hasFailure`.
+* If any check fails, the process exits with a non-zero code after printing the result.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit doctor
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit doctor --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* A failing `doctor` result often signals repository or runtime setup problems outside a single command.
+* Use the individual check names in the JSON output when automating follow-up actions.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/init">
+    `init`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# Commands
+
+
+
+The `commands` group is the new home for detailed command documentation.
+Each leaf page explains one executable CLI command from the user point of view and the agent integration point of view.
+
+Start Here [#start-here]
+
+* Read <a href="/en/docs/commands/init">`init`</a> when you are setting up RAGit in a repository.
+* Read <a href="/en/docs/commands/query">`query`</a> when you want direct retrieval hits from indexed knowledge.
+* Read <a href="/en/docs/commands/context/pack">`context pack`</a> when you want a compact prompt packet for the next agent step.
+* Read <a href="/en/docs/commands/memory/recall">`memory recall`</a> when you want to resume active work instead of doing a general search.
+
+Command Families [#command-families]
+
+* Top-level commands: <a href="/en/docs/commands/init">`init`</a>, <a href="/en/docs/commands/describe">`describe`</a>, <a href="/en/docs/commands/ingest">`ingest`</a>, <a href="/en/docs/commands/query">`query`</a>, <a href="/en/docs/commands/status">`status`</a>, <a href="/en/docs/commands/doctor">`doctor`</a>
+* Config: <a href="/en/docs/commands/config">`config`</a>
+* Context: <a href="/en/docs/commands/context">`context`</a>
+* Hooks: <a href="/en/docs/commands/hooks">`hooks`</a>
+* Memory: <a href="/en/docs/commands/memory">`memory`</a>
+* Migrate: <a href="/en/docs/commands/migrate">`migrate`</a>
+
+How To Read These Pages [#how-to-read-these-pages]
+
+* Every leaf page uses the same structure so you can find syntax, options, payload examples, and cautions quickly.
+* Commands that support `--input <path|->` include a JSON payload example.
+* Commands that support `--view` explain the difference between `minimal`, `default`, and `full`.
+* Commands that support `--dry-run` explain what is validated before any real mutation happens.
+
+Fast Mappings [#fast-mappings]
+
+* `query` answers: "What indexed knowledge matches this question?"
+* `context pack` answers: "What is the smallest useful prompt packet for this goal?"
+* `memory wrap` answers: "What should I record before stopping?"
+* `memory recall` answers: "What should I load before resuming?"
+* `memory promote` answers: "What should become durable project knowledge?"
+
+If you still prefer the old entry point, the legacy <a href="/en/docs/cli-reference">CLI Reference</a> page now redirects you into this group.
+
+
+# ingest
+
+
+
+What It Does [#what-it-does]
+
+`ingest` scans supported documents, writes embeddings and records into the canonical store, and produces a snapshot manifest bound to the current commit.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You added or changed project docs and want retrieval to see them.
+* You promoted durable memory into `docs/memory/**`.
+* You want to preview which files would be indexed before running a real mutation.
+
+When not to use it [#when-not-to-use-it]
+
+* You only need to search existing indexed data. Use <a href="/en/docs/commands/query">`query`</a>.
+* You only need the current working state. Use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit ingest [--all | --since <sha> | --files <glob> | --input <path|->] [--dry-run] [--format text|json|both]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--all`: Index all supported repository documents.
+* `--since <sha>`: Index only changes since a commit.
+* `--files <glob>`: Index a targeted glob.
+* `--input <path|->`: Provide a structured JSON payload instead of flags.
+* `--dry-run`: Validate inputs and compute the plan without writing the store or manifest.
+* `--format text|json|both`: Choose the result envelope form.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Human mode normally uses `--all`, `--since`, or `--files`.
+* Agent mode should prefer `--input <path|->` when multiple selectors are involved.
+
+```json
+{
+  "all": false,
+  "since": "HEAD~1",
+  "files": "docs/**/*.md"
+}
+```
+
+* JSON output reports `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, and `deletedDocumentIds`.
+* `--dry-run` returns the same planned surface without mutating the store.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit ingest --all --format both
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit ingest --input ingest.json --dry-run --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Do not mix `--input` with selector flags in the same call.
+* Invalid globs and unsafe path patterns are rejected before indexing begins.
+* `ingest` only sees searchable corpus docs, not `.ragit/memory/**` control-plane files.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/query">
+    `query`
+  </a>
+* <a href="/en/docs/commands/context/pack">
+    `context pack`
+  </a>
+* <a href="/en/docs/commands/memory/promote">
+    `memory promote`
+  </a>
+* <a href="/en/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+
+
+# init
+
+
+
+What It Does [#what-it-does]
+
+`init` prepares a repository for RAGit. It checks git context, creates the RAGit structure, loads or creates `AGENTS.md`, prepares guide files, and bootstraps the local zvec storage layout.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You are setting up RAGit in a repository for the first time.
+* You want the standard `.ragit/**` structure and guide scaffolding.
+* You want to confirm whether a legacy JSON store still needs migration.
+
+When not to use it [#when-not-to-use-it]
+
+* The repository is already initialized and you only want to index new docs. Use <a href="/en/docs/commands/ingest">`ingest`</a>.
+* You only need to inspect current setup health. Use <a href="/en/docs/commands/status">`status`</a> or <a href="/en/docs/commands/doctor">`doctor`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit init [--cwd <path>] [--yes|--non-interactive] [--git-init] [--output text|json|both]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--cwd <path>`: Run initialization against another repository path.
+* `--yes`: Accept defaults and skip prompts.
+* `--non-interactive`: Same intent as `--yes`, useful in scripted flows.
+* `--git-init`: Create a git repository automatically in non-interactive mode.
+* `--output text|json|both`: Choose the human table, JSON summary, or both.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only. There is no `--input <path|->` payload mode.
+* JSON output includes the high-level setup summary: `mode`, `git`, `agents`, `guide`, `storage`, and `nextActions`.
+* `--output json` is useful when an agent needs to check whether migration is still required.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit init
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit init --yes --git-init --output json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* In non-interactive mode, `init` fails if the directory is not a git repository and `--git-init` is missing.
+* In TTY-less environments, interactive mode is not available.
+* `init` prepares the repository but does not index docs yet. Run <a href="/en/docs/commands/ingest">`ingest`</a> after setup.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/en/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+
+
+# query
+
+
+
+What It Does [#what-it-does]
+
+`query` searches indexed repository knowledge and returns matching hits for a question. The result is always snapshot-scoped, so the answer is tied to the chosen commit state.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want direct retrieval hits for a question.
+* You want to inspect what the snapshot knows at a specific commit.
+* You want a lightweight agent call before building a larger context packet.
+
+When not to use it [#when-not-to-use-it]
+
+* You need a prompt-sized packet with token budgeting. Use <a href="/en/docs/commands/context/pack">`context pack`</a>.
+* You want to resume active work from working memory. Use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `question`: A direct search question.
+* `--input <path|->`: Provide a JSON payload with `question`, `topK`, and optional `at`.
+* `--top-k <n>`: Control how many hits to return.
+* `--at <sha>`: Query a specific snapshot SHA or prefix.
+* `--view minimal|default|full`: Choose how much hit detail to project.
+* `--format text|json|both`: Choose the output form.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Positional input is fine for a quick human call.
+* Agents should prefer `--input <path|->` when they need reproducible payloads.
+
+```json
+{
+  "question": "restore auth context",
+  "topK": 5,
+  "at": "HEAD"
+}
+```
+
+* JSON output returns `query`, `snapshotSha`, and `hits`.
+* `--view minimal` returns the smallest useful hit shape.
+* `--view default` returns the standard readable hit projection.
+* `--view full` keeps the richest text projection and is the most expensive for context windows.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit query "restore auth context" --format both
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit query --input query.json --view minimal --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Do not mix `--input` with positional `question`, `--top-k`, or `--at`.
+* If `question` is empty, the command fails.
+* `query` only sees indexed content that belongs to the snapshot.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/context/pack">
+    `context pack`
+  </a>
+* <a href="/en/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# status
+
+
+
+What It Does [#what-it-does]
+
+`status` prints the current repository state that matters to RAGit: branch, HEAD, backend, manifest count, embedding config, and zvec availability.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want a quick operational snapshot of the current repository.
+* You want to confirm whether the store is loaded and whether retrieval should be ready.
+* You want to inspect config surfaces without opening files manually.
+
+When not to use it [#when-not-to-use-it]
+
+* You want a deeper health diagnosis. Use <a href="/en/docs/commands/doctor">`doctor`</a>.
+* You want to change config values. Use <a href="/en/docs/commands/config/set">`config set`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit status [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--format text|json|both`: Choose human text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* There is no positional input and no JSON payload input.
+* JSON output includes `branch`, `head`, `backend`, `zvec`, `supported_types`, `manifests`, `embedding`, and `format`.
+* Agents should usually call `--format json`.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit status
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit status --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* `status` is a summary, not a repair command.
+* A loaded store does not guarantee that your latest docs are indexed. Run <a href="/en/docs/commands/ingest">`ingest`</a> after content changes.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/en/docs/commands/config/set">
+    `config set`
+  </a>
+
+
+# config
+
+
+
+The `config` family controls repository-local RAGit settings.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* Use <a href="/en/docs/commands/config/set">`config set`</a> to update one config key.
+
+Family Boundary [#family-boundary]
+
+* `config` changes behavior.
+* `status` and `doctor` inspect behavior.
+* `init` prepares defaults but does not replace targeted config edits.
+
+
+# config set
+
+
+
+What It Does [#what-it-does]
+
+`config set` updates one key in `.ragit/config.toml` using the repository-aware config loader and writer.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want to change output, ingest, storage, or embedding settings.
+* You want a scriptable way to change config without editing TOML by hand.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want to inspect current values. Use <a href="/en/docs/commands/status">`status`</a>.
+* You want to initialize missing defaults. Use <a href="/en/docs/commands/init">`init`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit config set <key> <value> [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `<key>`: The dotted config key to update.
+* `<value>`: The value to store.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is positional only.
+* Output is a plain stdout confirmation message. This command does not currently expose a JSON envelope.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit config set output.format markdown
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit config set ingest.supported_types '["adr","spec"]'
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Invalid keys or invalid values fail before the config file is written.
+* Because output is text-only, agents should validate follow-up state with <a href="/en/docs/commands/status">`status`</a>.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/en/docs/commands/init">
+    `init`
+  </a>
+
+
+# context
+
+
+
+The `context` family is for assembling prompt-ready packets instead of raw retrieval hits.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* Use <a href="/en/docs/commands/context/pack">`context pack`</a> when you know the goal and want a bounded packet.
+
+Family Boundary [#family-boundary]
+
+* `query` gives direct hits.
+* `context pack` turns relevant hits into a budgeted packet.
+* `memory recall` adds working-memory state on top of retrieval when you are resuming an active task.
+
+
+# context pack
+
+
+
+What It Does [#what-it-does]
+
+`context pack` turns retrieved knowledge into a bounded packet for a specific goal. It is the command to use when the next consumer is an agent prompt rather than a person reading search results.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You have a goal and want a compact context handoff.
+* You need token budgeting.
+* You want to pass structured input to an agent reliably.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want to inspect raw retrieval hits. Use <a href="/en/docs/commands/query">`query`</a>.
+* You want to resume active work with open loops and working state. Use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit context pack [goal] [--input <path|->] [--budget <tokens>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `goal`: The goal that should drive context selection.
+* `--input <path|->`: Provide a JSON payload with `goal`, optional `budget`, and optional `at`.
+* `--budget <tokens>`: Token budget for the selected packet.
+* `--at <sha>`: Use a specific snapshot instead of the current HEAD state.
+* `--view minimal|default|full`: Control how much detail is projected into the packet.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+```json
+{
+  "goal": "implementation plan for auth",
+  "budget": 1200,
+  "at": "HEAD"
+}
+```
+
+* JSON output includes `goal`, `snapshotSha`, `budget`, `usedTokens`, `selectedHits`, and `hits`.
+* `--view minimal` is the safest default for agent context windows.
+* `--view default` preserves a balanced amount of detail.
+* `--view full` is useful only when downstream reasoning truly needs richer text.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit context pack "implementation plan for auth" --budget 1200
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit context pack --input context-pack.json --view minimal --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Do not mix `--input` with positional `goal`, `--budget`, or `--at`.
+* An empty `goal` is rejected.
+* This command remains snapshot-bound; it does not include working-memory state unless you explicitly use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/query">
+    `query`
+  </a>
+* <a href="/en/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/en/docs/commands/describe">
+    `describe`
+  </a>
+
+
+# Hooks
+
+
+
+The `hooks` family manages the git hooks that RAGit installs under `.git/hooks`.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* <a href="/en/docs/commands/hooks/install">`hooks install`</a>: install managed hooks.
+* <a href="/en/docs/commands/hooks/uninstall">`hooks uninstall`</a>: remove managed hooks without touching external ones.
+* <a href="/en/docs/commands/hooks/status">`hooks status`</a>: inspect current hook state.
+
+Family Boundary [#family-boundary]
+
+* Hooks automate ingestion triggers.
+* They do not replace explicit <a href="/en/docs/commands/ingest">`ingest`</a> calls when you need a full refresh.
+
+
+# hooks install
+
+
+
+What It Does [#what-it-does]
+
+`hooks install` writes managed `post-commit` and `post-merge` hooks that trigger incremental ingestion.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want indexing to stay closer to repository changes automatically.
+* You just finished `init`.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want to inspect the hook state. Use <a href="/en/docs/commands/hooks/status">`hooks status`</a>.
+* You are removing managed hooks. Use <a href="/en/docs/commands/hooks/uninstall">`hooks uninstall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit hooks install [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--dry-run`: Show what would be installed without writing files.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only.
+* JSON output includes `dryRun`, `root`, and `hooks`.
+* `--dry-run` verifies paths and returns planned hook states without mutation.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit hooks install
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit hooks install --dry-run --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Hooks are written into `.git/hooks`, so the repository must have a valid git root.
+* The installed hooks are managed-by-ragit hooks, not arbitrary shell automation.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/hooks/status">
+    `hooks status`
+  </a>
+* <a href="/en/docs/commands/hooks/uninstall">
+    `hooks uninstall`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# hooks status
+
+
+
+What It Does [#what-it-does]
+
+`hooks status` reports whether the expected `post-commit` and `post-merge` hooks are installed, absent, or external.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want to verify hook state before install or uninstall.
+* You want a machine-readable view of hook ownership.
+
+When not to use it [#when-not-to-use-it]
+
+* You want to mutate hook state. Use <a href="/en/docs/commands/hooks/install">`hooks install`</a> or <a href="/en/docs/commands/hooks/uninstall">`hooks uninstall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit hooks status [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only.
+* JSON output includes `dryRun`, `root`, and `hooks`.
+* Each hook item reports `name`, `target`, `action`, and `state`.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit hooks status
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit hooks status --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* External hooks are not an error by themselves; they are a signal to avoid destructive automation.
+* `hooks status` does not confirm that the hook target command succeeded in previous runs. It only inspects file state.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+* <a href="/en/docs/commands/hooks/uninstall">
+    `hooks uninstall`
+  </a>
+
+
+# hooks uninstall
+
+
+
+What It Does [#what-it-does]
+
+`hooks uninstall` removes only hooks that were installed and marked as managed by RAGit. External hooks are left untouched and reported as external.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You no longer want automatic ingest hooks.
+* You need to verify whether managed hooks can be removed safely.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want hook visibility. Use <a href="/en/docs/commands/hooks/status">`hooks status`</a>.
+* You want to install hooks instead. Use <a href="/en/docs/commands/hooks/install">`hooks install`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit hooks uninstall [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--dry-run`: Preview which managed hooks would be removed.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only.
+* JSON output includes `dryRun`, `root`, and `hooks`.
+* `--dry-run` is the safe mode to confirm that external hooks will not be removed.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit hooks uninstall --dry-run
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit hooks uninstall --dry-run --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Hooks not marked with the RAGit header are treated as external and preserved.
+* Review the `state` field before a real uninstall if the repository already had custom hooks.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/hooks/status">
+    `hooks status`
+  </a>
+* <a href="/en/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+
+
+# Memory
+
+
+
+The `memory` family separates active continuity from durable searchable knowledge.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* <a href="/en/docs/commands/memory/wrap">`memory wrap`</a>: record the current session state.
+* <a href="/en/docs/commands/memory/recall">`memory recall`</a>: rebuild the next-session packet.
+* <a href="/en/docs/commands/memory/promote">`memory promote`</a>: crystallize stable knowledge into searchable docs.
+
+Family Boundary [#family-boundary]
+
+* `wrap` writes control-plane state into `.ragit/memory/**`.
+* `recall` reads working state and combines it with retrieval.
+* `promote` writes durable docs into `docs/memory/**` and can trigger targeted ingest.
+
+
+# memory promote
+
+
+
+What It Does [#what-it-does]
+
+`memory promote` takes promotion candidates and writes durable docs under `docs/memory/**`, such as decisions, glossary entries, or plans. When `HEAD` is available, it then ingests those docs so they become searchable immediately.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* A decision, glossary term, or plan should become durable project memory.
+* You want future retrieval to find the result without reopening session history.
+
+When not to use it [#when-not-to-use-it]
+
+* The note is still provisional. Keep it in working memory with <a href="/en/docs/commands/memory/wrap">`memory wrap`</a>.
+* You only want to resume active work. Use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit memory promote --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--input <path|->`: Required JSON payload describing promotion candidates.
+* `--dry-run`: Validate candidates, planned target docs, and planned ingest without writing.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+```json
+{
+  "promotionCandidates": [
+    {
+      "type": "adr",
+      "title": "Keep refresh handling outside manifest mutation",
+      "summary": "Separates active auth refresh logic from snapshot writes.",
+      "rationale": "Preserves snapshot contract stability.",
+      "nextReviewAt": "2026-06-01"
+    }
+  ]
+}
+```
+
+* JSON output includes `createdFiles`, `plannedFiles`, `sourceHeadSha`, `ingested`, `dryRun`, and `warnings`.
+* `--dry-run` tells you which doc files and ingest targets would be touched.
+* If `HEAD` does not exist, promotion still plans file creation but warns that ingest is skipped.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit memory promote --input promotion-batch.json
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit memory promote --input promotion-batch.json --dry-run --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Promotion is the deliberate filter that keeps `docs/memory/**` clean. Do not use it for raw scratch notes.
+* The payload must use valid promotion candidate types and fields.
+* Promoted docs affect searchable retrieval after ingest, not before.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/memory/wrap">
+    `memory wrap`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/en/docs/memory-model">
+    Memory Model Guide
+  </a>
+
+
+# memory recall
+
+
+
+What It Does [#what-it-does]
+
+`memory recall` reconstructs the packet you need to continue active work. It starts from current working memory and then supplements it with relevant snapshot-scoped retrieval hits.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You are resuming an interrupted task.
+* You want open loops, constraints, related decisions, and next actions in one packet.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want a general repository search. Use <a href="/en/docs/commands/query">`query`</a>.
+* You only want a prompt-sized retrieval pack with no working state. Use <a href="/en/docs/commands/context/pack">`context pack`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit memory recall <goal> [--view minimal|default|full] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `<goal>`: The task you want to resume.
+* `--view minimal|default|full`: Control how much retrieved detail is projected into the packet.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is positional only.
+* JSON output includes `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, and `nextActions`.
+* `--view minimal` is the best default for agent resumes.
+* `--view default` balances readability and detail.
+* `--view full` is only for cases where the restored packet must carry richer text from retrieval hits.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit memory recall "resume auth flow"
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit memory recall "resume auth flow" --view minimal --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* `memory recall` depends on working-memory state quality. If wraps are poor, recall quality drops too.
+* This command does not replay the entire session history. It intentionally produces a selective packet.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/memory/wrap">
+    `memory wrap`
+  </a>
+* <a href="/en/docs/commands/query">
+    `query`
+  </a>
+* <a href="/en/docs/commands/context/pack">
+    `context pack`
+  </a>
+
+
+# memory wrap
+
+
+
+What It Does [#what-it-does]
+
+`memory wrap` records the current session state into `.ragit/memory/**`. It writes a session wrap, refreshes the current working state, and updates the open-loops registry.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You are stopping work and want tomorrow's restart point preserved.
+* You want the current goal, constraints, open loops, and next actions written into working memory.
+
+When not to use it [#when-not-to-use-it]
+
+* You want to search stable project knowledge. Use <a href="/en/docs/commands/query">`query`</a> or <a href="/en/docs/commands/context/pack">`context pack`</a>.
+* You want to promote stable knowledge into searchable memory. Use <a href="/en/docs/commands/memory/promote">`memory promote`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit memory wrap --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--input <path|->`: Required JSON payload describing the session wrap.
+* `--dry-run`: Validate the wrap and show planned writes without changing files.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+```json
+{
+  "goal": "finish auth migration",
+  "summary": "Refined refresh token boundaries and left one open loop.",
+  "constraints": ["Do not break snapshot contracts."],
+  "decisions": ["Keep refresh handling outside manifest mutation."],
+  "openLoops": [
+    {
+      "id": "auth-refresh",
+      "title": "Finish refresh token handling",
+      "status": "open",
+      "nextAction": "Update the adapter tests"
+    }
+  ],
+  "nextActions": ["Update adapter tests", "Run pnpm test"],
+  "promotionCandidates": [],
+  "sourceHeadSha": "HEAD",
+  "createdAt": "2026-03-08T10:00:00.000Z"
+}
+```
+
+* JSON output includes `sessionId`, `sessionPath`, `currentPath`, `openLoopsPath`, `sourceHeadSha`, and `dryRun`.
+* `--dry-run` validates payload shape and shows target files without writing them.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit memory wrap --input session-wrap.json
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit memory wrap --input - --dry-run --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* The payload must match the wrap schema. Unexpected or malformed fields are rejected.
+* `memory wrap` does not ingest anything into searchable retrieval.
+* If `HEAD` is missing, wrap can still write state, but it will record the missing source reference accordingly.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/en/docs/commands/memory/promote">
+    `memory promote`
+  </a>
+* <a href="/en/docs/memory-model">
+    Memory Model Guide
+  </a>
+
+
+# migrate from-json-store
+
+
+
+What It Does [#what-it-does]
+
+`migrate from-json-store` reads the legacy JSON-backed store and rewrites its documents, chunks, and snapshot data into the current canonical storage layout.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* `status` or `init` indicates that a legacy JSON store still exists.
+* You are upgrading an older repository layout to the current store contract.
+
+When not to use it [#when-not-to-use-it]
+
+* The repository is already using the canonical store.
+* Your legacy source is sqlite-vss export data instead. Use <a href="/en/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit migrate from-json-store [--dry-run] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--dry-run`: Count what would be migrated without writing the canonical store.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only.
+* Output is a raw JSON object with `mode`, `docs`, `chunks`, and optional `snapshotSha`.
+* `--dry-run` is the safe first call for automation.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit migrate from-json-store --dry-run
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit migrate from-json-store --dry-run
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* The command fails if the legacy JSON store file is missing.
+* Treat migration as a write operation even though it prints raw JSON instead of the shared CLI envelope.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/migrate/from-sqlitevss">
+    `migrate from-sqlitevss`
+  </a>
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# migrate from-sqlitevss
+
+
+
+What It Does [#what-it-does]
+
+`migrate from-sqlitevss` reads exported sqlite-vss records and converts them into the canonical document, chunk, and snapshot layout used by current RAGit.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You have one of the supported sqlite-vss export files in the repository.
+* You are upgrading from an older vector-storage experiment to the current layout.
+
+When not to use it [#when-not-to-use-it]
+
+* Your legacy source is the JSON store instead. Use <a href="/en/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>.
+* The repository already uses the current canonical store.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit migrate from-sqlitevss [--dry-run] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--dry-run`: Count convertible docs and chunks without writing.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only.
+* Output is a raw JSON object with `mode`, `docs`, `chunks`, and optional `snapshotSha`.
+* `--dry-run` is the right default for agent automation.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit migrate from-sqlitevss --dry-run
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit migrate from-sqlitevss --dry-run
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* The command fails if no supported sqlite-vss export file can be found.
+* Like the JSON-store migration, this is a mutating command even though its output is raw JSON.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/migrate/from-json-store">
+    `migrate from-json-store`
+  </a>
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# Migrate
+
+
+
+The `migrate` family exists for one-time or occasional legacy data conversion.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* <a href="/en/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>: convert the old JSON store.
+* <a href="/en/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>: convert exported sqlite-vss data.
+
+Family Boundary [#family-boundary]
+
+* Migrations are write operations.
+* After a successful migration, you still verify with <a href="/en/docs/commands/status">`status`</a> or continue with <a href="/en/docs/commands/ingest">`ingest`</a>.
+
+
+# Agent CLI Contract
+
+
+
+RAGit은 이제 사람용 출력과 기계용 계약을 더 분명하게 분리합니다.
+에이전트 워크플로에 붙인다면 아래 규칙부터 기준으로 삼으시면 됩니다.
+
+기본 규칙 [#기본-규칙]
+
+* 기계 호출은 기본적으로 `--format json`을 우선합니다.
+* 처음 붙이는 명령은 `ragit describe <command> --format json`으로 계약부터 읽습니다.
+* `query`, `context pack`, `memory recall`은 기본적으로 `--view minimal`을 우선합니다.
+* 구조화된 payload가 있으면 `--input <path|->`를 우선합니다.
+* mutating 명령은 먼저 `--dry-run`으로 검증합니다.
+
+계약 형태 [#계약-형태]
+
+주요 명령은 공통 envelope를 반환할 수 있습니다.
+
+```json
+{
+  "command": "query",
+  "ok": true,
+  "version": "0.1.0",
+  "cwd": "/repo/path",
+  "data": {},
+  "warnings": []
+}
+```
+
+사람용 텍스트 출력이 바뀌더라도, 에이전트는 이 envelope를 안정적인 계약으로 읽으면 됩니다.
+
+명령별 구문, payload 예시, 실패 주의사항은 <a href="/ko/docs/commands">Commands</a>에서 자세히 보실 수 있습니다.
+
+조회 계열 명령 [#조회-계열-명령]
+
+* `query`는 positional 입력과 `--input <path|->` JSON payload를 모두 지원합니다.
+* `context pack`도 positional 입력과 `--input <path|->` JSON payload를 모두 지원합니다.
+* `memory recall`은 goal을 받아 `--view minimal|default|full`로 출력량을 조절할 수 있습니다.
+
+에이전트에서는 먼저 작은 패킷부터 사용하십시오.
+
+```bash
+ragit query --input query.json --view minimal --format json
+ragit context pack --input context-pack.json --view minimal --format json
+ragit memory recall "resume auth flow" --view minimal --format json
+```
+
+변경 계열 명령 [#변경-계열-명령]
+
+아래 명령은 `--dry-run`을 지원하므로, 에이전트가 쓰기 전에 먼저 계획을 검증할 수 있습니다.
+
+* `ingest`
+* `hooks install`
+* `hooks uninstall`
+* `memory wrap`
+* `memory promote`
+
+권장 패턴은 다음과 같습니다.
+
+```bash
+ragit memory promote --input promote.json --dry-run --format json
+ragit memory promote --input promote.json --format json
+```
+
+Memory 주의점 [#memory-주의점]
+
+두 메모리 표면을 혼동하지 마십시오.
+
+* `.ragit/memory/**`는 working state와 session history를 위한 control plane입니다.
+* `docs/memory/**`는 ingest와 snapshot retrieval에 참여하는 searchable corpus입니다.
+
+즉, 에이전트는 현재 작업을 다룰 때 `memory wrap`과 `memory recall`을 사용하고, 충분히 안정화된 지식만 `memory promote`로 searchable project memory로 승격해야 합니다.
+
+
+# 아키텍처
+
+
+
+런타임 [#런타임]
+
+* TypeScript / Node.js CLI
+* `.ragit/store/` 기준 zvec canonical store
+* `.ragit/memory/` 기준 메모리 제어면
+* `docs/memory/` 기준 검색 가능한 장기기억 코퍼스
+* v1 로컬 placeholder 임베딩 provider
+* `.ragit/manifest/` Git 추적 스냅샷
+
+검색 [#검색]
+
+* 청크 임베딩 + 키워드 점수 결합
+* 가중 하이브리드 랭킹(`alpha`)
+* snapshot SHA 기반 시점 조회
+
+결속 모델 [#결속-모델]
+
+* 각 스냅샷은 commit SHA와 결속
+* `--since <sha>` 증분 인덱싱 지원
+* `post-commit`, `post-merge` 훅 자동 동기화
+* `memory wrap`은 snapshot 계약을 바꾸지 않고 working state만 갱신
+* `memory promote`는 `docs/memory/**` 문서를 만들고 현재 `HEAD` 기준으로 선택적 ingest 가능
+
+구현 관점이 아니라 사용자 관점의 설명이 필요하다면 <a href="/ko/docs/memory-model">Memory Model Guide</a>를 참고하세요.
+
+
+# CLI 레퍼런스
+
+
+
+상세 CLI 레퍼런스는 이제 <a href="/ko/docs/commands">Commands</a>로 이동했습니다.
+
+이 페이지는 기존 링크와 북마크를 깨지 않기 위한 호환 경로만 제공합니다.
+
+지금 어디로 가면 되는가 [#지금-어디로-가면-되는가]
+
+* 명령군과 leaf 명령 상세는 <a href="/ko/docs/commands">Commands</a>를 보시면 됩니다.
+* 에이전트 안전 호출 규칙은 <a href="/ko/docs/agent-cli">Agent CLI Contract</a>를 보시면 됩니다.
+* `memory wrap`, `memory recall`, `memory promote`의 설계 철학은 <a href="/ko/docs/memory-model">Memory Model Guide</a>에서 확인하실 수 있습니다.
+
+
+# 개요
+
+
+
+RAGit은 git 기반 AI Agent 워크플로를 위한 로컬 우선 RAG CLI입니다.
+프로젝트 문서/컨텍스트를 수집하고 commit SHA와 결속된 스냅샷 검색을 제공합니다.
+
+프로젝트 목적 [#프로젝트-목적]
+
+RAGit은 AI Agent 프로젝트의 문서와 컨텍스트를 저장소 내부에서 커밋 결속형 재사용 지식으로 전환하는 로컬 우선 RAG CLI입니다.
+
+코어 벨류 [#코어-벨류]
+
+* 맥락 보존
+* 커밋 결속 재현성
+* 에이전트 친화 구조화
+* 저마찰 자동화
+
+제공 기능 [#제공-기능]
+
+* 커밋 결속 스냅샷
+* 하이브리드 검색(벡터 + 키워드)
+* 에이전트 컨텍스트 패킹
+* 활성 작업과 장기지식을 분리하는 메모리 모델
+* 비밀정보 마스킹 수집
+
+지원 문서 타입 [#지원-문서-타입]
+
+* ADR
+* PRD
+* SRS
+* SPEC
+* Plan
+* DDD
+* 용어집(Glossary)
+* PBD
+
+`SRS`는 시스템 수준 요구사항, `SPEC`는 구현체 단위 상세 기능 요구사항과 인터페이스 계약, `PBD`는 구현체 내부의 위상 구조와 결속 관계를 설명합니다.
+
+다음 단계 [#다음-단계]
+
+<a href="/ko/docs/quickstart">Quickstart</a> 문서에서 실행 절차를 확인하세요.
+명령어별 예시와 옵션 설명이 필요하시면 <a href="/ko/docs/commands">Commands</a>부터 보시면 됩니다.
+왜 메모리를 control plane과 searchable docs로 나누는지 알고 싶다면 <a href="/ko/docs/memory-model">Memory Model Guide</a>를 읽어보세요.
+에이전트 워크플로에 RAGit을 넣고 싶다면 <a href="/ko/docs/agent-cli">Agent CLI Contract</a>에서 `--format json`, `--view minimal`, `--input`, `--dry-run` 규약을 먼저 확인하세요.
+
+
+# Init 가이드
+
+
+
+저장소 체크아웃 안에서 `pnpm ragit init`은 기본적으로 7단계 인터랙티브 흐름으로 동작합니다.
+
+1. 환경 검사 (`git init` 선택 포함)
+2. 초기화 모드 확인
+3. 루트 `AGENTS.md` 로드/생성
+4. 문서 템플릿 범위 확인 (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PBD)
+5. `.ragit/guide` 증분 생성
+6. zvec 저장소 bootstrap
+7. 요약 및 다음 액션 출력
+
+`SPEC` 템플릿은 구현체 상세 기능 명세에, `PBD` 템플릿은 위상 구조와 결속 아키텍처 설명에 사용됩니다.
+
+init이 준비하는 것 [#init이-준비하는-것]
+
+* `.ragit/` 기준의 Git 인지 control plane 준비
+* 루트 `AGENTS.md`의 로드 또는 생성 흐름
+* `.ragit/config.toml`
+* `.ragit/guide/templates/*`
+* `.ragit/guide/guide-index.json`
+* `.ragit/store/meta.json`
+* `documents`, `chunks` 빈 zvec 컬렉션
+
+init이 준비하지 않는 것 [#init이-준비하지-않는-것]
+
+* searchable corpus 생성 없음
+* chunk 레코드 또는 manifest 생성 없음
+* 저장소 문서 스캔 또는 chunk 생성 없음
+* 빈 zvec 컬렉션에 대한 실제 벡터 upsert 없음
+
+즉, `init`은 저장소를 **control-plane ready** 및 **zvec-store ready** 상태로 만들지만, **search-ready** 상태로 만들지는 않습니다.
+검색 가능한 지식 상태는 `pnpm ragit ingest ...` 이후에 형성됩니다.
+
+`storage.backend = "zvec"`는 이제 canonical backend를 의미하며, `init`은 저장소 문서를 인덱싱하지 않은 빈 zvec 저장소만 bootstrap합니다.
+
+대표 사용자 시나리오 [#대표-사용자-시나리오]
+
+U1. 신규 로컬 부트스트랩 [#u1-신규-로컬-부트스트랩]
+
+현재 디렉터리가 Git 저장소가 아니고 `AGENTS.md`와 `.ragit/`도 아직 없을 때의 흐름입니다.
+
+1. `pnpm ragit init` 실행
+2. Git 부재 감지
+3. 대화형에서 `git init` 제안
+4. `AGENTS.md` 생성
+5. `.ragit/config.toml`, `.ragit/guide/templates/*`, `guide-index.json`, 빈 zvec 저장소 생성
+6. 다음 액션 출력: `ragit hooks install`, `ragit ingest --all`
+
+핵심은 초기화는 끝나지만, 아직 검색 가능한 지식 인덱스는 만들어지지 않는다는 점입니다.
+
+U2. 기존 Git 저장소 + 기존 AGENTS.md [#u2-기존-git-저장소--기존-agentsmd]
+
+이미 Git 저장소이며 루트 `AGENTS.md`가 존재할 때의 흐름입니다.
+
+1. `pnpm ragit init` 실행
+2. `AGENTS.md`를 읽기 전용으로 로드
+3. 누락된 `.ragit` control-plane 파일만 생성하고 필요 시 zvec 저장소 bootstrap
+4. `guide-index.json` 재생성
+
+핵심은 기존 지침문은 수정되지 않고, 표준 가이드 구조만 증분 보강된다는 점입니다.
+
+U3. 부분 초기화된 저장소 재실행 [#u3-부분-초기화된-저장소-재실행]
+
+`.ragit/`은 이미 있지만 일부 템플릿 또는 인덱스만 빠져 있을 때의 흐름입니다.
+
+1. `pnpm ragit init` 실행
+2. 기존 파일 유지
+3. 누락 템플릿만 생성
+4. `guide-index.json` 최신화
+
+핵심은 `init`이 idempotent/incremental하게 동작하여 안전하게 재실행 가능하다는 점입니다.
+
+U4. 비대화형 또는 CI 초기화 [#u4-비대화형-또는-ci-초기화]
+
+TTY가 없거나 자동화 환경에서 기본값으로 실행해야 할 때의 흐름입니다.
+
+1. `pnpm ragit init --yes` 실행
+2. Git 저장소면 바로 진행
+3. 비Git이면 `--git-init` 없을 때 실패, 있으면 자동 `git init`
+4. 동일한 guide + zvec-store 결과를 table 또는 JSON summary로 반환
+
+핵심은 CI에서도 guide/control-plane 준비와 빈 canonical store 준비까지는 가능하지만, 실제 인덱싱은 이후 `ingest` 단계가 담당한다는 점입니다.
+
+비대화형 실행 [#비대화형-실행]
+
+```bash
+pnpm ragit init --yes
+pnpm ragit init --yes --git-init
+pnpm ragit init --yes --output json
+```
+
+생성 구조 [#생성-구조]
+
+```text
+.ragit/
+  config.toml
+  guide/
+    guide-index.json
+    templates/
+  store/
+    meta.json
+    documents/
+    chunks/
+```
+
+
+# Memory Model Guide
+
+
+
+RAGit은 메모리를 거대한 대화 원문 한 덩어리로 다루지 않습니다. 메모리를 용도별로 분리해서, 에이전트가 모든 원시 로그와 도구 출력, 과거 대화를 다시 프롬프트에 밀어 넣지 않고도 작업을 이어갈 수 있게 만듭니다.
+
+The Problem [#the-problem]
+
+에이전트는 팀원이 프로젝트를 기억하듯이 자연스럽게 기억하지 못합니다. 세션 원문 로그는 “무슨 일이 있었는지”는 알려줄 수 있지만, “지금 무엇이 중요한지”를 바로 알려주기에는 적합하지 않습니다.
+
+사용자 입장에서 진짜 필요한 질문은 더 단순합니다.
+
+* 내가 하려던 일은 무엇이었는가?
+* 아직 지켜야 할 제약은 무엇인가?
+* 끝나지 않은 일은 무엇인가?
+* 나중에도 다시 써야 할 지식은 무엇인가?
+
+RAGit은 이 질문들에 직접 답하기 위해 메모리를 분리합니다. 과거 전체를 재생하는 대신, 다시 이어가기 위한 구조를 만드는 방식입니다.
+
+The Mental Model [#the-mental-model]
+
+메모리는 세 층으로 생각하면 이해하기 쉽습니다.
+
+* **Short-term memory**는 작업대입니다. 세션 중간의 임시 메모, 거친 아이디어, 아직 정리되지 않은 관찰이 머무는 곳입니다.
+* **Working memory**는 내일 다시 이어야 할 활성 상태입니다. 목표, 제약, 열린 루프, 다음 행동이 여기에 있어야 합니다.
+* **Long-term memory**는 나중에도 다시 찾아야 할 프로젝트 지식입니다. 안정화된 결정, 용어, 계획이 여기에 들어갑니다.
+
+현재 MVP에서 RAGit은 두 번째와 세 번째 층을 더 강하게 다룹니다. Working memory는 작업을 다시 이어가기 위한 것이고, long-term memory는 검증된 지식을 다시 찾기 위한 것입니다. Short-term memory는 개념적으로 존재하지만, 아직은 1급 검색 계층이 아니라 일시적인 작업대에 더 가깝습니다.
+
+Why Two Places Exist [#why-two-places-exist]
+
+RAGit이 메모리를 두 곳에 두는 이유는, 프로젝트가 서로 다른 두 종류의 메모리 동작을 필요로 하기 때문입니다.
+
+* `.ragit/memory/**`는 **control plane**입니다. 세션 wrap과 현재 working state를 저장합니다. 이 영역은 작업 재개에는 적합하지만, 일반 검색용 지식 베이스로 쓰기 위한 곳은 아닙니다.
+* `docs/memory/**`는 **searchable corpus**입니다. 승격된 결정, 용어, 계획을 일반 문서처럼 저장하고 ingest와 snapshot 검색에 참여시킵니다.
+
+이 분리는 신호 대 잡음비를 보호합니다. Working memory는 “지금 무엇이 살아 있는가”에 집중하고, long-term memory는 “나중에도 찾아야 할 것”에 집중합니다.
+
+Command Flow [#command-flow]
+
+```text
+CONTROL PLANE (.ragit/memory/**)             SEARCHABLE CORPUS (docs/memory/**)
+
+session work
+   |
+   +--> memory wrap ------> sessions/ + working/
+   |
+next-session goal
+   |
+   +--> memory recall <--- working/ + snapshot retrieval
+   |                     --> recall packet
+   |
+stable knowledge
+   |
+   +--> memory promote --------------------> decisions/ glossary/ plans
+                                              |
+                                              +--> ingest --> searchable snapshot hits
+```
+
+How Commands Map [#how-commands-map]
+
+* `memory wrap`은 나중에 다시 이어야 할 작업 상태를 기록합니다. 세션 히스토리를 저장하고 현재 working state를 갱신합니다.
+* `memory recall`은 작업 재개에 필요한 최소 패킷을 복원합니다. 과거 전체를 재생하는 대신, 지금 활성화된 working state를 먼저 잡고 여기에 관련 있는 snapshot-scoped retrieval 결과를 보탭니다.
+* `memory promote`는 안정화된 지식을 searchable document로 바꿉니다. 세션의 세부사항이 프로젝트 기억으로 결정화되는 단계입니다. 현재 MVP에서는 `HEAD`가 있으면 promote된 문서를 바로 ingest합니다.
+
+핵심은 이렇습니다. wrap은 연속성을 위한 것이고, recall은 복원을 위한 것이며, promote는 결정화를 위한 것입니다.
+
+A Simple Example [#a-simple-example]
+
+하루가 끝날 때 auth migration 작업을 멈춘다고 가정해 보겠습니다.
+
+`memory wrap`을 사용하면 현재 목표, snapshot 계약은 유지해야 한다는 제약, token refresh 관련 열린 루프, 내일의 다음 행동을 저장할 수 있습니다. 이 상태는 `.ragit/memory/**`에 남습니다.
+
+다음 날 아침에는 모든 메모를 다시 읽고 싶지 않습니다. `memory recall`을 사용하면 현재 working state와 함께, 저장소 안의 관련 결정이나 계획 문서 같은 검색 결과를 묶어서 가져옵니다. 이렇게 만들어진 recall packet이 어디서부터 다시 시작해야 하는지를 알려줍니다.
+
+이후 어떤 규칙이 충분히 안정화되면, 예를 들어 “refresh token 처리는 snapshot mutation 밖에 남겨야 한다” 같은 결론이 생기면 `memory promote`를 사용합니다. 그 규칙은 `docs/memory/**` 아래의 장기기억 문서가 되고, 이후 세션에서 일반 프로젝트 지식처럼 다시 검색할 수 있습니다.
+
+Common Misunderstandings [#common-misunderstandings]
+
+왜 .ragit/memory/**를 바로 검색하지 않나요? [#왜-ragitmemory를-바로-검색하지-않나요]
+
+Working state는 자주 바뀌고, 살아 있는 작업을 다시 이어주기 위한 운영 상태이기 때문입니다. 자동으로 장기지식이 되어야 하는 영역이 아닙니다.
+
+왜 promote를 wrap과 분리하나요? [#왜-promote를-wrap과-분리하나요]
+
+모든 세션 메모가 장기기억이 될 필요는 없기 때문입니다. Promote는 searchable corpus를 깨끗하게 유지하기 위한 의도적인 승격 단계입니다.
+
+언제 promote해야 하나요? [#언제-promote해야-하나요]
+
+미래 세션이 원래 세션 히스토리를 다시 열지 않아도 그 내용을 찾아야 할 때 승격하면 됩니다. 현재 MVP 기준으로는 안정된 결정, 재사용할 용어, 나중에도 검색할 가치가 있는 계획이 대표적입니다.
+
+working memory와 snapshot은 같은 것인가요? [#working-memory와-snapshot은-같은-것인가요]
+
+아닙니다. Snapshot은 “이 커밋에서 무엇이 검색 가능한가?”에 답하고, working memory는 “지금 내가 무엇을 이어가고 있는가?”에 답합니다.
+
+왜 working memory와 long-term memory를 둘 다 유지하나요? [#왜-working-memory와-long-term-memory를-둘-다-유지하나요]
+
+두 계층이 복원하는 문제가 다르기 때문입니다. Working memory는 작업의 관성을 복원하고, long-term memory는 오래 가는 지식을 복원합니다.
+
+
+# 빠른 시작
+
+
+
+요구 사항 [#요구-사항]
+
+* Node.js 20+
+* pnpm 10+
+* Git 저장소
+
+설치 [#설치]
+
+```bash
+pnpm install
+pnpm ragit --help
+```
+
+저장소 체크아웃 안에서는 CLI 명령을 `pnpm ragit <command>` 형태로 실행합니다.
+`pnpm build`는 로컬 저장소 사용에는 선택 사항이며, `dist/` 번들을 직접 생성하거나 검증할 때만 필요합니다.
+
+```bash
+pnpm build
+```
+
+RAGit 초기화 [#ragit-초기화]
+
+```bash
+pnpm ragit init
+pnpm ragit hooks install
+pnpm ragit ingest --all
+```
+
+여기까지 하면 커밋 결속 검색은 바로 사용할 수 있습니다. `memory wrap`, `memory recall`, `memory promote`가 왜 분리되어 있는지 이해하고 싶다면, 프로젝트에 memory 워크플로를 넣기 전에 <a href="/ko/docs/memory-model">Memory Model Guide</a>를 먼저 읽으세요.
+세부 구문과 명령별 예시가 필요하시면 <a href="/ko/docs/commands">Commands</a>로 이어서 보시면 됩니다.
+
+문서 사이트 로컬 실행 [#문서-사이트-로컬-실행]
+
+```bash
+pnpm docs:dev
+```
+
+브라우저에서 `/en/docs` 및 `/ko/docs`를 확인합니다.
+
+
+# 릴리즈 노트
+
+
+
+v0.1 하이라이트 [#v01-하이라이트]
+
+* MVP CLI 명령 세트 구현
+* SPEC/PBD 포함 8개 문서 타입 지원
+* `SPEC`로 구현체 수준 상세 기능 요구사항과 계약을 구조화
+* `PBD`로 구현체의 위상 구조와 결속 아키텍처를 문서화
+* AGENTS 파싱 기반 인터랙티브 `init`
+* 하이브리드 검색 및 컨텍스트 패킹
+* sqlite-vss 호환 마이그레이션 경로 제공
+
+검증 [#검증]
+
+* 문서 타입/마스킹/검색 점수 단위 테스트
+* 증분 인제스트 및 init 통합 테스트
+* 빌드/테스트 기준 통과
+
+
+# describe
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`describe`는 특정 CLI 경로의 현재 명령 계약을 반환합니다. 명령 목적, 인자, 옵션, 예시, 출력 필드, 문서 메타데이터까지 런타임 기준으로 확인할 수 있습니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* RAGit을 에이전트나 자동화에 연동할 때
+* 어떤 명령이 `--input`, `--dry-run`, `--view`를 지원하는지 확인할 때
+* 명령 호출을 코드에 고정하기 전에 계약 변동 여부를 확인할 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 이미 명령을 알고 있고 빠른 설명만 필요할 때. 해당 명령 상세 문서를 읽으십시오.
+* 실제 프로젝트 데이터를 원할 때. 대상 명령을 직접 실행하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit describe <command-path...> [--format text|json|both]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `<command-path...>`: 설명할 전체 명령 경로입니다. `memory promote`, `hooks install`처럼 다단어 명령은 공백으로 구분해 전달합니다.
+* `--format text|json|both`: 텍스트 요약, JSON envelope, 둘 다 중 하나를 선택합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 positional 인자만 사용합니다.
+* JSON 출력에는 `command`, `availableCommands`, `spec`가 포함됩니다.
+* `spec` 안에는 `group`, `docSlug`, `relatedCommands`, `stability`, 입력 지원 여부, 출력 필드가 담깁니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit describe query
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit describe memory promote --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* 요청한 경로가 설명 가능한 leaf command 집합에 없으면 실패합니다.
+* `memory`처럼 패밀리 이름만 주면 안 됩니다. 반드시 leaf command 전체 경로를 사용하십시오.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/agent-cli">
+    Agent CLI Contract
+  </a>
+* <a href="/ko/docs/commands/query">
+    `query`
+  </a>
+* <a href="/ko/docs/commands/context/pack">
+    `context pack`
+  </a>
+* <a href="/ko/docs/commands/memory/promote">
+    `memory promote`
+  </a>
+
+
+# doctor
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`doctor`는 git 설정, RAGit 구조, config, zvec runtime, schema layout, manifest consistency를 한 번에 진단합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 어떤 명령이 실패하고 있어 구조화된 진단 결과가 필요할 때
+* store, schema, manifest 불일치를 의심할 때
+* 실패 시 non-zero exit가 필요한 CI 친화적 헬스 체크가 필요할 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 현재 상태만 간단히 보고 싶을 때. <a href="/ko/docs/commands/status">`status`</a>를 사용하십시오.
+* 문제를 이미 알고 있고 재인덱싱만 필요할 때. <a href="/ko/docs/commands/ingest">`ingest`</a>를 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit doctor [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* positional 입력도 JSON payload 입력도 없습니다.
+* JSON 출력에는 `checks`와 `hasFailure`가 포함됩니다.
+* 하나라도 실패한 check가 있으면 결과 출력 후 non-zero code로 종료합니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit doctor
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit doctor --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `doctor` 실패는 단일 명령 문제가 아니라 저장소 또는 런타임 설정 문제일 가능성이 높습니다.
+* 자동화 후속 조치를 만들 때는 JSON output 안의 check name을 기준으로 분기하는 편이 안전합니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/init">
+    `init`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# Commands
+
+
+
+`commands` 그룹은 개별 명령 상세 문서의 새 진입점입니다.
+각 leaf 페이지는 한 개의 실행 가능한 CLI 명령을 사용자 관점과 에이전트 연동 관점에서 함께 설명합니다.
+
+여기서 시작하십시오 [#여기서-시작하십시오]
+
+* 저장소를 처음 설정할 때는 <a href="/ko/docs/commands/init">`init`</a>부터 읽으십시오.
+* 인덱싱된 지식에서 바로 검색할 때는 <a href="/ko/docs/commands/query">`query`</a>를 읽으십시오.
+* 다음 에이전트 단계에 넣을 압축된 패킷이 필요하면 <a href="/ko/docs/commands/context/pack">`context pack`</a>을 읽으십시오.
+* 일반 검색이 아니라 현재 작업을 이어서 복원하려면 <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 읽으십시오.
+
+명령어 패밀리 [#명령어-패밀리]
+
+* 최상위 명령: <a href="/ko/docs/commands/init">`init`</a>, <a href="/ko/docs/commands/describe">`describe`</a>, <a href="/ko/docs/commands/ingest">`ingest`</a>, <a href="/ko/docs/commands/query">`query`</a>, <a href="/ko/docs/commands/status">`status`</a>, <a href="/ko/docs/commands/doctor">`doctor`</a>
+* Config: <a href="/ko/docs/commands/config">`config`</a>
+* Context: <a href="/ko/docs/commands/context">`context`</a>
+* Hooks: <a href="/ko/docs/commands/hooks">`hooks`</a>
+* Memory: <a href="/ko/docs/commands/memory">`memory`</a>
+* Migrate: <a href="/ko/docs/commands/migrate">`migrate`</a>
+
+이 문서들을 읽는 방법 [#이-문서들을-읽는-방법]
+
+* 모든 leaf 페이지는 동일한 섹션 구조를 사용하므로 구문, 옵션, payload 예시, 주의점을 빠르게 찾을 수 있습니다.
+* `--input <path|->`를 지원하는 명령은 JSON payload 예시를 포함합니다.
+* `--view`를 지원하는 명령은 `minimal`, `default`, `full` 차이를 설명합니다.
+* `--dry-run`을 지원하는 명령은 실제 변경 전에 무엇을 검증하는지 설명합니다.
+
+빠른 매핑 [#빠른-매핑]
+
+* `query`: "이 질문에 맞는 인덱싱된 지식은 무엇인가?"
+* `context pack`: "이 목표를 위해 최소-충분 컨텍스트 패킷은 무엇인가?"
+* `memory wrap`: "작업을 멈추기 전에 무엇을 기록해야 하는가?"
+* `memory recall`: "작업을 다시 시작하기 전에 무엇을 불러와야 하는가?"
+* `memory promote`: "어떤 내용을 지속 가능한 프로젝트 기억으로 승격해야 하는가?"
+
+예전 진입점이 더 익숙하시다면, 기존 <a href="/ko/docs/cli-reference">CLI Reference</a> 페이지는 이제 이 그룹으로 안내하는 호환 페이지 역할만 합니다.
+
+
+# ingest
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`ingest`는 지원되는 문서를 스캔하고 canonical store에 임베딩과 레코드를 기록한 뒤, 현재 커밋에 결속된 snapshot manifest를 생성합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 프로젝트 문서를 추가하거나 변경해서 검색 결과에 반영하고 싶을 때
+* `docs/memory/**`에 장기기억 문서를 승격한 뒤 검색 가능하게 만들고 싶을 때
+* 실제 변경 전에 어떤 파일이 인덱싱될지 미리 보고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 기존 인덱스만 검색하고 싶을 때. <a href="/ko/docs/commands/query">`query`</a>를 사용하십시오.
+* 현재 작업 상태만 복원하고 싶을 때. <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit ingest [--all | --since <sha> | --files <glob> | --input <path|->] [--dry-run] [--format text|json|both]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--all`: 전체 지원 문서를 인덱싱합니다.
+* `--since <sha>`: 특정 커밋 이후 변경분만 인덱싱합니다.
+* `--files <glob>`: 특정 glob만 대상으로 인덱싱합니다.
+* `--input <path|->`: 플래그 대신 구조화된 JSON payload를 전달합니다.
+* `--dry-run`: store와 manifest를 쓰지 않고 계획만 검증합니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 사람은 보통 `--all`, `--since`, `--files` 중 하나를 직접 씁니다.
+* 에이전트는 조건 조합이 있을 때 `--input <path|->`를 우선 사용하는 편이 안전합니다.
+
+```json
+{
+  "all": false,
+  "since": "HEAD~1",
+  "files": "docs/**/*.md"
+}
+```
+
+* JSON 출력에는 `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`가 포함됩니다.
+* `--dry-run`은 같은 계획면을 반환하되 실제 변경은 하지 않습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit ingest --all --format both
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit ingest --input ingest.json --dry-run --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `--input`과 선택 플래그를 한 호출에 섞으면 안 됩니다.
+* 잘못된 glob나 안전하지 않은 경로 패턴은 인덱싱 전에 거부됩니다.
+* `.ragit/memory/**` control plane 파일은 searchable corpus가 아니므로 `ingest` 대상이 아닙니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/query">
+    `query`
+  </a>
+* <a href="/ko/docs/commands/context/pack">
+    `context pack`
+  </a>
+* <a href="/ko/docs/commands/memory/promote">
+    `memory promote`
+  </a>
+* <a href="/ko/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+
+
+# init
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`init`은 저장소를 RAGit에 맞게 준비합니다. git 컨텍스트를 확인하고, RAGit 구조를 만들고, `AGENTS.md`를 로드 또는 생성하며, 가이드 파일과 zvec 저장소 레이아웃을 초기화합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 저장소에서 RAGit을 처음 설정할 때
+* 표준 `.ragit/**` 구조와 가이드 골격이 필요할 때
+* 레거시 JSON store 마이그레이션이 필요한지 확인하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 이미 초기화된 저장소에서 새 문서만 인덱싱하고 싶을 때. <a href="/ko/docs/commands/ingest">`ingest`</a>를 사용하십시오.
+* 현재 상태만 점검하고 싶을 때. <a href="/ko/docs/commands/status">`status`</a> 또는 <a href="/ko/docs/commands/doctor">`doctor`</a>를 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit init [--cwd <path>] [--yes|--non-interactive] [--git-init] [--output text|json|both]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--cwd <path>`: 다른 저장소 경로를 대상으로 실행합니다.
+* `--yes`: 기본값을 수락하고 질문을 건너뜁니다.
+* `--non-interactive`: `--yes`와 같은 의도로 비대화형 실행을 강제합니다.
+* `--git-init`: 비대화형 모드에서 git 저장소를 자동 생성합니다.
+* `--output text|json|both`: 사람이 읽는 표, JSON 요약, 둘 다 중 하나를 선택합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 이 명령은 플래그 입력만 지원합니다. `--input <path|->` payload 모드는 없습니다.
+* JSON 출력에는 `mode`, `git`, `agents`, `guide`, `storage`, `nextActions`가 포함됩니다.
+* 에이전트가 마이그레이션 필요 여부를 판단해야 한다면 `--output json`이 적합합니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit init
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit init --yes --git-init --output json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* 비대화형 모드에서 git 저장소가 아니고 `--git-init`도 없으면 실패합니다.
+* TTY가 없는 환경에서는 대화형 모드를 사용할 수 없습니다.
+* `init`은 저장소를 준비할 뿐이고 문서를 인덱싱하지는 않습니다. 초기화 후 <a href="/ko/docs/commands/ingest">`ingest`</a>를 실행하십시오.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/ko/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+
+
+# query
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`query`는 인덱싱된 저장소 지식을 검색하고 질문에 맞는 hit를 반환합니다. 결과는 항상 snapshot 범위에 묶이므로, 선택한 커밋 시점 기준으로 재현됩니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 질문에 대한 직접 검색 결과가 필요할 때
+* 특정 커밋 시점에서 snapshot이 무엇을 알고 있는지 확인하고 싶을 때
+* 더 큰 컨텍스트 패킷을 만들기 전에 가볍게 검색하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 토큰 예산이 있는 프롬프트 패킷이 필요할 때. <a href="/ko/docs/commands/context/pack">`context pack`</a>을 사용하십시오.
+* working memory까지 포함해 현재 작업을 이어받고 싶을 때. <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `question`: 직접 검색할 질문입니다.
+* `--input <path|->`: `question`, `topK`, `at`를 담은 JSON payload를 전달합니다.
+* `--top-k <n>`: 반환 hit 개수를 조절합니다.
+* `--at <sha>`: 특정 snapshot SHA 또는 prefix를 사용합니다.
+* `--view minimal|default|full`: hit 투영의 상세 수준을 선택합니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 빠른 수동 호출에는 positional 입력이 적합합니다.
+* 에이전트 자동화에서는 `--input <path|->`로 payload를 명시하는 편이 재현성이 좋습니다.
+
+```json
+{
+  "question": "restore auth context",
+  "topK": 5,
+  "at": "HEAD"
+}
+```
+
+* JSON 출력은 `query`, `snapshotSha`, `hits`를 반환합니다.
+* `--view minimal`은 가장 작은 hit 형태를 반환합니다.
+* `--view default`는 사람이 읽기 좋은 기본 투영입니다.
+* `--view full`은 richer text를 유지하므로 context window 비용이 가장 큽니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit query "restore auth context" --format both
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit query --input query.json --view minimal --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `--input`과 positional `question`, `--top-k`, `--at`를 함께 쓰면 안 됩니다.
+* `question`이 비어 있으면 실패합니다.
+* `query`는 snapshot에 인덱싱된 콘텐츠만 검색합니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/context/pack">
+    `context pack`
+  </a>
+* <a href="/ko/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# status
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`status`는 현재 브랜치, HEAD, backend, manifest 개수, embedding 설정, zvec 가용성처럼 RAGit에 중요한 현재 상태를 빠르게 보여줍니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 저장소의 운영 상태를 빠르게 보고 싶을 때
+* store가 로드되었는지, 검색 준비가 되었는지 확인하고 싶을 때
+* 설정 표면을 파일을 열지 않고 확인하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 더 깊은 진단이 필요할 때. <a href="/ko/docs/commands/doctor">`doctor`</a>를 사용하십시오.
+* 설정값을 바꾸고 싶을 때. <a href="/ko/docs/commands/config/set">`config set`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit status [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--format text|json|both`: 사람이 읽는 출력, JSON, 둘 다 중 하나를 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* positional 입력도 JSON payload 입력도 없습니다.
+* JSON 출력에는 `branch`, `head`, `backend`, `zvec`, `supported_types`, `manifests`, `embedding`, `format`이 포함됩니다.
+* 에이전트는 보통 `--format json`을 사용하는 편이 좋습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit status
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit status --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `status`는 요약 명령이지 복구 명령이 아닙니다.
+* store가 로드되었다고 해서 최신 문서가 인덱싱되었다는 뜻은 아닙니다. 문서 변경 후에는 <a href="/ko/docs/commands/ingest">`ingest`</a>를 실행하십시오.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/ko/docs/commands/config/set">
+    `config set`
+  </a>
+
+
+# config
+
+
+
+`config` 패밀리는 저장소 로컬 RAGit 설정을 다룹니다.
+
+어떤 하위 명령을 선택하는가 [#어떤-하위-명령을-선택하는가]
+
+* <a href="/ko/docs/commands/config/set">`config set`</a>: 하나의 설정 키를 업데이트합니다.
+
+패밀리 경계 [#패밀리-경계]
+
+* `config`는 동작을 바꿉니다.
+* `status`와 `doctor`는 동작을 관찰합니다.
+* `init`은 기본값을 준비하지만 세부 설정 수정 자체를 대체하지는 않습니다.
+
+
+# config set
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`config set`은 저장소 인식형 config loader/writer를 사용해 `.ragit/config.toml`의 한 개 키를 업데이트합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* output, ingest, storage, embedding 설정을 바꾸고 싶을 때
+* TOML을 직접 열지 않고 스크립트 가능한 방식으로 설정을 바꾸고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 현재 값을 확인만 하고 싶을 때. <a href="/ko/docs/commands/status">`status`</a>를 사용하십시오.
+* 기본 구조와 기본값을 먼저 만들고 싶을 때. <a href="/ko/docs/commands/init">`init`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit config set <key> <value> [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `<key>`: 업데이트할 dotted config key입니다.
+* `<value>`: 저장할 값입니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 positional 인자만 사용합니다.
+* 출력은 단순 stdout 확인 메시지입니다. 현재 이 명령은 JSON envelope를 제공하지 않습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit config set output.format markdown
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit config set ingest.supported_types '["adr","spec"]'
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* 잘못된 key나 잘못된 value는 config 쓰기 전에 실패합니다.
+* 출력이 텍스트뿐이므로, 에이전트는 후속으로 <a href="/ko/docs/commands/status">`status`</a>로 상태를 검증하는 편이 좋습니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/ko/docs/commands/init">
+    `init`
+  </a>
+
+
+# context
+
+
+
+`context` 패밀리는 raw retrieval hit가 아니라 prompt-ready packet을 만들기 위한 명령군입니다.
+
+어떤 하위 명령을 선택하는가 [#어떤-하위-명령을-선택하는가]
+
+* <a href="/ko/docs/commands/context/pack">`context pack`</a>: 목표를 알고 있고, 예산 안에 들어오는 패킷이 필요할 때 사용합니다.
+
+패밀리 경계 [#패밀리-경계]
+
+* `query`는 직접 hit를 반환합니다.
+* `context pack`은 관련 hit를 예산 기반 패킷으로 바꿉니다.
+* `memory recall`은 작업 복원을 위해 working memory를 retrieval 위에 덧붙입니다.
+
+
+# context pack
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`context pack`은 검색된 지식을 특정 목표를 위한 bounded packet으로 바꿉니다. 다음 소비자가 사람이 아니라 에이전트 프롬프트일 때 사용하는 명령입니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 목표가 이미 있고 압축된 컨텍스트 handoff가 필요할 때
+* 토큰 예산이 중요할 때
+* 구조화된 입력을 안정적으로 에이전트에 넘기고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* raw retrieval hit만 보고 싶을 때. <a href="/ko/docs/commands/query">`query`</a>를 사용하십시오.
+* open loop와 working state까지 포함해 작업을 이어받고 싶을 때. <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit context pack [goal] [--input <path|->] [--budget <tokens>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `goal`: 컨텍스트 선택을 이끌 목표입니다.
+* `--input <path|->`: `goal`, 선택적 `budget`, 선택적 `at`를 담은 JSON payload를 전달합니다.
+* `--budget <tokens>`: 선택된 패킷의 토큰 예산입니다.
+* `--at <sha>`: 현재 HEAD 대신 특정 snapshot을 사용합니다.
+* `--view minimal|default|full`: 패킷 투영의 상세 수준을 조절합니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+```json
+{
+  "goal": "implementation plan for auth",
+  "budget": 1200,
+  "at": "HEAD"
+}
+```
+
+* JSON 출력에는 `goal`, `snapshotSha`, `budget`, `usedTokens`, `selectedHits`, `hits`가 포함됩니다.
+* `--view minimal`은 에이전트 context window에 가장 안전한 기본값입니다.
+* `--view default`는 읽기성과 상세의 균형을 맞춥니다.
+* `--view full`은 downstream reasoning에 richer text가 꼭 필요할 때만 쓰는 편이 좋습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit context pack "implementation plan for auth" --budget 1200
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit context pack --input context-pack.json --view minimal --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `--input`과 positional `goal`, `--budget`, `--at`를 함께 쓰면 안 됩니다.
+* `goal`이 비어 있으면 거부됩니다.
+* 이 명령은 여전히 snapshot-bound입니다. working memory까지 합친 복원이 필요하면 <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/query">
+    `query`
+  </a>
+* <a href="/ko/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/ko/docs/commands/describe">
+    `describe`
+  </a>
+
+
+# hooks
+
+
+
+`hooks` 패밀리는 `.git/hooks` 아래에 설치되는 RAGit 관리 hook을 다룹니다.
+
+어떤 하위 명령을 선택하는가 [#어떤-하위-명령을-선택하는가]
+
+* <a href="/ko/docs/commands/hooks/install">`hooks install`</a>: 관리 hook을 설치합니다.
+* <a href="/ko/docs/commands/hooks/uninstall">`hooks uninstall`</a>: 외부 hook은 건드리지 않고 관리 hook만 제거합니다.
+* <a href="/ko/docs/commands/hooks/status">`hooks status`</a>: 현재 hook 상태를 확인합니다.
+
+패밀리 경계 [#패밀리-경계]
+
+* hook은 ingest 트리거를 자동화합니다.
+* 그러나 전체 refresh가 필요하면 여전히 명시적 <a href="/ko/docs/commands/ingest">`ingest`</a> 호출이 필요할 수 있습니다.
+
+
+# hooks install
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`hooks install`은 incremental ingest를 트리거하는 관리형 `post-commit`과 `post-merge` hook을 기록합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 저장소 변경과 인덱싱을 더 자동으로 연결하고 싶을 때
+* `init` 직후 후속 작업으로 hook까지 설치하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* hook 상태만 보고 싶을 때. <a href="/ko/docs/commands/hooks/status">`hooks status`</a>를 사용하십시오.
+* 관리 hook을 제거하고 싶을 때. <a href="/ko/docs/commands/hooks/uninstall">`hooks uninstall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit hooks install [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--dry-run`: 파일을 쓰지 않고 설치 계획만 보여줍니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 플래그 기반만 지원합니다.
+* JSON 출력에는 `dryRun`, `root`, `hooks`가 포함됩니다.
+* `--dry-run`은 경로를 검증하고 planned hook state를 반환하지만 실제 변경은 하지 않습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit hooks install
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit hooks install --dry-run --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `.git/hooks`에 기록되므로 유효한 git root가 필요합니다.
+* 설치되는 hook은 RAGit이 관리하는 hook이며 임의의 셸 자동화를 대체하는 범용 시스템은 아닙니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/hooks/status">
+    `hooks status`
+  </a>
+* <a href="/ko/docs/commands/hooks/uninstall">
+    `hooks uninstall`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# hooks status
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`hooks status`는 기대하는 `post-commit`, `post-merge` hook이 설치되었는지, 없는지, 외부 hook인지 보고합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* install 또는 uninstall 전에 hook 상태를 확인하고 싶을 때
+* hook 소유권을 기계적으로 판별하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* hook 상태를 바꾸고 싶을 때. <a href="/ko/docs/commands/hooks/install">`hooks install`</a> 또는 <a href="/ko/docs/commands/hooks/uninstall">`hooks uninstall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit hooks status [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 플래그 기반만 지원합니다.
+* JSON 출력에는 `dryRun`, `root`, `hooks`가 포함됩니다.
+* 각 hook 항목은 `name`, `target`, `action`, `state`를 보고합니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit hooks status
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit hooks status --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* external hook은 그 자체로 오류는 아니지만, 파괴적 자동화를 피해야 한다는 신호입니다.
+* `hooks status`는 과거 hook 실행 결과까지 보장하지는 않습니다. 파일 상태만 검사합니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+* <a href="/ko/docs/commands/hooks/uninstall">
+    `hooks uninstall`
+  </a>
+
+
+# hooks uninstall
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`hooks uninstall`은 RAGit이 설치하고 표시한 hook만 제거합니다. 외부 hook은 건드리지 않고 external로 보고합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 자동 ingest hook이 더 이상 필요 없을 때
+* 실제 제거 전 어떤 managed hook이 제거될지 확인하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* hook 가시성만 필요할 때. <a href="/ko/docs/commands/hooks/status">`hooks status`</a>를 사용하십시오.
+* hook을 설치하고 싶을 때. <a href="/ko/docs/commands/hooks/install">`hooks install`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit hooks uninstall [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--dry-run`: 어떤 managed hook이 제거될지 미리 보여줍니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 플래그 기반만 지원합니다.
+* JSON 출력에는 `dryRun`, `root`, `hooks`가 포함됩니다.
+* `--dry-run`은 external hook이 지워지지 않는지 확인하는 안전 모드입니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit hooks uninstall --dry-run
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit hooks uninstall --dry-run --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* RAGit header가 없는 hook은 external로 분류되어 보존됩니다.
+* 기존 저장소에 사용자 정의 hook이 있었다면 실제 제거 전에 `state`를 확인하는 편이 안전합니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/hooks/status">
+    `hooks status`
+  </a>
+* <a href="/ko/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+
+
+# memory
+
+
+
+`memory` 패밀리는 활성 작업 연속성과 durable searchable knowledge를 분리합니다.
+
+어떤 하위 명령을 선택하는가 [#어떤-하위-명령을-선택하는가]
+
+* <a href="/ko/docs/commands/memory/wrap">`memory wrap`</a>: 현재 세션 상태를 기록합니다.
+* <a href="/ko/docs/commands/memory/recall">`memory recall`</a>: 다음 세션 복원 패킷을 만듭니다.
+* <a href="/ko/docs/commands/memory/promote">`memory promote`</a>: 안정된 지식을 searchable doc으로 승격합니다.
+
+패밀리 경계 [#패밀리-경계]
+
+* `wrap`은 `.ragit/memory/**`에 control-plane state를 씁니다.
+* `recall`은 working state를 읽고 retrieval과 합칩니다.
+* `promote`는 `docs/memory/**`에 durable doc을 쓰고 targeted ingest를 연결할 수 있습니다.
+
+
+# memory promote
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`memory promote`는 promotion candidate를 받아 `docs/memory/**` 아래 durable doc으로 기록합니다. `HEAD`가 있으면 그 문서를 바로 ingest하여 검색 가능하게 만듭니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* decision, glossary term, plan이 durable project memory가 되어야 할 때
+* 미래 세션이 원래 세션 히스토리를 열지 않고도 그 지식을 찾을 수 있어야 할 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 아직 가설 수준의 메모일 때. <a href="/ko/docs/commands/memory/wrap">`memory wrap`</a>으로 working memory에 두십시오.
+* 현재 작업 복원만 필요할 때. <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit memory promote --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--input <path|->`: promotion candidate를 설명하는 필수 JSON payload입니다.
+* `--dry-run`: 후보, 생성될 문서, planned ingest를 실제 쓰기 없이 검증합니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+```json
+{
+  "promotionCandidates": [
+    {
+      "type": "adr",
+      "title": "Keep refresh handling outside manifest mutation",
+      "summary": "Separates active auth refresh logic from snapshot writes.",
+      "rationale": "Preserves snapshot contract stability.",
+      "nextReviewAt": "2026-06-01"
+    }
+  ]
+}
+```
+
+* JSON 출력에는 `createdFiles`, `plannedFiles`, `sourceHeadSha`, `ingested`, `dryRun`, `warnings`가 포함됩니다.
+* `--dry-run`은 어떤 문서 파일과 ingest target이 만져질지를 사전에 보여줍니다.
+* `HEAD`가 없으면 파일 생성 계획은 유지되지만 ingest는 건너뛰었다는 경고가 함께 반환됩니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit memory promote --input promotion-batch.json
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit memory promote --input promotion-batch.json --dry-run --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* promote는 `docs/memory/**`를 깨끗하게 유지하기 위한 의도적 필터입니다. raw scratch note에는 사용하지 마십시오.
+* payload는 유효한 candidate type과 필드를 따라야 합니다.
+* promote 후에야 searchable retrieval에 반영됩니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/memory/wrap">
+    `memory wrap`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/ko/docs/memory-model">
+    Memory Model Guide
+  </a>
+
+
+# memory recall
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`memory recall`은 작업을 다시 이어가기 위해 필요한 패킷을 복원합니다. 현재 working memory에서 시작한 뒤, 관련 snapshot-scoped retrieval hit를 덧붙입니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 중단된 작업을 다시 시작할 때
+* open loop, constraint, related decision, next action을 한 패킷으로 보고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 일반 저장소 검색만 필요할 때. <a href="/ko/docs/commands/query">`query`</a>를 사용하십시오.
+* working state 없이 retrieval pack만 필요할 때. <a href="/ko/docs/commands/context/pack">`context pack`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit memory recall <goal> [--view minimal|default|full] [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `<goal>`: 다시 이어갈 작업 목표입니다.
+* `--view minimal|default|full`: retrieval detail 투영 수준을 조절합니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 positional 인자만 사용합니다.
+* JSON 출력에는 `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, `nextActions`가 포함됩니다.
+* `--view minimal`은 에이전트 재개 흐름의 기본값으로 가장 적합합니다.
+* `--view default`는 읽기성과 상세의 균형을 맞춥니다.
+* `--view full`은 retrieval hit의 richer text가 꼭 필요할 때만 사용하십시오.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit memory recall "resume auth flow"
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit memory recall "resume auth flow" --view minimal --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `memory recall` 품질은 working memory 품질에 크게 의존합니다. wrap이 빈약하면 recall도 약해집니다.
+* 이 명령은 전체 세션 로그를 재생하지 않습니다. 의도적으로 선택된 패킷만 복원합니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/memory/wrap">
+    `memory wrap`
+  </a>
+* <a href="/ko/docs/commands/query">
+    `query`
+  </a>
+* <a href="/ko/docs/commands/context/pack">
+    `context pack`
+  </a>
+
+
+# memory wrap
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`memory wrap`은 현재 세션 상태를 `.ragit/memory/**`에 기록합니다. session wrap을 저장하고, current working state를 갱신하며, open-loops registry를 업데이트합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 작업을 멈추기 전에 내일 이어받을 시작점을 남기고 싶을 때
+* 현재 goal, constraint, open loop, next action을 working memory에 기록하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 안정된 프로젝트 지식을 검색하고 싶을 때. <a href="/ko/docs/commands/query">`query`</a> 또는 <a href="/ko/docs/commands/context/pack">`context pack`</a>을 사용하십시오.
+* 안정된 지식을 searchable memory로 승격하고 싶을 때. <a href="/ko/docs/commands/memory/promote">`memory promote`</a>를 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit memory wrap --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--input <path|->`: 세션 wrap을 설명하는 필수 JSON payload입니다.
+* `--dry-run`: 파일을 쓰지 않고 검증과 계획만 수행합니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+```json
+{
+  "goal": "finish auth migration",
+  "summary": "Refined refresh token boundaries and left one open loop.",
+  "constraints": ["Do not break snapshot contracts."],
+  "decisions": ["Keep refresh handling outside manifest mutation."],
+  "openLoops": [
+    {
+      "id": "auth-refresh",
+      "title": "Finish refresh token handling",
+      "status": "open",
+      "nextAction": "Update the adapter tests"
+    }
+  ],
+  "nextActions": ["Update adapter tests", "Run pnpm test"],
+  "promotionCandidates": [],
+  "sourceHeadSha": "HEAD",
+  "createdAt": "2026-03-08T10:00:00.000Z"
+}
+```
+
+* JSON 출력에는 `sessionId`, `sessionPath`, `currentPath`, `openLoopsPath`, `sourceHeadSha`, `dryRun`이 포함됩니다.
+* `--dry-run`은 payload 형식을 검증하고 타깃 파일만 보여주며 실제 쓰기는 하지 않습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit memory wrap --input session-wrap.json
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit memory wrap --input - --dry-run --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* payload는 wrap schema를 따라야 합니다. 예상하지 않은 필드나 잘못된 형식은 거부됩니다.
+* `memory wrap`은 searchable retrieval에 아무것도 ingest하지 않습니다.
+* `HEAD`가 없어도 state 자체는 기록할 수 있지만, source reference는 그 상태에 맞게 기록됩니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/ko/docs/commands/memory/promote">
+    `memory promote`
+  </a>
+* <a href="/ko/docs/memory-model">
+    Memory Model Guide
+  </a>
+
+
+# migrate from-json-store
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`migrate from-json-store`는 예전 JSON 기반 store를 읽어 현재 canonical storage layout으로 문서, chunk, snapshot 데이터를 다시 기록합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* `status` 또는 `init`이 legacy JSON store 존재를 알려줄 때
+* 오래된 저장소 레이아웃을 현재 store contract로 업그레이드할 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 이미 canonical store를 사용 중일 때
+* 소스가 sqlite-vss export일 때. <a href="/ko/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>를 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit migrate from-json-store [--dry-run] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--dry-run`: canonical store를 쓰지 않고 변환 대상 개수만 계산합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 플래그 기반만 지원합니다.
+* 출력은 `mode`, `docs`, `chunks`, 선택적 `snapshotSha`를 담은 raw JSON 객체입니다.
+* 자동화에서는 `--dry-run`을 먼저 실행하는 편이 안전합니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit migrate from-json-store --dry-run
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit migrate from-json-store --dry-run
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* legacy JSON store 파일이 없으면 실패합니다.
+* shared CLI envelope 대신 raw JSON을 출력하지만, 여전히 mutating command로 취급해야 합니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/migrate/from-sqlitevss">
+    `migrate from-sqlitevss`
+  </a>
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# migrate from-sqlitevss
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`migrate from-sqlitevss`는 sqlite-vss export 레코드를 읽어 현재 RAGit canonical document, chunk, snapshot layout으로 변환합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 지원되는 sqlite-vss export 파일이 저장소 안에 있을 때
+* 과거 vector-storage 실험 레이아웃을 현재 구조로 옮기고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 레거시 소스가 JSON store일 때. <a href="/ko/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>를 사용하십시오.
+* 이미 현재 canonical store를 사용하고 있을 때
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit migrate from-sqlitevss [--dry-run] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--dry-run`: 실제 쓰기 없이 변환 가능한 docs/chunks 개수만 계산합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 플래그 기반만 지원합니다.
+* 출력은 `mode`, `docs`, `chunks`, 선택적 `snapshotSha`를 담은 raw JSON 객체입니다.
+* 에이전트 자동화에서는 `--dry-run`을 기본으로 두는 편이 좋습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit migrate from-sqlitevss --dry-run
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit migrate from-sqlitevss --dry-run
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* 지원되는 sqlite-vss export 파일을 찾지 못하면 실패합니다.
+* JSON store migration과 마찬가지로 output이 raw JSON이어도 mutating command입니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/migrate/from-json-store">
+    `migrate from-json-store`
+  </a>
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+
+
+# migrate
+
+
+
+`migrate` 패밀리는 일회성 또는 간헐적 레거시 데이터 변환을 위해 존재합니다.
+
+어떤 하위 명령을 선택하는가 [#어떤-하위-명령을-선택하는가]
+
+* <a href="/ko/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>: 예전 JSON store를 변환합니다.
+* <a href="/ko/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>: sqlite-vss export 데이터를 변환합니다.
+
+패밀리 경계 [#패밀리-경계]
+
+* migration은 쓰기 작업입니다.
+* 성공적인 migration 뒤에는 <a href="/ko/docs/commands/status">`status`</a>로 확인하거나 <a href="/ko/docs/commands/ingest">`ingest`</a>로 이어가는 편이 좋습니다.

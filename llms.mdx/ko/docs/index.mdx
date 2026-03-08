@@ -1,0 +1,45 @@
+# 개요
+
+
+
+RAGit은 git 기반 AI Agent 워크플로를 위한 로컬 우선 RAG CLI입니다.
+프로젝트 문서/컨텍스트를 수집하고 commit SHA와 결속된 스냅샷 검색을 제공합니다.
+
+프로젝트 목적 [#프로젝트-목적]
+
+RAGit은 AI Agent 프로젝트의 문서와 컨텍스트를 저장소 내부에서 커밋 결속형 재사용 지식으로 전환하는 로컬 우선 RAG CLI입니다.
+
+코어 벨류 [#코어-벨류]
+
+* 맥락 보존
+* 커밋 결속 재현성
+* 에이전트 친화 구조화
+* 저마찰 자동화
+
+제공 기능 [#제공-기능]
+
+* 커밋 결속 스냅샷
+* 하이브리드 검색(벡터 + 키워드)
+* 에이전트 컨텍스트 패킹
+* 활성 작업과 장기지식을 분리하는 메모리 모델
+* 비밀정보 마스킹 수집
+
+지원 문서 타입 [#지원-문서-타입]
+
+* ADR
+* PRD
+* SRS
+* SPEC
+* Plan
+* DDD
+* 용어집(Glossary)
+* PBD
+
+`SRS`는 시스템 수준 요구사항, `SPEC`는 구현체 단위 상세 기능 요구사항과 인터페이스 계약, `PBD`는 구현체 내부의 위상 구조와 결속 관계를 설명합니다.
+
+다음 단계 [#다음-단계]
+
+<a href="/ko/docs/quickstart">Quickstart</a> 문서에서 실행 절차를 확인하세요.
+명령어별 예시와 옵션 설명이 필요하시면 <a href="/ko/docs/commands">Commands</a>부터 보시면 됩니다.
+왜 메모리를 control plane과 searchable docs로 나누는지 알고 싶다면 <a href="/ko/docs/memory-model">Memory Model Guide</a>를 읽어보세요.
+에이전트 워크플로에 RAGit을 넣고 싶다면 <a href="/ko/docs/agent-cli">Agent CLI Contract</a>에서 `--format json`, `--view minimal`, `--input`, `--dry-run` 규약을 먼저 확인하세요.

@@ -1,0 +1,86 @@
+# query
+
+
+
+What It Does [#what-it-does]
+
+`query` searches indexed repository knowledge and returns matching hits for a question. The result is always snapshot-scoped, so the answer is tied to the chosen commit state.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want direct retrieval hits for a question.
+* You want to inspect what the snapshot knows at a specific commit.
+* You want a lightweight agent call before building a larger context packet.
+
+When not to use it [#when-not-to-use-it]
+
+* You need a prompt-sized packet with token budgeting. Use <a href="/en/docs/commands/context/pack">`context pack`</a>.
+* You want to resume active work from working memory. Use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `question`: A direct search question.
+* `--input <path|->`: Provide a JSON payload with `question`, `topK`, and optional `at`.
+* `--top-k <n>`: Control how many hits to return.
+* `--at <sha>`: Query a specific snapshot SHA or prefix.
+* `--view minimal|default|full`: Choose how much hit detail to project.
+* `--format text|json|both`: Choose the output form.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Positional input is fine for a quick human call.
+* Agents should prefer `--input <path|->` when they need reproducible payloads.
+
+```json
+{
+  "question": "restore auth context",
+  "topK": 5,
+  "at": "HEAD"
+}
+```
+
+* JSON output returns `query`, `snapshotSha`, and `hits`.
+* `--view minimal` returns the smallest useful hit shape.
+* `--view default` returns the standard readable hit projection.
+* `--view full` keeps the richest text projection and is the most expensive for context windows.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit query "restore auth context" --format both
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit query --input query.json --view minimal --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Do not mix `--input` with positional `question`, `--top-k`, or `--at`.
+* If `question` is empty, the command fails.
+* `query` only sees indexed content that belongs to the snapshot.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/context/pack">
+    `context pack`
+  </a>
+* <a href="/en/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>

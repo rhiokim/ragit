@@ -1,0 +1,84 @@
+# memory promote
+
+
+
+What It Does [#what-it-does]
+
+`memory promote` takes promotion candidates and writes durable docs under `docs/memory/**`, such as decisions, glossary entries, or plans. When `HEAD` is available, it then ingests those docs so they become searchable immediately.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* A decision, glossary term, or plan should become durable project memory.
+* You want future retrieval to find the result without reopening session history.
+
+When not to use it [#when-not-to-use-it]
+
+* The note is still provisional. Keep it in working memory with <a href="/en/docs/commands/memory/wrap">`memory wrap`</a>.
+* You only want to resume active work. Use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit memory promote --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--input <path|->`: Required JSON payload describing promotion candidates.
+* `--dry-run`: Validate candidates, planned target docs, and planned ingest without writing.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+```json
+{
+  "promotionCandidates": [
+    {
+      "type": "adr",
+      "title": "Keep refresh handling outside manifest mutation",
+      "summary": "Separates active auth refresh logic from snapshot writes.",
+      "rationale": "Preserves snapshot contract stability.",
+      "nextReviewAt": "2026-06-01"
+    }
+  ]
+}
+```
+
+* JSON output includes `createdFiles`, `plannedFiles`, `sourceHeadSha`, `ingested`, `dryRun`, and `warnings`.
+* `--dry-run` tells you which doc files and ingest targets would be touched.
+* If `HEAD` does not exist, promotion still plans file creation but warns that ingest is skipped.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit memory promote --input promotion-batch.json
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit memory promote --input promotion-batch.json --dry-run --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Promotion is the deliberate filter that keeps `docs/memory/**` clean. Do not use it for raw scratch notes.
+* The payload must use valid promotion candidate types and fields.
+* Promoted docs affect searchable retrieval after ingest, not before.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/memory/wrap">
+    `memory wrap`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/en/docs/memory-model">
+    Memory Model Guide
+  </a>

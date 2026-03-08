@@ -1,0 +1,68 @@
+# doctor
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`doctor`는 git 설정, RAGit 구조, config, zvec runtime, schema layout, manifest consistency를 한 번에 진단합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 어떤 명령이 실패하고 있어 구조화된 진단 결과가 필요할 때
+* store, schema, manifest 불일치를 의심할 때
+* 실패 시 non-zero exit가 필요한 CI 친화적 헬스 체크가 필요할 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 현재 상태만 간단히 보고 싶을 때. <a href="/ko/docs/commands/status">`status`</a>를 사용하십시오.
+* 문제를 이미 알고 있고 재인덱싱만 필요할 때. <a href="/ko/docs/commands/ingest">`ingest`</a>를 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit doctor [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* positional 입력도 JSON payload 입력도 없습니다.
+* JSON 출력에는 `checks`와 `hasFailure`가 포함됩니다.
+* 하나라도 실패한 check가 있으면 결과 출력 후 non-zero code로 종료합니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit doctor
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit doctor --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `doctor` 실패는 단일 명령 문제가 아니라 저장소 또는 런타임 설정 문제일 가능성이 높습니다.
+* 자동화 후속 조치를 만들 때는 JSON output 안의 check name을 기준으로 분기하는 편이 안전합니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/init">
+    `init`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>

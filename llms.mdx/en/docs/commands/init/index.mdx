@@ -1,0 +1,75 @@
+# init
+
+
+
+What It Does [#what-it-does]
+
+`init` prepares a repository for RAGit. It checks git context, creates the RAGit structure, loads or creates `AGENTS.md`, prepares guide files, and bootstraps the local zvec storage layout.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You are setting up RAGit in a repository for the first time.
+* You want the standard `.ragit/**` structure and guide scaffolding.
+* You want to confirm whether a legacy JSON store still needs migration.
+
+When not to use it [#when-not-to-use-it]
+
+* The repository is already initialized and you only want to index new docs. Use <a href="/en/docs/commands/ingest">`ingest`</a>.
+* You only need to inspect current setup health. Use <a href="/en/docs/commands/status">`status`</a> or <a href="/en/docs/commands/doctor">`doctor`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit init [--cwd <path>] [--yes|--non-interactive] [--git-init] [--output text|json|both]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--cwd <path>`: Run initialization against another repository path.
+* `--yes`: Accept defaults and skip prompts.
+* `--non-interactive`: Same intent as `--yes`, useful in scripted flows.
+* `--git-init`: Create a git repository automatically in non-interactive mode.
+* `--output text|json|both`: Choose the human table, JSON summary, or both.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only. There is no `--input <path|->` payload mode.
+* JSON output includes the high-level setup summary: `mode`, `git`, `agents`, `guide`, `storage`, and `nextActions`.
+* `--output json` is useful when an agent needs to check whether migration is still required.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit init
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit init --yes --git-init --output json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* In non-interactive mode, `init` fails if the directory is not a git repository and `--git-init` is missing.
+* In TTY-less environments, interactive mode is not available.
+* `init` prepares the repository but does not index docs yet. Run <a href="/en/docs/commands/ingest">`ingest`</a> after setup.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/en/docs/commands/hooks/install">
+    `hooks install`
+  </a>

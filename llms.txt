@@ -1,0 +1,65 @@
+# Documentation
+
+## English
+- [Agent CLI Contract](/en/docs/agent-cli): How to call RAGit safely from AI agents
+- [Architecture](/en/docs/architecture): Core architecture of RAGit CLI
+- [CLI Reference](/en/docs/cli-reference): Compatibility page for the new Commands documentation group
+- [Overview](/en/docs): RAGit documentation overview
+- [Init Guide](/en/docs/init-guide): Interactive AGENTS-aware initialization flow
+- [Memory Model Guide](/en/docs/memory-model): Understand why RAGit separates working memory from searchable long-term memory
+- [Quickstart](/en/docs/quickstart): Get started with RAGit and docs workflow
+- [Release Notes](/en/docs/release-notes): Highlights for RAGit v0.1
+- [describe](/en/docs/commands/describe): Inspect machine-readable command contracts
+- [doctor](/en/docs/commands/doctor): Diagnose repository and runtime health
+- [Commands](/en/docs/commands): Detailed command guides for every executable RAGit CLI command
+- [ingest](/en/docs/commands/ingest): Index repository docs and refresh the snapshot manifest
+- [init](/en/docs/commands/init): Initialize a repository for RAGit
+- [query](/en/docs/commands/query): Retrieve indexed knowledge from a specific snapshot scope
+- [status](/en/docs/commands/status): Summarize repository, manifest, and zvec state
+- [config](/en/docs/commands/config): Configure repository-level RAGit behavior
+- [config set](/en/docs/commands/config/set): Update a single RAGit config value
+- [context](/en/docs/commands/context): Build prompt-sized context packets from indexed knowledge
+- [context pack](/en/docs/commands/context/pack): Build a goal-scoped context packet with a token budget
+- [Hooks](/en/docs/commands/hooks): Manage git hooks that keep indexing in sync with repository changes
+- [hooks install](/en/docs/commands/hooks/install): Install managed RAGit git hooks
+- [hooks status](/en/docs/commands/hooks/status): Inspect managed and external git hook state
+- [hooks uninstall](/en/docs/commands/hooks/uninstall): Remove managed RAGit git hooks safely
+- [Memory](/en/docs/commands/memory): Manage working memory and durable memory promotion
+- [memory promote](/en/docs/commands/memory/promote): Turn stable knowledge into searchable long-term memory docs
+- [memory recall](/en/docs/commands/memory/recall): Rebuild the smallest useful packet for resuming work
+- [memory wrap](/en/docs/commands/memory/wrap): Record a session summary into working memory
+- [migrate from-json-store](/en/docs/commands/migrate/from-json-store): Convert the legacy JSON store into the canonical zvec layout
+- [migrate from-sqlitevss](/en/docs/commands/migrate/from-sqlitevss): Convert sqlite-vss export data into the canonical zvec layout
+- [Migrate](/en/docs/commands/migrate): Move legacy stores into the current zvec-backed layout
+
+## Korean
+- [Agent CLI Contract](/ko/docs/agent-cli): AI agent가 RAGit을 안전하게 호출하는 방법
+- [아키텍처](/ko/docs/architecture): RAGit CLI 핵심 아키텍처
+- [CLI 레퍼런스](/ko/docs/cli-reference): 새 Commands 문서 그룹으로 연결하는 호환 페이지
+- [개요](/ko/docs): RAGit 문서 개요
+- [Init 가이드](/ko/docs/init-guide): AGENTS 연동 인터랙티브 초기화 흐름
+- [Memory Model Guide](/ko/docs/memory-model): RAGit이 왜 working memory와 searchable long-term memory를 분리하는지 이해하기
+- [빠른 시작](/ko/docs/quickstart): RAGit 및 문서 워크플로 시작하기
+- [릴리즈 노트](/ko/docs/release-notes): RAGit v0.1 주요 변경
+- [describe](/ko/docs/commands/describe): 명령 계약을 기계 친화적으로 조회합니다
+- [doctor](/ko/docs/commands/doctor): 저장소와 런타임 상태를 진단합니다
+- [Commands](/ko/docs/commands): 실행 가능한 모든 RAGit CLI 명령의 상세 가이드
+- [ingest](/ko/docs/commands/ingest): 저장소 문서를 인덱싱하고 snapshot manifest를 갱신합니다
+- [init](/ko/docs/commands/init): 저장소를 RAGit용으로 초기화합니다
+- [query](/ko/docs/commands/query): 특정 snapshot 범위에서 인덱싱된 지식을 검색합니다
+- [status](/ko/docs/commands/status): 저장소, manifest, zvec 상태를 요약합니다
+- [config](/ko/docs/commands/config): 저장소 단위 RAGit 설정을 관리합니다
+- [config set](/ko/docs/commands/config/set): 하나의 RAGit 설정값을 업데이트합니다
+- [context](/ko/docs/commands/context): 인덱싱된 지식에서 프롬프트 크기의 컨텍스트 패킷을 만듭니다
+- [context pack](/ko/docs/commands/context/pack): 목표 기준 컨텍스트 패킷을 토큰 예산 안에서 구성합니다
+- [hooks](/ko/docs/commands/hooks): 저장소 변경과 인덱싱을 더 가깝게 묶는 git hook을 관리합니다
+- [hooks install](/ko/docs/commands/hooks/install): RAGit 관리 git hook을 설치합니다
+- [hooks status](/ko/docs/commands/hooks/status): 관리형과 외부 git hook 상태를 확인합니다
+- [hooks uninstall](/ko/docs/commands/hooks/uninstall): RAGit 관리 git hook만 안전하게 제거합니다
+- [memory](/ko/docs/commands/memory): working memory와 장기기억 승격을 관리합니다
+- [memory promote](/ko/docs/commands/memory/promote): 안정된 지식을 searchable long-term memory 문서로 승격합니다
+- [memory recall](/ko/docs/commands/memory/recall): 작업 재개를 위한 최소-충분 패킷을 복원합니다
+- [memory wrap](/ko/docs/commands/memory/wrap): 세션 요약을 working memory에 기록합니다
+- [migrate from-json-store](/ko/docs/commands/migrate/from-json-store): 레거시 JSON store를 canonical zvec 레이아웃으로 변환합니다
+- [migrate from-sqlitevss](/ko/docs/commands/migrate/from-sqlitevss): sqlite-vss export 데이터를 canonical zvec 레이아웃으로 변환합니다
+- [migrate](/ko/docs/commands/migrate): 레거시 저장소를 현재 zvec 기반 레이아웃으로 옮깁니다

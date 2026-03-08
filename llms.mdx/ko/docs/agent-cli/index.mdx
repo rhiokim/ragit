@@ -1,0 +1,73 @@
+# Agent CLI Contract
+
+
+
+RAGit은 이제 사람용 출력과 기계용 계약을 더 분명하게 분리합니다.
+에이전트 워크플로에 붙인다면 아래 규칙부터 기준으로 삼으시면 됩니다.
+
+기본 규칙 [#기본-규칙]
+
+* 기계 호출은 기본적으로 `--format json`을 우선합니다.
+* 처음 붙이는 명령은 `ragit describe <command> --format json`으로 계약부터 읽습니다.
+* `query`, `context pack`, `memory recall`은 기본적으로 `--view minimal`을 우선합니다.
+* 구조화된 payload가 있으면 `--input <path|->`를 우선합니다.
+* mutating 명령은 먼저 `--dry-run`으로 검증합니다.
+
+계약 형태 [#계약-형태]
+
+주요 명령은 공통 envelope를 반환할 수 있습니다.
+
+```json
+{
+  "command": "query",
+  "ok": true,
+  "version": "0.1.0",
+  "cwd": "/repo/path",
+  "data": {},
+  "warnings": []
+}
+```
+
+사람용 텍스트 출력이 바뀌더라도, 에이전트는 이 envelope를 안정적인 계약으로 읽으면 됩니다.
+
+명령별 구문, payload 예시, 실패 주의사항은 <a href="/ko/docs/commands">Commands</a>에서 자세히 보실 수 있습니다.
+
+조회 계열 명령 [#조회-계열-명령]
+
+* `query`는 positional 입력과 `--input <path|->` JSON payload를 모두 지원합니다.
+* `context pack`도 positional 입력과 `--input <path|->` JSON payload를 모두 지원합니다.
+* `memory recall`은 goal을 받아 `--view minimal|default|full`로 출력량을 조절할 수 있습니다.
+
+에이전트에서는 먼저 작은 패킷부터 사용하십시오.
+
+```bash
+ragit query --input query.json --view minimal --format json
+ragit context pack --input context-pack.json --view minimal --format json
+ragit memory recall "resume auth flow" --view minimal --format json
+```
+
+변경 계열 명령 [#변경-계열-명령]
+
+아래 명령은 `--dry-run`을 지원하므로, 에이전트가 쓰기 전에 먼저 계획을 검증할 수 있습니다.
+
+* `ingest`
+* `hooks install`
+* `hooks uninstall`
+* `memory wrap`
+* `memory promote`
+
+권장 패턴은 다음과 같습니다.
+
+```bash
+ragit memory promote --input promote.json --dry-run --format json
+ragit memory promote --input promote.json --format json
+```
+
+Memory 주의점 [#memory-주의점]
+
+두 메모리 표면을 혼동하지 마십시오.
+
+* `.ragit/memory/**`는 working state와 session history를 위한 control plane입니다.
+* `docs/memory/**`는 ingest와 snapshot retrieval에 참여하는 searchable corpus입니다.
+
+즉, 에이전트는 현재 작업을 다룰 때 `memory wrap`과 `memory recall`을 사용하고, 충분히 안정화된 지식만 `memory promote`로 searchable project memory로 승격해야 합니다.

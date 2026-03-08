@@ -1,0 +1,68 @@
+# doctor
+
+
+
+What It Does [#what-it-does]
+
+`doctor` runs a multi-check diagnosis across git setup, RAGit structure, config, zvec runtime, schema layout, and manifest consistency.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* A command is failing and you need a structured diagnostic view.
+* You suspect a store, schema, or manifest mismatch.
+* You want a CI-friendly health check that can exit non-zero on failure.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want a quick current-state summary. Use <a href="/en/docs/commands/status">`status`</a>.
+* You already know the issue and need to reindex. Use <a href="/en/docs/commands/ingest">`ingest`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit doctor [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--format text|json|both`: Choose human text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* There is no positional input and no JSON payload input.
+* JSON output includes `checks` and `hasFailure`.
+* If any check fails, the process exits with a non-zero code after printing the result.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit doctor
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit doctor --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* A failing `doctor` result often signals repository or runtime setup problems outside a single command.
+* Use the individual check names in the JSON output when automating follow-up actions.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/init">
+    `init`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>

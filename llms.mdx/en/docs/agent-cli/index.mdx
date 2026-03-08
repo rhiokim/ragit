@@ -1,0 +1,73 @@
+# Agent CLI Contract
+
+
+
+RAGit now keeps a clearer split between human-readable CLI output and machine-safe command contracts.
+If you are integrating it into an agent workflow, use these rules first.
+
+Default Rules [#default-rules]
+
+* Prefer `--format json` for machine consumers.
+* Use `ragit describe <command> --format json` before integrating a command for the first time.
+* Prefer `--view minimal` for `query`, `context pack`, and `memory recall`.
+* Prefer `--input <path|->` for agent calls that carry structured payloads.
+* Run mutating commands with `--dry-run` first.
+
+Contract Shape [#contract-shape]
+
+Most major commands can now return a shared envelope:
+
+```json
+{
+  "command": "query",
+  "ok": true,
+  "version": "0.1.0",
+  "cwd": "/repo/path",
+  "data": {},
+  "warnings": []
+}
+```
+
+That envelope is meant to stay stable even when the human text output changes.
+
+For per-command syntax, payload shapes, and failure notes, use <a href="/en/docs/commands">Commands</a> as the detailed reference.
+
+Read Commands [#read-commands]
+
+* `query` supports positional input or `--input <path|->` JSON payloads.
+* `context pack` supports positional input or `--input <path|->` JSON payloads.
+* `memory recall` accepts a goal and can shrink output with `--view minimal|default|full`.
+
+For agents, start small:
+
+```bash
+ragit query --input query.json --view minimal --format json
+ragit context pack --input context-pack.json --view minimal --format json
+ragit memory recall "resume auth flow" --view minimal --format json
+```
+
+Mutating Commands [#mutating-commands]
+
+These commands now support `--dry-run` so an agent can validate intent before writing:
+
+* `ingest`
+* `hooks install`
+* `hooks uninstall`
+* `memory wrap`
+* `memory promote`
+
+Typical pattern:
+
+```bash
+ragit memory promote --input promote.json --dry-run --format json
+ragit memory promote --input promote.json --format json
+```
+
+Memory Caveat [#memory-caveat]
+
+Do not confuse the two memory surfaces:
+
+* `.ragit/memory/**` is the control plane for working state and session history.
+* `docs/memory/**` is the searchable corpus that participates in ingest and snapshot retrieval.
+
+That means agents should use `memory wrap` and `memory recall` to manage active work, and `memory promote` only when knowledge is stable enough to become searchable project memory.

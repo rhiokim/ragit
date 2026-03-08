@@ -1,0 +1,68 @@
+# status
+
+
+
+What It Does [#what-it-does]
+
+`status` prints the current repository state that matters to RAGit: branch, HEAD, backend, manifest count, embedding config, and zvec availability.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want a quick operational snapshot of the current repository.
+* You want to confirm whether the store is loaded and whether retrieval should be ready.
+* You want to inspect config surfaces without opening files manually.
+
+When not to use it [#when-not-to-use-it]
+
+* You want a deeper health diagnosis. Use <a href="/en/docs/commands/doctor">`doctor`</a>.
+* You want to change config values. Use <a href="/en/docs/commands/config/set">`config set`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit status [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--format text|json|both`: Choose human text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* There is no positional input and no JSON payload input.
+* JSON output includes `branch`, `head`, `backend`, `zvec`, `supported_types`, `manifests`, `embedding`, and `format`.
+* Agents should usually call `--format json`.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit status
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit status --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* `status` is a summary, not a repair command.
+* A loaded store does not guarantee that your latest docs are indexed. Run <a href="/en/docs/commands/ingest">`ingest`</a> after content changes.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/en/docs/commands/config/set">
+    `config set`
+  </a>

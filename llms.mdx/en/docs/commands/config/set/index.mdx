@@ -1,0 +1,67 @@
+# config set
+
+
+
+What It Does [#what-it-does]
+
+`config set` updates one key in `.ragit/config.toml` using the repository-aware config loader and writer.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want to change output, ingest, storage, or embedding settings.
+* You want a scriptable way to change config without editing TOML by hand.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want to inspect current values. Use <a href="/en/docs/commands/status">`status`</a>.
+* You want to initialize missing defaults. Use <a href="/en/docs/commands/init">`init`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit config set <key> <value> [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `<key>`: The dotted config key to update.
+* `<value>`: The value to store.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is positional only.
+* Output is a plain stdout confirmation message. This command does not currently expose a JSON envelope.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit config set output.format markdown
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit config set ingest.supported_types '["adr","spec"]'
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Invalid keys or invalid values fail before the config file is written.
+* Because output is text-only, agents should validate follow-up state with <a href="/en/docs/commands/status">`status`</a>.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/en/docs/commands/init">
+    `init`
+  </a>
