@@ -45,18 +45,14 @@ sequenceDiagram
 
 ## MVP Document Types (v0.1)
 
-- ADR
-- PRD
-- SRS
-- SPEC
-- Plan
-- DDD
-- Glossary
-- PBD
-
-- `SRS`: system-level software requirements
-- `SPEC`: implementation-level functional requirements and interface contracts
-- `PBD`: phase and binding topology for understanding implementation structure and coupling
+- `Architecture Decision (ADR)`: durable decision record with rationale and consequences
+- `Product Requirement (PRD)`: product problem, users, goals, and success criteria
+- `Software Requirements (SRS)`: system-level functional and non-functional requirements
+- `Implementation Specification (SPEC)`: implementation-level functional requirements and interface contracts
+- `Plan`: execution sequencing, milestones, and work breakdown
+- `Domain-Driven Design (DDD)`: bounded contexts, aggregates, and domain structure
+- `Glossary`: shared vocabulary for stable project terms
+- `Phase and Binding Documents (PBD)`: phase and binding topology for understanding implementation structure and coupling
 
 ## Installation
 
@@ -178,7 +174,7 @@ By default, `pnpm ragit init` runs a 7-step interactive wizard:
 1. Check Git environment (suggest `git init` if not a repository)
 2. Confirm initialization mode
 3. Load or create root `AGENTS.md`
-4. Confirm document template scope (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PBD)
+4. Confirm document template scope (Architecture Decision (ADR) / Product Requirement (PRD) / Software Requirements (SRS) / Implementation Specification (SPEC) / Plan / Domain-Driven Design (DDD) / Glossary / Phase and Binding Documents (PBD))
 5. Incrementally generate `.ragit/guide` and refresh `guide-index.json`
 6. Bootstrap the zvec canonical store
 7. Print summary table and next actions
