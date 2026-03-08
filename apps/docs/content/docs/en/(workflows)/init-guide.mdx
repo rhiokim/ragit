@@ -13,11 +13,36 @@ The repository init command runs a 7-step interactive flow by default when you a
 6. Bootstrap the zvec store
 7. Print summary + next actions
 
+## Visual Overview
+
+![Repository init flow diagram showing the seven setup steps and where template scope becomes explicit.](/guide-visuals/init-flow.svg)
+
+This diagram is the fastest way to read the command. Steps 1 through 4 establish the repository contract and authoring system. Steps 5 and 6 create scaffolding. Step 7 reports status and next actions, but it does not make the repository searchable yet.
+
+<Callout title="How to read this flow">
+  The center of gravity is Step 4. That is where document roles become explicit, so later ingest and retrieval can interpret files by purpose instead of treating every Markdown file as the same artifact.
+</Callout>
+
 Step 4 is where `init` prepares a shared authoring system, not just a directory tree. RAGit installs eight document templates so humans and agents can separate product intent (`Product Requirement (PRD)`), system requirements (`Software Requirements (SRS)`), implementation contracts (`Implementation Specification (SPEC)`), topology and bindings (`Phase and Binding Documents (PBD)`), stable decisions (`Architecture Decision (ADR)`), execution sequencing (`Plan`), domain structure (`Domain-Driven Design (DDD)`), and shared vocabulary (`Glossary`).
 
 `Implementation Specification (SPEC)` templates are used for implementation-level functional specifications, while `Phase and Binding Documents (PBD)` templates describe phase topology and binding structure.
 
 ## How to think about template scope
+
+<Cards>
+  <Card title="Product framing">
+    Start with `Product Requirement (PRD)` when you are defining the problem, user, and outcome. Move to `Software Requirements (SRS)` when the question becomes what the system must provide.
+  </Card>
+  <Card title="Implementation contract">
+    Use `Implementation Specification (SPEC)` when module behavior, interfaces, and acceptance details must become explicit for humans and agents.
+  </Card>
+  <Card title="Topology reasoning">
+    Use `Phase and Binding Documents (PBD)` when the hard part is how phases, components, or agents connect and where drift can appear between them.
+  </Card>
+  <Card title="Stable choices">
+    Use `Architecture Decision (ADR)` when you are recording a durable choice between alternatives rather than an execution sequence.
+  </Card>
+</Cards>
 
 - Start with `Product Requirement (PRD)` when you are defining the problem, user, and outcome.
 - Move to `Software Requirements (SRS)` when you need system-level requirements and constraints.
@@ -35,6 +60,14 @@ If you are unsure which template to start with, pick by role rather than filenam
 - In practice, the safest authoring pattern is to set `type` explicitly and keep the title aligned with the document role.
 
 ## What `init` prepares
+
+![Diagram contrasting what init creates immediately versus what still waits for ingest.](/guide-visuals/init-boundary.svg)
+
+This boundary matters because users often assume `init` already indexed repository documents. It does not. The command ends with an empty but usable control plane and an empty but usable canonical store.
+
+<Callout type="warning" title="Important boundary">
+  `init` makes the repository control-plane ready and zvec-store ready. `ingest` is the step that turns repository documents into searchable knowledge.
+</Callout>
 
 - Git-aware control-plane preparation for `.ragit/`
 - Load or create flow for the root `AGENTS.md`

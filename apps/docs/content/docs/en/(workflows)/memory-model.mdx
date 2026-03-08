@@ -20,6 +20,22 @@ RAGit splits memory so it can answer those questions directly instead of replayi
 
 ## The Mental Model
 
+![Three-layer memory diagram showing short-term scratch space, working memory for active continuity, and long-term memory for reusable knowledge.](/guide-visuals/memory-layers.svg)
+
+This diagram is the fastest mental model for the page. The top layer is temporary, the middle layer is active continuity, and the bottom layer is durable project knowledge. In the current MVP, RAGit puts most of its weight on the middle and bottom layers.
+
+<Cards>
+  <Card title="Short-term memory">
+    Temporary scratch space for rough notes, partial observations, and in-session thinking. It exists conceptually, but it is not the main searchable layer in the MVP.
+  </Card>
+  <Card title="Working memory">
+    The active state you want to resume: goal, constraints, open loops, and next actions. This layer restores momentum.
+  </Card>
+  <Card title="Long-term memory">
+    Reusable project knowledge such as stable decisions, glossary entries, and durable plans. This layer restores durable knowledge.
+  </Card>
+</Cards>
+
 Think about memory in three layers:
 
 - **Short-term memory** is scratch space. It holds temporary notes, rough ideas, and in-progress observations inside a session.
@@ -38,6 +54,16 @@ RAGit uses two places because the project needs two different kinds of memory be
 This split protects signal quality. Working memory stays focused on “what is active now,” while long-term memory stays focused on “what should remain findable later.”
 
 ## Command Flow
+
+![Swimlane diagram showing wrap and recall on the control plane and promote plus ingest on the searchable corpus side.](/guide-visuals/memory-flow.svg)
+
+The left lane is about continuity now. The right lane is about knowledge worth finding later. `memory recall` is the bridge between them: it starts from current working state and then pulls in relevant snapshot-scoped retrieval.
+
+<Callout title="A simple rule of thumb">
+  `memory wrap` preserves continuity, `memory recall` restores the smallest useful packet, and `memory promote` crystallizes stable knowledge into searchable project memory.
+</Callout>
+
+### Exact path sketch
 
 ```text
 CONTROL PLANE (.ragit/memory/**)             SEARCHABLE CORPUS (docs/memory/**)

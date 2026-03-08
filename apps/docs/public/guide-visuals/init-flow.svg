@@ -1,0 +1,56 @@
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="760" rx="28" fill="#0F172A"/>
+  <rect x="28" y="28" width="1144" height="704" rx="24" fill="#F8FAFC"/>
+  <text x="72" y="104" fill="#0F172A" font-family="system-ui, sans-serif" font-size="38" font-weight="700">Repository init at a glance</text>
+  <text x="72" y="144" fill="#475569" font-family="system-ui, sans-serif" font-size="20">Interactive setup prepares the guide system first, then boots an empty canonical store.</text>
+
+  <rect x="72" y="186" width="300" height="124" rx="20" fill="#E2E8F0"/>
+  <text x="104" y="228" fill="#0F172A" font-family="system-ui, sans-serif" font-size="18" font-weight="700">1. Environment check</text>
+  <text x="104" y="258" fill="#334155" font-family="system-ui, sans-serif" font-size="16">Detect Git state and repository conditions.</text>
+  <text x="104" y="286" fill="#64748B" font-family="system-ui, sans-serif" font-size="15">Optionally propose git init.</text>
+
+  <rect x="402" y="186" width="300" height="124" rx="20" fill="#E2E8F0"/>
+  <text x="434" y="228" fill="#0F172A" font-family="system-ui, sans-serif" font-size="18" font-weight="700">2. Mode confirmation</text>
+  <text x="434" y="258" fill="#334155" font-family="system-ui, sans-serif" font-size="16">Interactive vs non-interactive path.</text>
+  <text x="434" y="286" fill="#64748B" font-family="system-ui, sans-serif" font-size="15">Defaults are locked before generation.</text>
+
+  <rect x="732" y="186" width="300" height="124" rx="20" fill="#E2E8F0"/>
+  <text x="764" y="228" fill="#0F172A" font-family="system-ui, sans-serif" font-size="18" font-weight="700">3. Root AGENTS.md</text>
+  <text x="764" y="258" fill="#334155" font-family="system-ui, sans-serif" font-size="16">Load existing instructions or create them.</text>
+  <text x="764" y="286" fill="#64748B" font-family="system-ui, sans-serif" font-size="15">The root contract stays the entry point.</text>
+
+  <rect x="402" y="354" width="390" height="148" rx="24" fill="#DBEAFE" stroke="#2563EB" stroke-width="3"/>
+  <text x="434" y="402" fill="#1D4ED8" font-family="system-ui, sans-serif" font-size="18" font-weight="700">4. Template scope</text>
+  <text x="434" y="436" fill="#0F172A" font-family="system-ui, sans-serif" font-size="22" font-weight="700">Authoring system becomes explicit</text>
+  <text x="434" y="468" fill="#334155" font-family="system-ui, sans-serif" font-size="16">ADR, PRD, SRS, SPEC, Plan, DDD, Glossary, PBD</text>
+  <text x="434" y="494" fill="#64748B" font-family="system-ui, sans-serif" font-size="15">This is where document roles are separated before search exists.</text>
+
+  <rect x="72" y="566" width="300" height="112" rx="20" fill="#DCFCE7"/>
+  <text x="104" y="606" fill="#166534" font-family="system-ui, sans-serif" font-size="18" font-weight="700">5. Build .ragit/guide</text>
+  <text x="104" y="636" fill="#14532D" font-family="system-ui, sans-serif" font-size="16">Create templates and guide-index incrementally.</text>
+
+  <rect x="402" y="566" width="300" height="112" rx="20" fill="#FEF3C7"/>
+  <text x="434" y="606" fill="#92400E" font-family="system-ui, sans-serif" font-size="18" font-weight="700">6. Bootstrap zvec store</text>
+  <text x="434" y="636" fill="#78350F" font-family="system-ui, sans-serif" font-size="16">Prepare empty documents/chunks collections.</text>
+
+  <rect x="732" y="566" width="300" height="112" rx="20" fill="#EDE9FE"/>
+  <text x="764" y="606" fill="#6D28D9" font-family="system-ui, sans-serif" font-size="18" font-weight="700">7. Print summary</text>
+  <text x="764" y="636" fill="#5B21B6" font-family="system-ui, sans-serif" font-size="16">Return next actions such as hooks install and ingest.</text>
+
+  <path d="M372 248H402" stroke="#94A3B8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M702 248H732" stroke="#94A3B8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M882 310V336C882 346 874 354 864 354H792" stroke="#94A3B8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M402 430H360C348 430 338 440 338 452V538C338 554 324 566 308 566H252" stroke="#94A3B8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M597 502V536" stroke="#94A3B8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M792 430H834C846 430 856 440 856 452V538C856 554 870 566 886 566H732" stroke="#94A3B8" stroke-width="4" stroke-linecap="round"/>
+
+  <rect x="850" y="368" width="214" height="108" rx="18" fill="#FFFFFF"/>
+  <text x="876" y="404" fill="#0F172A" font-family="system-ui, sans-serif" font-size="17" font-weight="700">Key boundary</text>
+  <text x="876" y="434" fill="#334155" font-family="system-ui, sans-serif" font-size="15">Search-ready does not exist yet.</text>
+  <text x="876" y="458" fill="#64748B" font-family="system-ui, sans-serif" font-size="14">init prepares names, templates,</text>
+  <text x="876" y="478" fill="#64748B" font-family="system-ui, sans-serif" font-size="14">and store scaffolding first.</text>
+
+  <rect x="72" y="692" width="960" height="20" rx="10" fill="#E2E8F0"/>
+  <rect x="72" y="692" width="682" height="20" rx="10" fill="#2563EB"/>
+  <text x="72" y="686" fill="#475569" font-family="system-ui, sans-serif" font-size="14">Guide/control-plane preparation dominates the flow before ingest begins.</text>
+</svg>

@@ -13,11 +13,36 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 6. zvec 저장소 bootstrap
 7. 요약 및 다음 액션 출력
 
+## 시각 개요
+
+![7단계 init 흐름과 템플릿 범위 확인 단계의 의미를 보여주는 다이어그램](/guide-visuals/init-flow.svg)
+
+이 그림은 `init` 명령을 가장 빠르게 읽는 요약입니다. 1단계부터 4단계까지는 저장소 계약과 authoring system을 준비하고, 5단계와 6단계는 그 구조를 실제 파일과 저장소 골격으로 만듭니다. 마지막 7단계는 결과와 다음 행동을 출력할 뿐, 저장소를 검색 가능 상태로 만들지는 않습니다.
+
+<Callout title="이 다이어그램을 읽는 핵심">
+  중심은 4단계입니다. 여기서 문서 역할이 분리되기 때문에, 이후 ingest와 retrieval이 모든 Markdown 파일을 같은 물건으로 보지 않고 역할 기준으로 해석할 수 있습니다.
+</Callout>
+
 4단계는 단순히 디렉터리를 만드는 단계가 아니라, 저장소 안에 공통 authoring system을 준비하는 단계입니다. RAGit은 8개 문서 템플릿을 설치하여 사람과 에이전트가 제품 의도(`Product Requirement (PRD)`), 시스템 요구사항(`Software Requirements (SRS)`), 구현 계약(`Implementation Specification (SPEC)`), 위상/결속 설명(`Phase and Binding Documents (PBD)`), 안정화된 결정(`Architecture Decision (ADR)`), 실행 순서(`Plan`), 도메인 구조(`Domain-Driven Design (DDD)`), 공통 어휘(`Glossary`)를 서로 다른 역할로 분리해서 기록하도록 만듭니다.
 
 `Implementation Specification (SPEC)` 템플릿은 구현체 상세 기능 명세에, `Phase and Binding Documents (PBD)` 템플릿은 위상 구조와 결속 아키텍처 설명에 사용됩니다.
 
 ## 템플릿 범위를 이해하는 기준
+
+<Cards>
+  <Card title="제품 정의">
+    문제, 사용자, 결과를 먼저 정의할 때는 `Product Requirement (PRD)`로 시작하고, 시스템이 무엇을 보장해야 하는지로 내려갈 때 `Software Requirements (SRS)`로 이동하십시오.
+  </Card>
+  <Card title="구현 계약">
+    모듈 동작, 인터페이스, acceptance detail을 명확히 고정해야 할 때는 `Implementation Specification (SPEC)`가 가장 직접적인 문서 타입입니다.
+  </Card>
+  <Card title="위상 설명">
+    어려운 지점이 위상 연결, 컴포넌트 결속, agent 간 연결이라면 `Phase and Binding Documents (PBD)`가 더 정확한 설명 표면입니다.
+  </Card>
+  <Card title="결정 기록">
+    실행 순서를 적는 것이 아니라 대안 사이에서 오래 남을 결정을 고정하는 것이라면 `Architecture Decision (ADR)`를 사용하십시오.
+  </Card>
+</Cards>
 
 - 문제, 사용자, 결과를 먼저 정의할 때는 `Product Requirement (PRD)`부터 시작하십시오.
 - 시스템 수준 요구사항과 제약을 정리할 때는 `Software Requirements (SRS)`로 이동하십시오.
@@ -35,6 +60,14 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 - 실무적으로는 `type`을 명시하고, 제목도 문서 역할과 일치시키는 패턴이 가장 안전합니다.
 
 ## `init`이 준비하는 것
+
+![init이 즉시 만드는 것과 ingest 전까지 아직 생기지 않는 것을 대비해 보여주는 다이어그램](/guide-visuals/init-boundary.svg)
+
+이 경계가 중요한 이유는, 많은 사용자가 `init`이 저장소 문서를 이미 인덱싱했다고 오해하기 쉽기 때문입니다. 실제로는 비어 있지만 사용 가능한 control plane과 비어 있지만 사용 가능한 canonical store까지만 준비됩니다.
+
+<Callout type="warning" title="중요한 경계">
+  `init`은 저장소를 control-plane ready 및 zvec-store ready 상태로 만듭니다. 저장소 문서를 검색 가능한 지식으로 바꾸는 단계는 `ingest`입니다.
+</Callout>
 
 - `.ragit/` 기준의 Git 인지 control plane 준비
 - 루트 `AGENTS.md`의 로드 또는 생성 흐름
