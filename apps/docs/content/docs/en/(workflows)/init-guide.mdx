@@ -3,7 +3,7 @@ title: Init Guide
 description: Interactive AGENTS-aware initialization flow
 ---
 
-`pnpm ragit init` runs a 7-step interactive flow by default when you are inside the repository checkout.
+The repository init command runs a 7-step interactive flow by default when you are inside the repository checkout.
 
 1. Environment check (and optional `git init`)
 2. Mode confirmation
@@ -34,7 +34,7 @@ description: Interactive AGENTS-aware initialization flow
 
 `init` makes the repository **control-plane ready** and **zvec-store ready**.
 It does **not** make the repository **search-ready**.
-Searchable knowledge appears only after `pnpm ragit ingest ...`.
+Searchable knowledge appears only after the repository ingest command runs.
 
 `storage.backend = "zvec"` now means the canonical backend, and `init` bootstraps an empty store without indexing repository documents.
 
@@ -44,7 +44,7 @@ Searchable knowledge appears only after `pnpm ragit ingest ...`.
 
 Use this flow when the current directory is not a Git repository and neither `AGENTS.md` nor `.ragit/` exists yet.
 
-1. Run `pnpm ragit init`
+1. Run the repository init command
 2. RAGit detects that Git is missing
 3. Interactive mode proposes `git init`
 4. RAGit creates `AGENTS.md`
@@ -57,7 +57,7 @@ The important outcome is that initialization is complete, but searchable knowled
 
 Use this flow when the repository already has Git history and a root `AGENTS.md`.
 
-1. Run `pnpm ragit init`
+1. Run the repository init command
 2. RAGit loads `AGENTS.md` in read-only mode
 3. RAGit creates only the missing `.ragit` control-plane files and bootstraps zvec if needed
 4. RAGit refreshes `guide-index.json`
@@ -68,7 +68,7 @@ The important outcome is that the existing instruction file stays unchanged whil
 
 Use this flow when `.ragit/` already exists but some templates or index files are missing.
 
-1. Run `pnpm ragit init`
+1. Run the repository init command
 2. Existing files are preserved
 3. Missing templates are added
 4. `guide-index.json` is regenerated
@@ -79,7 +79,7 @@ The important outcome is that `init` behaves incrementally and can be re-run saf
 
 Use this flow when TTY is unavailable or when automation requires defaults.
 
-1. Run `pnpm ragit init --yes`
+1. Run the repository init command in non-interactive mode
 2. If the directory is already a Git repository, initialization proceeds immediately
 3. If it is not a Git repository, `--git-init` is required for automatic initialization
 4. RAGit returns the same guide + zvec-store summary with table or JSON output

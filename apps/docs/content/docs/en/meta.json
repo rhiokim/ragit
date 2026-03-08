@@ -1,13 +1,9 @@
 {
-  "title": "English",
+  "root": true,
   "pages": [
-    "index",
-    "quickstart",
+    "(overview)",
+    "(workflows)",
     "commands",
-    "memory-model",
-    "agent-cli",
-    "init-guide",
-    "architecture",
-    "release-notes"
+    "(reference)"
   ]
 }

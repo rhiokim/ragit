@@ -3,7 +3,7 @@ title: Init 가이드
 description: AGENTS 연동 인터랙티브 초기화 흐름
 ---
 
-저장소 체크아웃 안에서 `pnpm ragit init`은 기본적으로 7단계 인터랙티브 흐름으로 동작합니다.
+저장소 체크아웃 안에서 저장소 init 명령은 기본적으로 7단계 인터랙티브 흐름으로 동작합니다.
 
 1. 환경 검사 (`git init` 선택 포함)
 2. 초기화 모드 확인
@@ -33,7 +33,7 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 - 빈 zvec 컬렉션에 대한 실제 벡터 upsert 없음
 
 즉, `init`은 저장소를 **control-plane ready** 및 **zvec-store ready** 상태로 만들지만, **search-ready** 상태로 만들지는 않습니다.
-검색 가능한 지식 상태는 `pnpm ragit ingest ...` 이후에 형성됩니다.
+검색 가능한 지식 상태는 저장소 ingest 명령을 실행한 뒤에 형성됩니다.
 
 `storage.backend = "zvec"`는 이제 canonical backend를 의미하며, `init`은 저장소 문서를 인덱싱하지 않은 빈 zvec 저장소만 bootstrap합니다.
 
@@ -43,7 +43,7 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 
 현재 디렉터리가 Git 저장소가 아니고 `AGENTS.md`와 `.ragit/`도 아직 없을 때의 흐름입니다.
 
-1. `pnpm ragit init` 실행
+1. 저장소 init 명령 실행
 2. Git 부재 감지
 3. 대화형에서 `git init` 제안
 4. `AGENTS.md` 생성
@@ -56,7 +56,7 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 
 이미 Git 저장소이며 루트 `AGENTS.md`가 존재할 때의 흐름입니다.
 
-1. `pnpm ragit init` 실행
+1. 저장소 init 명령 실행
 2. `AGENTS.md`를 읽기 전용으로 로드
 3. 누락된 `.ragit` control-plane 파일만 생성하고 필요 시 zvec 저장소 bootstrap
 4. `guide-index.json` 재생성
@@ -67,7 +67,7 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 
 `.ragit/`은 이미 있지만 일부 템플릿 또는 인덱스만 빠져 있을 때의 흐름입니다.
 
-1. `pnpm ragit init` 실행
+1. 저장소 init 명령 실행
 2. 기존 파일 유지
 3. 누락 템플릿만 생성
 4. `guide-index.json` 최신화
@@ -78,7 +78,7 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 
 TTY가 없거나 자동화 환경에서 기본값으로 실행해야 할 때의 흐름입니다.
 
-1. `pnpm ragit init --yes` 실행
+1. 비대화형 init 명령 실행
 2. Git 저장소면 바로 진행
 3. 비Git이면 `--git-init` 없을 때 실패, 있으면 자동 `git init`
 4. 동일한 guide + zvec-store 결과를 table 또는 JSON summary로 반환

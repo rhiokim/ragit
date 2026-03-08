@@ -1,6 +1,7 @@
 'use client';
 
 import { gitConfig } from '@/lib/layout.shared';
+import { Folder, Item } from '@/components/sidebar-page-tree';
 import { PanelLeft } from 'lucide-react';
 import { LargeSearchToggle } from '../node_modules/fumadocs-ui/dist/layouts/shared/search-toggle.js';
 import { ThemeToggle } from '../node_modules/fumadocs-ui/dist/layouts/shared/theme-toggle.js';
@@ -55,7 +56,7 @@ export function DocsSidebar() {
           <LargeSearchToggle hideIfDisabled />
         </div>
         <SidebarViewport>
-          <SidebarPageTree />
+          <SidebarPageTree Folder={Folder} Item={Item} />
         </SidebarViewport>
         <div className="flex flex-col border-t p-4 pt-2 empty:hidden">
           <div className="flex text-fd-muted-foreground items-center empty:hidden">
@@ -77,7 +78,7 @@ export function DocsSidebar() {
           </div>
         </div>
         <SidebarViewport>
-          <SidebarPageTree />
+          <SidebarPageTree Folder={Folder} Item={Item} />
         </SidebarViewport>
         <div className="flex flex-col border-t p-4 pt-2 empty:hidden" />
       </SidebarDrawer>
