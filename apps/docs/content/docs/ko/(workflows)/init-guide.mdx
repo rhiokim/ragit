@@ -8,12 +8,31 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 1. 환경 검사 (`git init` 선택 포함)
 2. 초기화 모드 확인
 3. 루트 `AGENTS.md` 로드/생성
-4. 문서 템플릿 범위 확인 (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PBD)
+4. 문서 템플릿 범위 확인 (Architecture Decision (ADR), Product Requirement (PRD), Software Requirements (SRS), Implementation Specification (SPEC), Plan, Domain-Driven Design (DDD), Glossary, Phase and Binding Documents (PBD))
 5. `.ragit/guide` 증분 생성
 6. zvec 저장소 bootstrap
 7. 요약 및 다음 액션 출력
 
-`SPEC` 템플릿은 구현체 상세 기능 명세에, `PBD` 템플릿은 위상 구조와 결속 아키텍처 설명에 사용됩니다.
+4단계는 단순히 디렉터리를 만드는 단계가 아니라, 저장소 안에 공통 authoring system을 준비하는 단계입니다. RAGit은 8개 문서 템플릿을 설치하여 사람과 에이전트가 제품 의도(`Product Requirement (PRD)`), 시스템 요구사항(`Software Requirements (SRS)`), 구현 계약(`Implementation Specification (SPEC)`), 위상/결속 설명(`Phase and Binding Documents (PBD)`), 안정화된 결정(`Architecture Decision (ADR)`), 실행 순서(`Plan`), 도메인 구조(`Domain-Driven Design (DDD)`), 공통 어휘(`Glossary`)를 서로 다른 역할로 분리해서 기록하도록 만듭니다.
+
+`Implementation Specification (SPEC)` 템플릿은 구현체 상세 기능 명세에, `Phase and Binding Documents (PBD)` 템플릿은 위상 구조와 결속 아키텍처 설명에 사용됩니다.
+
+## 템플릿 범위를 이해하는 기준
+
+- 문제, 사용자, 결과를 먼저 정의할 때는 `Product Requirement (PRD)`부터 시작하십시오.
+- 시스템 수준 요구사항과 제약을 정리할 때는 `Software Requirements (SRS)`로 이동하십시오.
+- 모듈 동작, 인터페이스, acceptance detail을 고정할 때는 `Implementation Specification (SPEC)`를 사용하십시오.
+- 어려운 지점이 위상 연결, 컴포넌트 결속, agent 간 연결이라면 `Phase and Binding Documents (PBD)`를 사용하십시오.
+- 실행 순서가 아니라 오래 남을 결정을 기록할 때는 `Architecture Decision (ADR)`를 사용하십시오.
+
+어떤 템플릿을 쓸지 헷갈릴 때는 파일명보다 역할 기준으로 고르십시오. requirements 문서는 `SRS`, 기능 계약 문서는 `SPEC`, topology 설명 문서는 `PBD`로 두는 편이 이후 검색과 재진입에 가장 유리합니다.
+
+## 문서 타입 인식 방식
+
+- frontmatter의 `type`이 가장 강한 신호입니다.
+- frontmatter가 없으면 `docs/specs/`, `docs/requirements/`, `docs/ddd/` 같은 경로명이 힌트가 됩니다.
+- 경로도 모호하면 `# Glossary`, `# PBD` 같은 첫 헤딩을 기준으로 추론합니다.
+- 실무적으로는 `type`을 명시하고, 제목도 문서 역할과 일치시키는 패턴이 가장 안전합니다.
 
 ## `init`이 준비하는 것
 
@@ -36,6 +55,8 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 검색 가능한 지식 상태는 저장소 ingest 명령을 실행한 뒤에 형성됩니다.
 
 `storage.backend = "zvec"`는 이제 canonical backend를 의미하며, `init`은 저장소 문서를 인덱싱하지 않은 빈 zvec 저장소만 bootstrap합니다.
+
+핵심은 `init`이 먼저 이름 체계, 템플릿 체계, 타입 인식 힌트를 준비해 둔다는 점입니다. 그래야 이후 ingest와 retrieval 단계가 모든 Markdown 파일을 동일하게 다루지 않고, 문서의 역할에 맞는 검색과 재진입을 수행할 수 있습니다.
 
 ## 대표 사용자 시나리오
 

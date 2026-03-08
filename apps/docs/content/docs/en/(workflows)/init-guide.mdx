@@ -8,12 +8,31 @@ The repository init command runs a 7-step interactive flow by default when you a
 1. Environment check (and optional `git init`)
 2. Mode confirmation
 3. Load/create root `AGENTS.md`
-4. Confirm docs template scope (ADR/PRD/SRS/SPEC/Plan/DDD/Glossary/PBD)
+4. Confirm docs template scope (Architecture Decision (ADR), Product Requirement (PRD), Software Requirements (SRS), Implementation Specification (SPEC), Plan, Domain-Driven Design (DDD), Glossary, Phase and Binding Documents (PBD))
 5. Build `.ragit/guide` incrementally
 6. Bootstrap the zvec store
 7. Print summary + next actions
 
-`SPEC` templates are used for implementation-level functional specifications, while `PBD` templates describe phase topology and binding structure.
+Step 4 is where `init` prepares a shared authoring system, not just a directory tree. RAGit installs eight document templates so humans and agents can separate product intent (`Product Requirement (PRD)`), system requirements (`Software Requirements (SRS)`), implementation contracts (`Implementation Specification (SPEC)`), topology and bindings (`Phase and Binding Documents (PBD)`), stable decisions (`Architecture Decision (ADR)`), execution sequencing (`Plan`), domain structure (`Domain-Driven Design (DDD)`), and shared vocabulary (`Glossary`).
+
+`Implementation Specification (SPEC)` templates are used for implementation-level functional specifications, while `Phase and Binding Documents (PBD)` templates describe phase topology and binding structure.
+
+## How to think about template scope
+
+- Start with `Product Requirement (PRD)` when you are defining the problem, user, and outcome.
+- Move to `Software Requirements (SRS)` when you need system-level requirements and constraints.
+- Use `Implementation Specification (SPEC)` when you are defining module behavior, interfaces, and acceptance details.
+- Use `Phase and Binding Documents (PBD)` when the hard part is how phases, components, or agents bind together.
+- Use `Architecture Decision (ADR)` when you are recording a durable decision instead of an execution sequence.
+
+If you are unsure which template to start with, pick by role rather than filename style. A requirements document should become `SRS`, a feature contract should become `SPEC`, and a topology explanation should become `PBD`.
+
+## How document type recognition works
+
+- Frontmatter `type` is the strongest signal.
+- If frontmatter is missing, RAGit looks at path names such as `docs/specs/`, `docs/requirements/`, or `docs/ddd/`.
+- If the path is still ambiguous, RAGit falls back to the first heading, such as `# Glossary` or `# PBD`.
+- In practice, the safest authoring pattern is to set `type` explicitly and keep the title aligned with the document role.
 
 ## What `init` prepares
 
@@ -37,6 +56,8 @@ It does **not** make the repository **search-ready**.
 Searchable knowledge appears only after the repository ingest command runs.
 
 `storage.backend = "zvec"` now means the canonical backend, and `init` bootstraps an empty store without indexing repository documents.
+
+The important takeaway is that `init` prepares the naming system, template system, and detection hints first, so later ingest and retrieval can interpret documents by role instead of treating every Markdown file as the same kind of artifact.
 
 ## Representative User Scenarios
 
