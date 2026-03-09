@@ -174,7 +174,7 @@ By default, `pnpm ragit init` runs a 7-step interactive wizard:
 1. Check Git environment (suggest `git init` if not a repository)
 2. Confirm initialization mode
 3. Load or create root `AGENTS.md`
-4. Confirm document template scope (Architecture Decision (ADR) / Product Requirement (PRD) / Software Requirements (SRS) / Implementation Specification (SPEC) / Plan / Domain-Driven Design (DDD) / Glossary / Phase and Binding Documents (PBD))
+4. Show supported document templates (Architecture Decision (ADR) / Product Requirement (PRD) / Software Requirements (SRS) / Implementation Specification (SPEC) / Plan / Domain-Driven Design (DDD) / Glossary / Phase and Binding Documents (PBD))
 5. Incrementally generate `.ragit/guide` and refresh `guide-index.json`
 6. Bootstrap the zvec canonical store
 7. Print summary table and next actions
@@ -206,6 +206,9 @@ pnpm ragit init --non-interactive  # alias of --yes
 pnpm ragit init --git-init         # allow git init in non-interactive mode
 pnpm ragit init --output json      # JSON summary output
 ```
+
+- `--cwd` may point to the repository root or any nested path inside the worktree; `init` normalizes to the Git root before writing `.ragit` or `AGENTS.md`.
+- zvec bootstrap currently supports `darwin/arm64`, `linux/arm64`, and `linux/x64`.
 
 Recommended flow after `init`:
 

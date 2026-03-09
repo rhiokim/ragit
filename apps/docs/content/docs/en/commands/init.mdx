@@ -6,7 +6,7 @@ command_path: init
 
 ## What It Does
 
-`init` prepares a repository for RAGit. It checks git context, creates the RAGit structure, loads or creates `AGENTS.md`, prepares guide files, and bootstraps the local zvec storage layout.
+`init` prepares a repository for RAGit. It checks git context, normalizes to the repository root when you point at a nested Git path, creates the RAGit structure, loads or creates `AGENTS.md`, prepares guide files, and bootstraps the local zvec storage layout.
 
 ## When To Use / When Not To Use
 
@@ -29,7 +29,7 @@ pnpm ragit init [--cwd <path>] [--yes|--non-interactive] [--git-init] [--output 
 
 ## Arguments And Options
 
-- `--cwd <path>`: Run initialization against another repository path.
+- `--cwd <path>`: Run initialization against another repository path. If the path is inside a Git working tree, `init` anchors to the repository root.
 - `--yes`: Accept defaults and skip prompts.
 - `--non-interactive`: Same intent as `--yes`, useful in scripted flows.
 - `--git-init`: Create a git repository automatically in non-interactive mode.
@@ -59,6 +59,7 @@ pnpm ragit init --yes --git-init --output json
 
 - In non-interactive mode, `init` fails if the directory is not a git repository and `--git-init` is missing.
 - In TTY-less environments, interactive mode is not available.
+- zvec bootstrap currently supports `darwin/arm64`, `linux/arm64`, and `linux/x64`.
 - `init` prepares the repository but does not index docs yet. Run <a href="/en/docs/commands/ingest">`ingest`</a> after setup.
 
 ## Related Commands

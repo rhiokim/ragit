@@ -3,19 +3,19 @@ title: Init 가이드
 description: AGENTS 연동 인터랙티브 초기화 흐름
 ---
 
-저장소 체크아웃 안에서 저장소 init 명령은 기본적으로 7단계 인터랙티브 흐름으로 동작합니다.
+저장소 체크아웃 안에서 저장소 init 명령은 기본적으로 7단계 인터랙티브 흐름으로 동작합니다. Git worktree 내부의 하위 경로에서 실행해도 실제 초기화 기준점은 저장소 루트입니다.
 
 1. 환경 검사 (`git init` 선택 포함)
 2. 초기화 모드 확인
 3. 루트 `AGENTS.md` 로드/생성
-4. 문서 템플릿 범위 확인 (Architecture Decision (ADR), Product Requirement (PRD), Software Requirements (SRS), Implementation Specification (SPEC), Plan, Domain-Driven Design (DDD), Glossary, Phase and Binding Documents (PBD))
+4. 지원 문서 템플릿 안내 (Architecture Decision (ADR), Product Requirement (PRD), Software Requirements (SRS), Implementation Specification (SPEC), Plan, Domain-Driven Design (DDD), Glossary, Phase and Binding Documents (PBD))
 5. `.ragit/guide` 증분 생성
 6. zvec 저장소 bootstrap
 7. 요약 및 다음 액션 출력
 
 ## 시각 개요
 
-![7단계 init 흐름과 템플릿 범위 확인 단계의 의미를 보여주는 다이어그램](/guide-visuals/init-flow.svg)
+![7단계 init 흐름과 지원 템플릿 세트가 드러나는 단계를 보여주는 다이어그램](/guide-visuals/init-flow.svg)
 
 이 그림은 `init` 명령을 가장 빠르게 읽는 요약입니다. 1단계부터 4단계까지는 저장소 계약과 authoring system을 준비하고, 5단계와 6단계는 그 구조를 실제 파일과 저장소 골격으로 만듭니다. 마지막 7단계는 결과와 다음 행동을 출력할 뿐, 저장소를 검색 가능 상태로 만들지는 않습니다.
 
@@ -67,6 +67,10 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 
 <Callout type="warning" title="중요한 경계">
   `init`은 저장소를 control-plane ready 및 zvec-store ready 상태로 만듭니다. 저장소 문서를 검색 가능한 지식으로 바꾸는 단계는 `ingest`입니다.
+</Callout>
+
+<Callout title="플랫폼 참고">
+  zvec bootstrap은 현재 `darwin/arm64`, `linux/arm64`, `linux/x64`만 지원합니다.
 </Callout>
 
 - `.ragit/` 기준의 Git 인지 control plane 준비

@@ -20,7 +20,7 @@
   <text x="764" y="286" fill="#64748B" font-family="system-ui, sans-serif" font-size="15">The root contract stays the entry point.</text>
 
   <rect x="402" y="354" width="390" height="148" rx="24" fill="#DBEAFE" stroke="#2563EB" stroke-width="3"/>
-  <text x="434" y="402" fill="#1D4ED8" font-family="system-ui, sans-serif" font-size="18" font-weight="700">4. Template scope</text>
+  <text x="434" y="402" fill="#1D4ED8" font-family="system-ui, sans-serif" font-size="18" font-weight="700">4. Supported templates</text>
   <text x="434" y="436" fill="#0F172A" font-family="system-ui, sans-serif" font-size="22" font-weight="700">Authoring system becomes explicit</text>
   <text x="434" y="468" fill="#334155" font-family="system-ui, sans-serif" font-size="16">ADR, PRD, SRS, SPEC, Plan, DDD, Glossary, PBD</text>
   <text x="434" y="494" fill="#64748B" font-family="system-ui, sans-serif" font-size="15">This is where document roles are separated before search exists.</text>
