@@ -4,13 +4,31 @@
   "description": "RAG for git-based AI agent workflows",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "ragit": "dist/cli.js"
   },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "ragit": "tsx src/cli.ts",
     "build": "tsdown",
     "build:verify": "node scripts/verify-build-contract.mjs",
+    "pack:verify": "node scripts/verify-pack-contract.mjs",
+    "pack:smoke": "node scripts/smoke-packed-cli.mjs",
+    "release:check": "pnpm test && pnpm build && pnpm build:verify && pnpm pack:verify && pnpm pack:smoke",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "docs:dev": "pnpm --filter ./apps/docs... dev",
@@ -27,7 +45,18 @@
     "agent"
   ],
   "author": "Rhio",
-  "license": "ISC",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhiokim/ragit.git"
+  },
+  "homepage": "https://rhiokim.github.io/ragit/en/",
+  "bugs": {
+    "url": "https://github.com/rhiokim/ragit/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "packageManager": "pnpm@10.13.1",
   "engines": {
     "node": ">=20.19.0"

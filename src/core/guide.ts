@@ -3,6 +3,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { KNOWN_DOC_TYPES } from "./types.js";
+import { RAGIT_VERSION } from "./version.js";
 
 export const BOUNDARY_REGEX_SOURCE = "^#{2,6}\\s*(\\[[A-Z][0-9]+(?:\\.[a-z0-9]+)*\\])\\s+([^\\n]+)$";
 export const GRF_REGEX_SOURCE =
@@ -367,7 +368,7 @@ export const ensureGuideStructure = async (cwd: string): Promise<GuideStructureR
 };
 
 export const buildGuideIndex = (agents: AgentsInstructionResult, parsed: ReturnType<typeof parseGuideBoundaries>): GuideIndex => ({
-  version: "0.1.0",
+  version: RAGIT_VERSION,
   generatedAt: new Date().toISOString(),
   source: {
     path: agents.path,

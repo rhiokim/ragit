@@ -13,6 +13,7 @@ import { formatContextPackText, packContext, projectContextPack } from "./core/c
 import { runIngest } from "./core/ingest.js";
 import { formatQueryResultText, projectRetrievalHits } from "./core/output.js";
 import { searchKnowledge } from "./core/retrieval.js";
+import { RAGIT_VERSION } from "./core/version.js";
 
 const program = new Command();
 
@@ -109,7 +110,7 @@ const parseOptionalPositiveNumber = (value: string | undefined, label: string): 
 program
   .name("ragit")
   .description("zvec + git 기반 로컬 RAG CLI")
-  .version("0.1.0");
+  .version(RAGIT_VERSION);
 
 program
   .command("init")

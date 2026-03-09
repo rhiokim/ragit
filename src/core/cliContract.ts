@@ -1,4 +1,4 @@
-import packageJson from "../../package.json";
+import { RAGIT_VERSION } from "./version.js";
 
 export type CliFormat = "text" | "json" | "both";
 export type CliView = "minimal" | "default" | "full";
@@ -11,8 +11,6 @@ export interface CliEnvelope<T> {
   data: T;
   warnings: string[];
 }
-
-export const RAGIT_VERSION = packageJson.version;
 
 const FORMAT_ALIASES: Record<string, CliFormat> = {
   both: "both",
@@ -75,4 +73,3 @@ export const emitCliOutput = <T>(params: {
   if (params.text) console.log(params.text);
   console.log(json);
 };
-
