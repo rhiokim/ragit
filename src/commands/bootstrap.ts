@@ -4,7 +4,7 @@ import { loadConfig, setConfigValue, writeConfig } from "../core/config.js";
 import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
-import { bootstrapCanonicalStore, closeCanonicalStore, hasLegacyJsonStore, isZvecPlatformSupported } from "../core/store.js";
+import { bootstrapCanonicalStore, closeCanonicalStore, formatZvecPlatformSupport, getZvecPlatformSupport, hasLegacyJsonStore } from "../core/store.js";
 
 export const runConfigSet = async (cwd: string, key: string, value: string): Promise<void> => {
   await ensureRagitStructure(cwd);
@@ -159,10 +159,11 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
     }
   })();
   try {
+    const support = getZvecPlatformSupport();
     checks.push({
       name: "zvec.platform",
-      ok: isZvecPlatformSupported(),
-      detail: isZvecPlatformSupported() ? `${process.platform}/${process.arch}` : `${process.platform}/${process.arch} unsupported`,
+      ok: support.supported,
+      detail: formatZvecPlatformSupport(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

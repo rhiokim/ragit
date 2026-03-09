@@ -44,7 +44,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     outputSchemaSummary: ["mode", "git", "agents", "guide", "storage", "nextActions[]"],
     arguments: [],
     options: [
-      { name: "--cwd", type: "path", description: "대상 저장소 경로" },
+      { name: "--cwd", type: "path", description: "대상 저장소 루트 또는 그 하위 경로" },
       { name: "--yes", type: "boolean", description: "질문 없이 기본값으로 초기화" },
       { name: "--non-interactive", type: "boolean", description: "질문 없이 기본값으로 초기화" },
       { name: "--output", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "text" },

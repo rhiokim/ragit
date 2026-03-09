@@ -3,7 +3,7 @@
 import { Command } from "commander";
 import { resolveCwd, runConfigSet, runDoctor, runStatus } from "./commands/bootstrap.js";
 import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
-import { formatInitSummaryTable, runInit } from "./commands/init.js";
+import { formatInitSummaryTable, resolveInitRoot, runInit } from "./commands/init.js";
 import { runMemoryPromoteCommand, runMemoryRecallCommand, runMemoryWrapCommand } from "./commands/memory.js";
 import { buildCliEnvelope, CliFormat, CliView, emitCliOutput, normalizeCliFormat, normalizeCliView } from "./core/cliContract.js";
 import { assertSafeGlobText, readJsonInput } from "./core/cliInput.js";
@@ -114,13 +114,13 @@ program
 program
   .command("init")
   .description("프로젝트 초기화")
-  .option("--cwd <path>", "대상 저장소 경로")
+  .option("--cwd <path>", "대상 저장소 루트 또는 그 하위 경로")
   .option("--yes", "질문 없이 기본값으로 초기화")
   .option("--non-interactive", "질문 없이 기본값으로 초기화")
   .option("--output <format>", "text|json|both", "text")
   .option("--git-init", "비대화형 모드에서 git 저장소 자동 초기화")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveInitRoot(resolveCwd(options.cwd));
     const format = normalizeCliFormat(options.output, "text");
     const summary = await runInit(cwd, {
       nonInteractive: Boolean(options.yes || options.nonInteractive),

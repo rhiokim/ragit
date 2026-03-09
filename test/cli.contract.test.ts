@@ -19,6 +19,25 @@ const runCli = (args: string[]): string =>
 
 describe("CLI machine contract", () => {
   it(
+    "normalizes init cwd to the git root in JSON output",
+    async () => {
+      const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-init-root-"));
+      git(temp, ["init"]);
+      const nested = path.join(temp, "apps", "docs");
+      await mkdir(nested, { recursive: true });
+      const expectedRoot = git(nested, ["rev-parse", "--show-toplevel"]);
+
+      const initOutput = JSON.parse(runCli(["init", "--cwd", nested, "--yes", "--output", "json"]));
+
+      expect(initOutput.command).toBe("init");
+      expect(initOutput.ok).toBe(true);
+      expect(initOutput.cwd).toBe(expectedRoot);
+      expect(initOutput.data.agents.path).toBe("AGENTS.md");
+    },
+    15_000,
+  );
+
+  it(
     "emits JSON envelopes for describe, query, context pack, memory recall, and status",
     async () => {
       const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-contract-"));
@@ -114,4 +133,3 @@ Recall packets should restore active work instead of replaying raw logs.`,
     20_000,
   );
 });
-

@@ -30,6 +30,14 @@ export const initGitRepository = async (cwd: string): Promise<void> => {
 
 export const getGitRoot = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "--show-toplevel"]);
 
+export const tryGetGitRoot = async (cwd: string): Promise<string | null> => {
+  try {
+    return await getGitRoot(cwd);
+  } catch {
+    return null;
+  }
+};
+
 export const getHeadSha = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "HEAD"]);
 
 export const getParentSha = async (cwd: string): Promise<string | null> => {

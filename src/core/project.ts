@@ -63,14 +63,11 @@ export const ensureGitIgnoreEntries = async (cwd: string): Promise<void> => {
   } catch {
     content = "";
   }
-  let updated = content.trimEnd();
-  for (const entry of gitIgnoreEntries) {
-    if (!content.includes(entry)) {
-      updated += `\n${entry}`;
-    }
-  }
-  if (updated.length > 0) {
-    updated += "\n";
-  }
-  await writeFile(gitIgnorePath, updated, "utf8");
+  const existingLines = new Set(content.split(/\r?\n/));
+  const missingEntries = gitIgnoreEntries.filter((entry) => !existingLines.has(entry));
+  if (missingEntries.length === 0) return;
+
+  const prefix = content.length === 0 ? "" : content.endsWith("\n") ? "" : "\n";
+  const appended = `${missingEntries.join("\n")}\n`;
+  await writeFile(gitIgnorePath, `${content}${prefix}${appended}`, "utf8");
 };

@@ -1,9 +1,9 @@
 import { loadConfig } from "../core/config.js";
 import path from "node:path";
 import { buildGuideIndex, ensureAgentsInstruction, ensureGuideStructure, parseGuideBoundaries, templatePathsForSummary, writeGuideIndex } from "../core/guide.js";
-import { initGitRepository, isGitRepository } from "../core/git.js";
+import { initGitRepository, isGitRepository, tryGetGitRoot } from "../core/git.js";
 import { ensureGitIgnoreEntries, ensureRagitStructure } from "../core/project.js";
-import { bootstrapCanonicalStore, closeCanonicalStore, hasLegacyJsonStore } from "../core/store.js";
+import { bootstrapCanonicalStore, closeCanonicalStore, ensureZvecRuntime, hasLegacyJsonStore } from "../core/store.js";
 import { KNOWN_DOC_TYPES } from "../core/types.js";
 import { confirmStep, printStep } from "../core/wizard.js";
 
@@ -43,6 +43,8 @@ export interface InitSummary {
 
 const totalSteps = 7;
 
+export const resolveInitRoot = async (cwd: string): Promise<string> => (await tryGetGitRoot(cwd)) ?? cwd;
+
 const ensureInteractiveAvailable = (interactive: boolean): void => {
   if (interactive && !process.stdin.isTTY) {
     throw new Error("TTY 환경이 아니므로 대화형 초기화를 실행할 수 없습니다. --yes 또는 --non-interactive를 사용해 주세요.");
@@ -81,6 +83,7 @@ const ensureGitContext = async (cwd: string, interactive: boolean, gitInitOption
 };
 
 export const runInit = async (cwd: string, options: InitOptions = {}): Promise<InitSummary> => {
+  const root = await resolveInitRoot(cwd);
   const interactive = !options.nonInteractive;
   const quiet = Boolean(options.quiet);
   ensureInteractiveAvailable(interactive);
@@ -94,7 +97,8 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
   };
 
   logStep(1, "환경 검사");
-  const git = await ensureGitContext(cwd, interactive, Boolean(options.gitInit));
+  ensureZvecRuntime();
+  const git = await ensureGitContext(root, interactive, Boolean(options.gitInit));
   stepLogs.push(git.wasRepository ? "git repository detected" : "git repository initialized");
 
   logStep(2, "초기화 모드 확인");
@@ -107,33 +111,33 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
   stepLogs.push(`mode=${mode}`);
 
   logStep(3, "루트 AGENTS.md 로드/생성");
-  await ensureRagitStructure(cwd);
-  await ensureGitIgnoreEntries(cwd);
-  const agents = await ensureAgentsInstruction(cwd);
+  await ensureRagitStructure(root);
+  await ensureGitIgnoreEntries(root);
+  const agents = await ensureAgentsInstruction(root);
   stepLogs.push(`agents=${agents.mode}`);
 
-  logStep(4, "문서 템플릿 범위 확정");
+  logStep(4, "지원 문서 템플릿 안내");
   const templates = templatePathsForSummary();
   stepLogs.push(`doc-types=${KNOWN_DOC_TYPES.join(",")}`);
 
   logStep(5, "가이드 구조 생성 및 인덱스 갱신");
-  const guide = await ensureGuideStructure(cwd);
+  const guide = await ensureGuideStructure(root);
   const parsed = parseGuideBoundaries(agents.content);
   const index = buildGuideIndex(agents, parsed);
-  const indexPath = await writeGuideIndex(cwd, index);
+  const indexPath = await writeGuideIndex(root, index);
   stepLogs.push(`boundaries=${parsed.boundaries.length}`);
 
   logStep(6, "zvec 저장소 bootstrap");
-  const config = await loadConfig(cwd);
+  const config = await loadConfig(root);
   const storage = await (async () => {
-    const store = await bootstrapCanonicalStore(cwd, config.embedding, false);
+    const store = await bootstrapCanonicalStore(root, config.embedding, false);
     try {
       return {
         backend: "zvec" as const,
         status: store.status,
         collections: [store.meta.collections.documents, store.meta.collections.chunks],
         searchReady: false as const,
-        migrationRequired: await hasLegacyJsonStore(cwd),
+        migrationRequired: await hasLegacyJsonStore(root),
       };
     } finally {
       closeCanonicalStore(store);
@@ -152,12 +156,12 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
     steps: stepLogs,
     git,
     agents: {
-      path: path.relative(cwd, agents.path) || "AGENTS.md",
+      path: path.relative(root, agents.path) || "AGENTS.md",
       mode: agents.mode,
       sha256: agents.sha256,
     },
     guide: {
-      indexPath: path.relative(cwd, indexPath).replaceAll(path.sep, "/"),
+      indexPath: path.relative(root, indexPath).replaceAll(path.sep, "/"),
       createdFiles: guide.createdFiles,
       skippedFiles: guide.skippedFiles,
       templates,

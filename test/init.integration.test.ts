@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -21,6 +22,21 @@ describe("init command integration", () => {
     expect(summary.storage.status).toBe("created");
     expect(summary.storage.collections).toEqual(["documents", "chunks"]);
     expect(summary.storage.searchReady).toBe(false);
+  });
+
+  it("anchors nested git paths to the repository root", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-nested-"));
+    git(temp, ["init"]);
+    const nested = path.join(temp, "packages", "docs");
+    await mkdir(nested, { recursive: true });
+
+    const summary = await runInit(nested, { nonInteractive: true });
+
+    expect(summary.agents.path).toBe("AGENTS.md");
+    expect(summary.guide.indexPath).toBe(".ragit/guide/guide-index.json");
+    await access(path.join(temp, "AGENTS.md"), constants.F_OK);
+    await access(path.join(temp, ".ragit", "guide", "guide-index.json"), constants.F_OK);
+    await expect(access(path.join(nested, ".ragit"), constants.F_OK)).rejects.toThrow();
   });
 
   it("loads existing AGENTS without mutating source content", async () => {
