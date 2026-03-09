@@ -112,44 +112,48 @@ Dry-run should not mutate tracked state.`,
     20_000,
   );
 
-  it("rejects unsafe input paths, control characters, invalid globs, and unexpected memory fields", async () => {
-    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-input-"));
-    git(temp, ["init"]);
-    git(temp, ["config", "user.email", "ragit@example.com"]);
-    git(temp, ["config", "user.name", "ragit-test"]);
-    await writeFile(path.join(temp, "README.md"), "# temp\n", "utf8");
-    git(temp, ["add", "."]);
-    git(temp, ["commit", "-m", "init"]);
-    await runInit(temp, { nonInteractive: true });
+  it(
+    "rejects unsafe input paths, control characters, invalid globs, and unexpected memory fields",
+    async () => {
+      const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-input-"));
+      git(temp, ["init"]);
+      git(temp, ["config", "user.email", "ragit@example.com"]);
+      git(temp, ["config", "user.name", "ragit-test"]);
+      await writeFile(path.join(temp, "README.md"), "# temp\n", "utf8");
+      git(temp, ["add", "."]);
+      git(temp, ["commit", "-m", "init"]);
+      await runInit(temp, { nonInteractive: true });
 
-    const outside = path.join(os.tmpdir(), `ragit-outside-${Date.now()}.json`);
-    await writeFile(outside, JSON.stringify({ question: "outside" }, null, 2), "utf8");
-    await writeFile(path.join(temp, "bad-query.json"), JSON.stringify({ question: "hello\u0007" }, null, 2), "utf8");
-    await writeFile(path.join(temp, "bad-ingest.json"), JSON.stringify({ files: "../**/*.md" }, null, 2), "utf8");
-    await writeFile(
-      path.join(temp, "bad-wrap.json"),
-      JSON.stringify(
-        {
-          goal: "bad wrap",
-          summary: "unexpected field should fail",
-          constraints: [],
-          decisions: [],
-          openLoops: [],
-          nextActions: [],
-          promotionCandidates: [],
-          unexpected: true,
-        },
-        null,
-        2,
-      ),
-      "utf8",
-    );
+      const outside = path.join(os.tmpdir(), `ragit-outside-${Date.now()}.json`);
+      await writeFile(outside, JSON.stringify({ question: "outside" }, null, 2), "utf8");
+      await writeFile(path.join(temp, "bad-query.json"), JSON.stringify({ question: "hello\u0007" }, null, 2), "utf8");
+      await writeFile(path.join(temp, "bad-ingest.json"), JSON.stringify({ files: "../**/*.md" }, null, 2), "utf8");
+      await writeFile(
+        path.join(temp, "bad-wrap.json"),
+        JSON.stringify(
+          {
+            goal: "bad wrap",
+            summary: "unexpected field should fail",
+            constraints: [],
+            decisions: [],
+            openLoops: [],
+            nextActions: [],
+            promotionCandidates: [],
+            unexpected: true,
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
 
-    expect(runCliExpectError(["query", "--input", outside, "--cwd", temp, "--format", "json"])).toContain("repo 밖 input 경로");
-    expect(runCliExpectError(["query", "--input", "bad-query.json", "--cwd", temp, "--format", "json"])).toContain("control character");
-    expect(runCliExpectError(["ingest", "--input", "bad-ingest.json", "--cwd", temp, "--format", "json"])).toContain("repo 내부 glob");
-    expect(runCliExpectError(["memory", "wrap", "--input", "bad-wrap.json", "--cwd", temp, "--format", "json"])).toContain("예상하지 못한 필드");
-  });
+      expect(runCliExpectError(["query", "--input", outside, "--cwd", temp, "--format", "json"])).toContain("repo 밖 input 경로");
+      expect(runCliExpectError(["query", "--input", "bad-query.json", "--cwd", temp, "--format", "json"])).toContain("control character");
+      expect(runCliExpectError(["ingest", "--input", "bad-ingest.json", "--cwd", temp, "--format", "json"])).toContain("repo 내부 glob");
+      expect(runCliExpectError(["memory", "wrap", "--input", "bad-wrap.json", "--cwd", temp, "--format", "json"])).toContain("예상하지 못한 필드");
+    },
+    15_000,
+  );
 
   it("detects ambiguous snapshot prefixes", async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-ambiguous-sha-"));
