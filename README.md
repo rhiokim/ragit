@@ -61,13 +61,25 @@ Requirements:
 - Node.js `20.19.0` or newer
 - pnpm `10.13.1` or newer
 
+For repository-local development:
+
 ```bash
 pnpm install
 pnpm ragit --help
 ```
 
 Inside this repository checkout, run CLI commands with `pnpm ragit <command>`.
-When the package is installed as a published CLI, use `ragit <command>`.
+
+For the published CLI:
+
+```bash
+npm install -g ragit
+pnpm add -g ragit
+bun add -g ragit
+npx ragit --help
+```
+
+When the package is installed globally, use `ragit <command>`.
 
 `pnpm build` is optional for repository-local usage.
 Run it only when you need to generate `dist/` artifacts or verify the packaged CLI entrypoint.
@@ -101,6 +113,21 @@ Deployment:
 - GitHub Actions deploys automatically to `gh-pages` when `main` is pushed.
 - For manual redeploy, run `docs-gh-pages` via `workflow_dispatch`.
 - In Repository Settings > Pages, set Source to `gh-pages` / root(`/`).
+
+## Package Publishing
+
+- `publish.yml` validates tags against `package.json.version` and publishes only on `vX.Y.Z` tag pushes.
+- `workflow_dispatch` runs the same release checks without publishing, so you can rehearse the pipeline before the first release.
+- Before enabling automatic publish, configure npm Trusted Publishing for `rhiokim/ragit` and the GitHub Actions workflow.
+
+Release validation flow:
+
+```bash
+pnpm release:check
+VERSION=$(node -p 'require("./package.json").version')
+git tag "v${VERSION}"
+git push origin --tags
+```
 
 ## Core Commands
 
@@ -234,6 +261,11 @@ pnpm ragit ingest --all
 
 - Secret masking is enabled by default during ingestion (`security.secret_masking=true`)
 - OpenAI/GitHub/AWS keys and `api_key/token/secret` patterns are masked.
+
+## License
+
+RAGit is licensed under Apache-2.0.
+The root [LICENSE](./LICENSE) file is the single source of truth for license terms across this repository.
 
 ## Test
 

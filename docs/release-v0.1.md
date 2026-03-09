@@ -15,6 +15,8 @@
 - [ ] E2E 실환경 검증 (수동)
 
 ## 배포 체크
-- [ ] `pnpm build`
-- [ ] `npm publish --access public`
-- [ ] 태그 `v0.1.0` 생성
+- [ ] npm Trusted Publishing에 `rhiokim/ragit` GitHub Actions workflow 연결
+- [ ] `pnpm release:check`
+- [ ] `workflow_dispatch`로 publish 리허설 실행
+- [ ] `package.json.version`과 동일한 태그 생성: `v0.1.0`
+- [ ] `git push origin --tags`

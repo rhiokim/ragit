@@ -1,6 +1,6 @@
 'use client';
 
-import { gitConfig } from '@/lib/layout.shared';
+import { projectLinks } from '@/lib/layout.shared';
 import { Folder, Item } from '@/components/sidebar-page-tree';
 import { PanelLeft } from 'lucide-react';
 import { LargeSearchToggle } from '../node_modules/fumadocs-ui/dist/layouts/shared/search-toggle.js';
@@ -19,6 +19,8 @@ const iconButtonClassName =
 
 const sidebarTriggerClassName = `${iconButtonClassName} mb-auto text-fd-muted-foreground`;
 const mobileTriggerClassName = `${iconButtonClassName} p-2`;
+const metadataLinkClassName =
+  'text-xs text-fd-muted-foreground transition-colors hover:text-fd-foreground underline-offset-4 hover:underline';
 
 function GitHubIcon() {
   return (
@@ -31,7 +33,7 @@ function GitHubIcon() {
 function GitHubLink({ className }: { className: string }) {
   return (
     <a
-      href={`https://github.com/${gitConfig.user}/${gitConfig.repo}`}
+      href={projectLinks.github}
       rel="noreferrer noopener"
       target="_blank"
       aria-label="GitHub"
@@ -63,6 +65,14 @@ export function DocsSidebar() {
             <GitHubLink className={iconButtonClassName} />
             <ThemeToggle className="ms-auto p-0" />
           </div>
+          <a
+            href={projectLinks.license}
+            rel="noreferrer noopener"
+            target="_blank"
+            className={`${metadataLinkClassName} mt-3`}
+          >
+            Licensed under Apache-2.0
+          </a>
         </div>
       </SidebarContent>
       <SidebarDrawer>
@@ -76,6 +86,14 @@ export function DocsSidebar() {
               <PanelLeft />
             </SidebarTrigger>
           </div>
+          <a
+            href={projectLinks.license}
+            rel="noreferrer noopener"
+            target="_blank"
+            className={metadataLinkClassName}
+          >
+            Licensed under Apache-2.0
+          </a>
         </div>
         <SidebarViewport>
           <SidebarPageTree Folder={Folder} Item={Item} />

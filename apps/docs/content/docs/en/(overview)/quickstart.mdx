@@ -11,6 +11,8 @@ description: Get started with RAGit and docs workflow
 
 ## Install
 
+For repository-local development:
+
 ```bash
 pnpm install
 ```
@@ -26,6 +28,15 @@ The local build step is optional and only needed when you want to generate the `
 
 ```bash
 pnpm build
+```
+
+For the published CLI:
+
+```bash
+npm install -g ragit
+pnpm add -g ragit
+bun add -g ragit
+npx ragit --help
 ```
 
 ## Initialize RAGit

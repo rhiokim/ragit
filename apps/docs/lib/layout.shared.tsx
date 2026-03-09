@@ -7,6 +7,11 @@ export const gitConfig = {
   branch: 'main',
 };
 
+export const projectLinks = {
+  github: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
+  license: `https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/LICENSE`,
+};
+
 export function baseOptions(language: Language): BaseLayoutProps {
   const docsPath = `/${language}/docs`;
   return {
@@ -14,6 +19,6 @@ export function baseOptions(language: Language): BaseLayoutProps {
       title: 'RAGit',
       url: docsPath,
     },
-    githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
+    githubUrl: projectLinks.github,
   };
 }
