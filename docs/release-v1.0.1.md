@@ -1,4 +1,4 @@
-# RAGit v0.1.0 Release Checklist
+# RAGit v1.0.1 Release Checklist
 
 ## 기능 체크
 - [x] init/config/status/doctor
@@ -18,5 +18,5 @@
 - [ ] npm Trusted Publishing에 `rhiokim/ragit` GitHub Actions workflow 연결
 - [ ] `pnpm release:check`
 - [ ] `workflow_dispatch`로 publish 리허설 실행
-- [ ] `package.json.version`과 동일한 태그 생성: `v0.1.0`
+- [ ] `package.json.version`과 동일한 태그 생성: `v1.0.1`
 - [ ] `git push origin --tags`
