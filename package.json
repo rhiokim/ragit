@@ -30,7 +30,7 @@
     "pack:smoke": "node scripts/smoke-packed-cli.mjs",
     "release:check": "pnpm test && pnpm build && pnpm build:verify && pnpm pack:verify && pnpm pack:smoke",
     "dev": "tsx src/cli.ts",
-    "test": "vitest run --pool=forks --maxWorkers=1 --no-file-parallelism --teardownTimeout=30000",
+    "test": "vitest run --pool=forks --no-isolate --maxWorkers=1 --no-file-parallelism --teardownTimeout=30000",
     "docs:dev": "pnpm --filter ./apps/docs... dev",
     "docs:build": "pnpm --filter ./apps/docs... build",
     "docs:check:commands": "pnpm --filter ./apps/docs... check:commands",
