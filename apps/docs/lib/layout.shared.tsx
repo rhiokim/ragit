@@ -19,6 +19,10 @@ export function baseOptions(language: Language): BaseLayoutProps {
       title: 'RAGit',
       url: docsPath,
     },
+    i18n: true,
+    themeSwitch: {
+      mode: 'light-dark',
+    },
     githubUrl: projectLinks.github,
   };
 }

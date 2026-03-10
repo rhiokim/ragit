@@ -1,9 +1,11 @@
+import { docsBasePath } from './site';
+
 export const searchLanguages = ['en', 'ko'] as const;
 
 export type SearchLanguage = (typeof searchLanguages)[number];
 
 export const defaultSearchLanguage: SearchLanguage = 'en';
-export const docsBasePath: string = '/ragit';
+export { docsBasePath } from './site';
 
 export function normalizeSearchLanguage(value?: string): SearchLanguage {
   return value === 'ko' ? 'ko' : defaultSearchLanguage;
