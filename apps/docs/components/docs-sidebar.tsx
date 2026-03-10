@@ -4,7 +4,6 @@ import { projectLinks } from '@/lib/layout.shared';
 import { Folder, Item } from '@/components/sidebar-page-tree';
 import { PanelLeft } from 'lucide-react';
 import { LargeSearchToggle } from '../node_modules/fumadocs-ui/dist/layouts/shared/search-toggle.js';
-import { ThemeToggle } from '../node_modules/fumadocs-ui/dist/layouts/shared/theme-toggle.js';
 import {
   SidebarCollapseTrigger,
   SidebarContent,
@@ -63,7 +62,6 @@ export function DocsSidebar() {
         <div className="flex flex-col border-t p-4 pt-2 empty:hidden">
           <div className="flex text-fd-muted-foreground items-center empty:hidden">
             <GitHubLink className={iconButtonClassName} />
-            <ThemeToggle className="ms-auto p-0" />
           </div>
           <a
             href={projectLinks.license}
@@ -81,7 +79,6 @@ export function DocsSidebar() {
             <div className="flex flex-1">
               <GitHubLink className={mobileTriggerClassName} />
             </div>
-            <ThemeToggle className="p-0" />
             <SidebarTrigger className={mobileTriggerClassName}>
               <PanelLeft />
             </SidebarTrigger>
