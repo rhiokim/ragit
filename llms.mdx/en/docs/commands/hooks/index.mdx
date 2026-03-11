@@ -1,0 +1,16 @@
+# Hooks
+
+
+
+The `hooks` family manages the git hooks that RAGit installs under `.git/hooks`.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* <a href="/en/docs/commands/hooks/install">`hooks install`</a>: install managed hooks.
+* <a href="/en/docs/commands/hooks/uninstall">`hooks uninstall`</a>: remove managed hooks without touching external ones.
+* <a href="/en/docs/commands/hooks/status">`hooks status`</a>: inspect current hook state.
+
+Family Boundary [#family-boundary]
+
+* Hooks automate ingestion triggers.
+* They do not replace explicit <a href="/en/docs/commands/ingest">`ingest`</a> calls when you need a full refresh.

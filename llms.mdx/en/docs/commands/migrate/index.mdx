@@ -1,0 +1,15 @@
+# Migrate
+
+
+
+The `migrate` family exists for one-time or occasional legacy data conversion.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* <a href="/en/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>: convert the old JSON store.
+* <a href="/en/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>: convert exported sqlite-vss data.
+
+Family Boundary [#family-boundary]
+
+* Migrations are write operations.
+* After a successful migration, you still verify with <a href="/en/docs/commands/status">`status`</a> or continue with <a href="/en/docs/commands/ingest">`ingest`</a>.

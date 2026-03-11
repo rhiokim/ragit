@@ -1,0 +1,86 @@
+# query
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`query`는 인덱싱된 저장소 지식을 검색하고 질문에 맞는 hit를 반환합니다. 결과는 항상 snapshot 범위에 묶이므로, 선택한 커밋 시점 기준으로 재현됩니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 질문에 대한 직접 검색 결과가 필요할 때
+* 특정 커밋 시점에서 snapshot이 무엇을 알고 있는지 확인하고 싶을 때
+* 더 큰 컨텍스트 패킷을 만들기 전에 가볍게 검색하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 토큰 예산이 있는 프롬프트 패킷이 필요할 때. <a href="/ko/docs/commands/context/pack">`context pack`</a>을 사용하십시오.
+* working memory까지 포함해 현재 작업을 이어받고 싶을 때. <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `question`: 직접 검색할 질문입니다.
+* `--input <path|->`: `question`, `topK`, `at`를 담은 JSON payload를 전달합니다.
+* `--top-k <n>`: 반환 hit 개수를 조절합니다.
+* `--at <sha>`: 특정 snapshot SHA 또는 prefix를 사용합니다.
+* `--view minimal|default|full`: hit 투영의 상세 수준을 선택합니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 빠른 수동 호출에는 positional 입력이 적합합니다.
+* 에이전트 자동화에서는 `--input <path|->`로 payload를 명시하는 편이 재현성이 좋습니다.
+
+```json
+{
+  "question": "restore auth context",
+  "topK": 5,
+  "at": "HEAD"
+}
+```
+
+* JSON 출력은 `query`, `snapshotSha`, `hits`를 반환합니다.
+* `--view minimal`은 가장 작은 hit 형태를 반환합니다.
+* `--view default`는 사람이 읽기 좋은 기본 투영입니다.
+* `--view full`은 richer text를 유지하므로 context window 비용이 가장 큽니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit query "restore auth context" --format both
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit query --input query.json --view minimal --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `--input`과 positional `question`, `--top-k`, `--at`를 함께 쓰면 안 됩니다.
+* `question`이 비어 있으면 실패합니다.
+* `query`는 snapshot에 인덱싱된 콘텐츠만 검색합니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/context/pack">
+    `context pack`
+  </a>
+* <a href="/ko/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>

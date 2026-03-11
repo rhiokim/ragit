@@ -1,0 +1,67 @@
+# config set
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`config set`은 저장소 인식형 config loader/writer를 사용해 `.ragit/config.toml`의 한 개 키를 업데이트합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* output, ingest, storage, embedding 설정을 바꾸고 싶을 때
+* TOML을 직접 열지 않고 스크립트 가능한 방식으로 설정을 바꾸고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 현재 값을 확인만 하고 싶을 때. <a href="/ko/docs/commands/status">`status`</a>를 사용하십시오.
+* 기본 구조와 기본값을 먼저 만들고 싶을 때. <a href="/ko/docs/commands/init">`init`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit config set <key> <value> [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `<key>`: 업데이트할 dotted config key입니다.
+* `<value>`: 저장할 값입니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 positional 인자만 사용합니다.
+* 출력은 단순 stdout 확인 메시지입니다. 현재 이 명령은 JSON envelope를 제공하지 않습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit config set output.format markdown
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit config set ingest.supported_types '["adr","spec"]'
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* 잘못된 key나 잘못된 value는 config 쓰기 전에 실패합니다.
+* 출력이 텍스트뿐이므로, 에이전트는 후속으로 <a href="/ko/docs/commands/status">`status`</a>로 상태를 검증하는 편이 좋습니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/ko/docs/commands/init">
+    `init`
+  </a>

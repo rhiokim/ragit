@@ -1,0 +1,130 @@
+# Memory Model Guide
+
+
+
+
+
+
+
+RAGit does not treat memory as one giant transcript. It separates memory by purpose so that an agent can resume work without dragging every raw note, tool output, or past conversation back into the prompt.
+
+The Problem [#the-problem]
+
+Agents do not naturally remember your project the way a teammate does. A raw session log can tell you everything that happened, but it is bad at telling you what matters right now.
+
+For a user, the real question is simpler:
+
+* What was I trying to do?
+* Which constraints still matter?
+* What is still open?
+* What knowledge is now stable enough to reuse later?
+
+RAGit splits memory so it can answer those questions directly instead of replaying the entire past.
+
+The Mental Model [#the-mental-model]
+
+<img alt="Three-layer memory diagram showing short-term scratch space, working memory for active continuity, and long-term memory for reusable knowledge." src={__img0} />
+
+This diagram is the fastest mental model for the page. The top layer is temporary, the middle layer is active continuity, and the bottom layer is durable project knowledge. In the current MVP, RAGit puts most of its weight on the middle and bottom layers.
+
+<Cards>
+  <Card title="Short-term memory">
+    Temporary scratch space for rough notes, partial observations, and in-session thinking. It exists conceptually, but it is not the main searchable layer in the MVP.
+  </Card>
+
+  <Card title="Working memory">
+    The active state you want to resume: goal, constraints, open loops, and next actions. This layer restores momentum.
+  </Card>
+
+  <Card title="Long-term memory">
+    Reusable project knowledge such as stable decisions, glossary entries, and durable plans. This layer restores durable knowledge.
+  </Card>
+</Cards>
+
+Think about memory in three layers:
+
+* **Short-term memory** is scratch space. It holds temporary notes, rough ideas, and in-progress observations inside a session.
+* **Working memory** is the active state you want to resume tomorrow. It should tell you the goal, constraints, open loops, and next actions.
+* **Long-term memory** is reusable project knowledge. It contains things that have become stable enough to search and reuse across future work.
+
+In the current MVP, RAGit emphasizes the second and third layers. Working memory helps you continue a task. Long-term memory helps you find durable knowledge again later. Short-term memory still exists conceptually, but it remains transient scratch space rather than a first-class searchable layer.
+
+Why Two Places Exist [#why-two-places-exist]
+
+RAGit uses two places because the project needs two different kinds of memory behavior.
+
+* `.ragit/memory/**` is the **control plane**. It stores session wraps and current working state. This area is good for resuming work, but it is not meant to be your general searchable knowledge base.
+* `docs/memory/**` is the **searchable corpus**. It stores promoted decisions, glossary entries, and plans as normal documents that can participate in ingest and snapshot-scoped retrieval.
+
+This split protects signal quality. Working memory stays focused on “what is active now,” while long-term memory stays focused on “what should remain findable later.”
+
+Command Flow [#command-flow]
+
+<img alt="Swimlane diagram showing wrap and recall on the control plane and promote plus ingest on the searchable corpus side." src={__img1} />
+
+The left lane is about continuity now. The right lane is about knowledge worth finding later. `memory recall` is the bridge between them: it starts from current working state and then pulls in relevant snapshot-scoped retrieval.
+
+<Callout title="A simple rule of thumb">
+  `memory wrap` preserves continuity, `memory recall` restores the smallest useful packet, and `memory promote` crystallizes stable knowledge into searchable project memory.
+</Callout>
+
+Exact path sketch [#exact-path-sketch]
+
+```text
+CONTROL PLANE (.ragit/memory/**)             SEARCHABLE CORPUS (docs/memory/**)
+
+session work
+   |
+   +--> memory wrap ------> sessions/ + working/
+   |
+goal for next session
+   |
+   +--> memory recall <--- working/ + snapshot retrieval
+   |                     --> recall packet
+   |
+stable knowledge
+   |
+   +--> memory promote --------------------> decisions/ glossary/ plans
+                                              |
+                                              +--> ingest --> searchable snapshot hits
+```
+
+How Commands Map [#how-commands-map]
+
+* `memory wrap` records the state of the work you want to resume. It writes session history and refreshes the current working state.
+* `memory recall` reconstructs the smallest useful packet for continuing work. It starts from what is active now in working memory and then supplements it with relevant snapshot-scoped retrieval results rather than replaying the full past.
+* `memory promote` turns stable knowledge into searchable documents. It is how an important conclusion stops being a session detail and becomes project memory. In the current MVP, promoted documents are ingested immediately when `HEAD` is available.
+
+The key idea is that wrap is for continuity, recall is for restoration, and promote is for crystallization.
+
+A Simple Example [#a-simple-example]
+
+Imagine you stop work on an auth migration at the end of the day.
+
+You use `memory wrap` to save the current goal, the rule that snapshot contracts must stay intact, the open loop about token refresh, and the next action for tomorrow. That state lives in `.ragit/memory/**`.
+
+The next morning, you do not want to reread every note. You use `memory recall`. RAGit pulls the current working state and combines it with relevant retrieved knowledge, such as earlier decisions about auth boundaries or plans stored in the repository. You get a recall packet that tells you where to restart.
+
+Later, once a rule becomes stable, such as “refresh token handling must remain outside snapshot mutation,” you use `memory promote`. That rule becomes a durable document in `docs/memory/**`, where future sessions can search it like any other project knowledge.
+
+Common Misunderstandings [#common-misunderstandings]
+
+Why not search .ragit/memory/** directly? [#why-not-search-ragitmemory-directly]
+
+Because working state changes often and exists to help you resume active work. It is operational state, not automatically durable knowledge.
+
+Why is promote separate from wrap? [#why-is-promote-separate-from-wrap]
+
+Because not every session note deserves to become long-term memory. Promotion is the deliberate step that keeps the searchable corpus clean.
+
+When should I promote something? [#when-should-i-promote-something]
+
+Promote it when you expect a future session to benefit from finding it without reopening the original session history. In the current MVP, that usually means a stable decision, a reusable term, or a plan worth searching later.
+
+Is working memory the same as a snapshot? [#is-working-memory-the-same-as-a-snapshot]
+
+No. A snapshot answers, “What knowledge is searchable for this commit?” Working memory answers, “What am I actively trying to continue right now?”
+
+Why keep both working memory and long-term memory? [#why-keep-both-working-memory-and-long-term-memory]
+
+Because they solve different recovery problems. Working memory restores momentum. Long-term memory restores durable knowledge.

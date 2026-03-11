@@ -1,0 +1,60 @@
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="760" rx="28" fill="#0F172A"/>
+  <rect x="28" y="28" width="1144" height="704" rx="24" fill="#F8FAFC"/>
+  <text x="72" y="104" fill="#0F172A" font-family="system-ui, sans-serif" font-size="38" font-weight="700">How wrap, recall, promote, and ingest connect</text>
+  <text x="72" y="144" fill="#475569" font-family="system-ui, sans-serif" font-size="20">The command flow crosses two memory surfaces: operational continuity on the left, searchable knowledge on the right.</text>
+
+  <rect x="72" y="188" width="458" height="482" rx="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="3"/>
+  <text x="108" y="234" fill="#1D4ED8" font-family="system-ui, sans-serif" font-size="24" font-weight="700">CONTROL PLANE</text>
+  <text x="108" y="264" fill="#334155" font-family="system-ui, sans-serif" font-size="16">.ragit/memory/**</text>
+
+  <rect x="108" y="298" width="386" height="84" rx="18" fill="#FFFFFF"/>
+  <text x="136" y="336" fill="#0F172A" font-family="system-ui, sans-serif" font-size="18" font-weight="700">Session work</text>
+  <text x="136" y="362" fill="#475569" font-family="system-ui, sans-serif" font-size="15">raw progress, notes, constraints, next move</text>
+
+  <rect x="108" y="422" width="386" height="96" rx="18" fill="#DBEAFE"/>
+  <text x="136" y="460" fill="#1D4ED8" font-family="system-ui, sans-serif" font-size="18" font-weight="700">memory wrap</text>
+  <text x="136" y="486" fill="#334155" font-family="system-ui, sans-serif" font-size="15">writes sessions/ and refreshes working/</text>
+
+  <rect x="108" y="558" width="386" height="76" rx="18" fill="#FFFFFF"/>
+  <text x="136" y="600" fill="#0F172A" font-family="system-ui, sans-serif" font-size="18">Working state for the next session</text>
+
+  <rect x="670" y="188" width="458" height="482" rx="24" fill="#ECFDF5" stroke="#16A34A" stroke-width="3"/>
+  <text x="706" y="234" fill="#166534" font-family="system-ui, sans-serif" font-size="24" font-weight="700">SEARCHABLE CORPUS</text>
+  <text x="706" y="264" fill="#334155" font-family="system-ui, sans-serif" font-size="16">docs/memory/** + snapshot retrieval</text>
+
+  <rect x="706" y="298" width="386" height="104" rx="18" fill="#FFFFFF"/>
+  <text x="734" y="336" fill="#0F172A" font-family="system-ui, sans-serif" font-size="18" font-weight="700">memory promote</text>
+  <text x="734" y="362" fill="#475569" font-family="system-ui, sans-serif" font-size="15">turns stable knowledge into decisions/,</text>
+  <text x="734" y="384" fill="#475569" font-family="system-ui, sans-serif" font-size="15">glossary/, plans/, and related documents</text>
+
+  <rect x="706" y="442" width="386" height="84" rx="18" fill="#DCFCE7"/>
+  <text x="734" y="480" fill="#166534" font-family="system-ui, sans-serif" font-size="18" font-weight="700">ingest</text>
+  <text x="734" y="506" fill="#334155" font-family="system-ui, sans-serif" font-size="15">indexes promoted documents into snapshot search</text>
+
+  <rect x="706" y="566" width="386" height="68" rx="18" fill="#FFFFFF"/>
+  <text x="734" y="606" fill="#0F172A" font-family="system-ui, sans-serif" font-size="18">searchable snapshot hits for future recall</text>
+
+  <rect x="476" y="334" width="248" height="94" rx="18" fill="#FEF3C7"/>
+  <text x="506" y="372" fill="#92400E" font-family="system-ui, sans-serif" font-size="18" font-weight="700">memory recall</text>
+  <text x="506" y="398" fill="#78350F" font-family="system-ui, sans-serif" font-size="15">combines working state</text>
+  <text x="506" y="420" fill="#78350F" font-family="system-ui, sans-serif" font-size="15">with relevant retrieval</text>
+
+  <rect x="476" y="482" width="248" height="78" rx="18" fill="#FFFFFF"/>
+  <text x="508" y="526" fill="#0F172A" font-family="system-ui, sans-serif" font-size="18">small recall packet</text>
+
+  <path d="M300 382V422" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M300 518V558" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M494 470H476" stroke="#F59E0B" stroke-width="5" stroke-linecap="round"/>
+  <path d="M724 470H706" stroke="#F59E0B" stroke-width="5" stroke-linecap="round"/>
+  <path d="M600 428V482" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M900 402V442" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M900 526V566" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M706 600C660 600 648 566 648 544V560" stroke="#16A34A" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 10"/>
+  <path d="M476 536C424 536 420 596 300 596" stroke="#2563EB" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 10"/>
+
+  <rect x="72" y="688" width="1056" height="24" rx="12" fill="#E2E8F0"/>
+  <rect x="72" y="688" width="528" height="24" rx="12" fill="#2563EB"/>
+  <rect x="600" y="688" width="528" height="24" rx="12" fill="#16A34A"/>
+  <text x="72" y="678" fill="#475569" font-family="system-ui, sans-serif" font-size="14">Left side restores continuity now. Right side preserves knowledge worth finding later.</text>
+</svg>

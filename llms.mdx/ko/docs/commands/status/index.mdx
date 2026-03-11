@@ -1,0 +1,68 @@
+# status
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`status`는 현재 브랜치, HEAD, backend, manifest 개수, embedding 설정, zvec 가용성처럼 RAGit에 중요한 현재 상태를 빠르게 보여줍니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 저장소의 운영 상태를 빠르게 보고 싶을 때
+* store가 로드되었는지, 검색 준비가 되었는지 확인하고 싶을 때
+* 설정 표면을 파일을 열지 않고 확인하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 더 깊은 진단이 필요할 때. <a href="/ko/docs/commands/doctor">`doctor`</a>를 사용하십시오.
+* 설정값을 바꾸고 싶을 때. <a href="/ko/docs/commands/config/set">`config set`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit status [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--format text|json|both`: 사람이 읽는 출력, JSON, 둘 다 중 하나를 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* positional 입력도 JSON payload 입력도 없습니다.
+* JSON 출력에는 `branch`, `head`, `backend`, `zvec`, `supported_types`, `manifests`, `embedding`, `format`이 포함됩니다.
+* 에이전트는 보통 `--format json`을 사용하는 편이 좋습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit status
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit status --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `status`는 요약 명령이지 복구 명령이 아닙니다.
+* store가 로드되었다고 해서 최신 문서가 인덱싱되었다는 뜻은 아닙니다. 문서 변경 후에는 <a href="/ko/docs/commands/ingest">`ingest`</a>를 실행하십시오.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/ko/docs/commands/config/set">
+    `config set`
+  </a>

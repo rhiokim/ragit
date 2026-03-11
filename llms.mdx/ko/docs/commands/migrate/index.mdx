@@ -1,0 +1,15 @@
+# migrate
+
+
+
+`migrate` 패밀리는 일회성 또는 간헐적 레거시 데이터 변환을 위해 존재합니다.
+
+어떤 하위 명령을 선택하는가 [#어떤-하위-명령을-선택하는가]
+
+* <a href="/ko/docs/commands/migrate/from-json-store">`migrate from-json-store`</a>: 예전 JSON store를 변환합니다.
+* <a href="/ko/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>: sqlite-vss export 데이터를 변환합니다.
+
+패밀리 경계 [#패밀리-경계]
+
+* migration은 쓰기 작업입니다.
+* 성공적인 migration 뒤에는 <a href="/ko/docs/commands/status">`status`</a>로 확인하거나 <a href="/ko/docs/commands/ingest">`ingest`</a>로 이어가는 편이 좋습니다.

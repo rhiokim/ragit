@@ -1,0 +1,28 @@
+# 아키텍처
+
+
+
+런타임 [#런타임]
+
+* TypeScript / Node.js CLI
+* `.ragit/store/` 기준 zvec canonical store
+* `.ragit/memory/` 기준 메모리 제어면
+* `docs/memory/` 기준 검색 가능한 장기기억 코퍼스
+* v1 로컬 placeholder 임베딩 provider
+* `.ragit/manifest/` Git 추적 스냅샷
+
+검색 [#검색]
+
+* 청크 임베딩 + 키워드 점수 결합
+* 가중 하이브리드 랭킹(`alpha`)
+* snapshot SHA 기반 시점 조회
+
+결속 모델 [#결속-모델]
+
+* 각 스냅샷은 commit SHA와 결속
+* `--since <sha>` 증분 인덱싱 지원
+* `post-commit`, `post-merge` 훅 자동 동기화
+* `memory wrap`은 snapshot 계약을 바꾸지 않고 working state만 갱신
+* `memory promote`는 `docs/memory/**` 문서를 만들고 현재 `HEAD` 기준으로 선택적 ingest 가능
+
+구현 관점이 아니라 사용자 관점의 설명이 필요하다면 <a href="/ko/docs/memory-model">Memory Model Guide</a>를 참고하세요.

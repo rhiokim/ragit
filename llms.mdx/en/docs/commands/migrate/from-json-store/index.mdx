@@ -1,0 +1,67 @@
+# migrate from-json-store
+
+
+
+What It Does [#what-it-does]
+
+`migrate from-json-store` reads the legacy JSON-backed store and rewrites its documents, chunks, and snapshot data into the current canonical storage layout.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* `status` or `init` indicates that a legacy JSON store still exists.
+* You are upgrading an older repository layout to the current store contract.
+
+When not to use it [#when-not-to-use-it]
+
+* The repository is already using the canonical store.
+* Your legacy source is sqlite-vss export data instead. Use <a href="/en/docs/commands/migrate/from-sqlitevss">`migrate from-sqlitevss`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit migrate from-json-store [--dry-run] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--dry-run`: Count what would be migrated without writing the canonical store.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only.
+* Output is a raw JSON object with `mode`, `docs`, `chunks`, and optional `snapshotSha`.
+* `--dry-run` is the safe first call for automation.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit migrate from-json-store --dry-run
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit migrate from-json-store --dry-run
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* The command fails if the legacy JSON store file is missing.
+* Treat migration as a write operation even though it prints raw JSON instead of the shared CLI envelope.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/migrate/from-sqlitevss">
+    `migrate from-sqlitevss`
+  </a>
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/ingest">
+    `ingest`
+  </a>

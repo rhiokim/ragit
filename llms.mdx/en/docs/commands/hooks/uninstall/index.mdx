@@ -1,0 +1,65 @@
+# hooks uninstall
+
+
+
+What It Does [#what-it-does]
+
+`hooks uninstall` removes only hooks that were installed and marked as managed by RAGit. External hooks are left untouched and reported as external.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You no longer want automatic ingest hooks.
+* You need to verify whether managed hooks can be removed safely.
+
+When not to use it [#when-not-to-use-it]
+
+* You only want hook visibility. Use <a href="/en/docs/commands/hooks/status">`hooks status`</a>.
+* You want to install hooks instead. Use <a href="/en/docs/commands/hooks/install">`hooks install`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit hooks uninstall [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--dry-run`: Preview which managed hooks would be removed.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only.
+* JSON output includes `dryRun`, `root`, and `hooks`.
+* `--dry-run` is the safe mode to confirm that external hooks will not be removed.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit hooks uninstall --dry-run
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit hooks uninstall --dry-run --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* Hooks not marked with the RAGit header are treated as external and preserved.
+* Review the `state` field before a real uninstall if the repository already had custom hooks.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/hooks/status">
+    `hooks status`
+  </a>
+* <a href="/en/docs/commands/hooks/install">
+    `hooks install`
+  </a>

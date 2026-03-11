@@ -1,0 +1,115 @@
+# Init 가이드
+
+
+
+저장소 init 명령은 이제 discover-first bootstrap 흐름입니다. 저장소 루트 정규화, `.ragit/**` 준비, `AGENTS.md`, guide 자산, 빈 zvec store bootstrap은 유지하지만, 그 전에 먼저 저장소를 스캔해서 무엇을 이미 알고 있는지 판정합니다.
+
+흐름 [#흐름]
+
+1. Git 문맥 확인 및 필요 시 `git init`
+2. 저장소 코드/문서/빌드 파일 스캔
+3. `empty`, `existing`, `docs-heavy`, `monorepo` 모드 판정
+4. 문서 census, coverage 평가, maturity 평가 수행
+5. 기존 저장소 소스로 knowledge-slot map 구성
+6. 누락된 기초 문서를 계획하고 기존 문서를 먼저 재사용
+7. 1단계 draft 문서 작성, `.ragit/**` bootstrap, zvec store bootstrap
+8. 최종 리포트와 next actions 출력
+
+1단계 생성 문서 [#1단계-생성-문서]
+
+`init`은 1단계에서 아래 draft 문서만 생성할 수 있습니다.
+
+* `RAGIT.md`
+* `docs/workspace-map.md`
+* `docs/ragit/ingestion-policy.md`
+* `docs/known-gaps.md`
+* `docs/adr/README.md`
+
+생성 문서는 모두 inferred draft로 표시되므로, 사람이 검증한 저장소 문서와 쉽게 구분할 수 있습니다.
+
+init이 준비하는 것 [#init이-준비하는-것]
+
+* Git 인지 저장소 루트 정규화
+* 기존 문서 탐지와 coverage 평가
+* 부족한 영역만 메우는 draft foundational docs
+* `.ragit/config.toml`
+* `.ragit/guide/templates/*`
+* `.ragit/guide/guide-index.json`
+* `.ragit/store/meta.json`
+* `documents`, `chunks` 빈 zvec 컬렉션
+
+init이 준비하지 않는 것 [#init이-준비하지-않는-것]
+
+* searchable corpus 생성 없음
+* zvec document/chunk 레코드 생성 없음
+* snapshot manifest 생성 없음
+* query-ready knowledge state 생성 없음
+
+즉, `init`은 저장소 문서를 읽고 분류할 수는 있지만, searchable knowledge는 여전히 <a href="/ko/docs/commands/ingest">`ingest`</a>부터 시작합니다.
+
+대표 시나리오 [#대표-시나리오]
+
+비어 있는 저장소 [#비어-있는-저장소]
+
+* `pnpm ragit init --yes --git-init`
+* 선택 모드: `empty`
+* 기대 결과: foundational draft + control-plane/bootstrap 자산 생성
+
+기존 코드베이스 [#기존-코드베이스]
+
+* `pnpm ragit init`
+* 선택 모드: `existing`
+* 기대 결과: 기존 문서 재사용, 누락된 draft만 추가, 핵심 문서 덮어쓰기 없음
+
+문서가 풍부한 저장소 [#문서가-풍부한-저장소]
+
+* `pnpm ragit init`
+* 선택 모드: `docs-heavy`
+* 기대 결과: 재사용 비율 높음, 생성 문서 수 낮음
+
+모노레포 [#모노레포]
+
+* `pnpm ragit init`
+* 선택 모드: `monorepo`
+* 기대 결과: apps/packages 구조가 workspace map과 knowledge map에 반영됨
+
+Dry-run [#dry-run]
+
+```bash
+pnpm ragit init --dry-run --output json
+```
+
+기대 결과:
+
+* 전체 scan/coverage/maturity report 반환
+* create/reuse/skip 계획 반환
+* 파일 시스템 변경 없음
+
+비대화형 예시 [#비대화형-예시]
+
+```bash
+pnpm ragit init --yes
+pnpm ragit init --yes --git-init
+pnpm ragit init --mode auto --strategy balanced --merge-existing --output json
+pnpm ragit init --dry-run --output json
+```
+
+생성 구조 [#생성-구조]
+
+```text
+RAGIT.md
+docs/
+  adr/README.md
+  known-gaps.md
+  ragit/ingestion-policy.md
+  workspace-map.md
+.ragit/
+  config.toml
+  guide/
+    guide-index.json
+    templates/
+  store/
+    meta.json
+    documents/
+    chunks/
+```

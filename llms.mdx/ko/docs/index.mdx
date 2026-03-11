@@ -1,0 +1,76 @@
+# 개요
+
+
+
+RAGit은 git 기반 AI Agent 워크플로를 위한 로컬 우선 RAG CLI입니다.
+프로젝트 문서/컨텍스트를 수집하고 commit SHA와 결속된 스냅샷 검색을 제공합니다.
+
+프로젝트 목적 [#프로젝트-목적]
+
+RAGit은 AI Agent 프로젝트의 문서와 컨텍스트를 저장소 내부에서 커밋 결속형 재사용 지식으로 전환하는 로컬 우선 RAG CLI입니다.
+
+코어 벨류 [#코어-벨류]
+
+* 맥락 보존
+* 커밋 결속 재현성
+* 에이전트 친화 구조화
+* 저마찰 자동화
+
+라이선스 [#라이선스]
+
+RAGit은 Apache-2.0으로 라이선스됩니다.
+저장소 전체 라이선스 조건의 단일 기준 문서는 루트 [LICENSE](https://github.com/rhiokim/ragit/blob/main/LICENSE) 파일입니다.
+
+제공 기능 [#제공-기능]
+
+* 커밋 결속 스냅샷
+* 하이브리드 검색(벡터 + 키워드)
+* 에이전트 컨텍스트 패킹
+* 활성 작업과 장기지식을 분리하는 메모리 모델
+* 비밀정보 마스킹 수집
+
+지원 문서 타입 [#지원-문서-타입]
+
+문서 타입은 저장 포맷이 아니라 협업 기억 안에서의 역할 구분입니다. RAGit은 이 구분을 사용해 다음 에이전트가 지금 읽는 문서가 제품 의도인지, 시스템 요구사항인지, 구현 계약인지, 결정 기록인지, 위상 설명인지를 더 빠르게 판단하게 합니다.
+아래 축약어는 canonical document name의 약칭이므로, 처음 읽을 때는 원래 용어와 약어를 함께 보면서 역할과 이름을 동시에 익히는 편이 좋습니다.
+
+| 타입                                    | 언제 쓰는가                                     | 산출물 초점                | 자주 헷갈리는 이웃 타입                                         |
+| ------------------------------------- | ------------------------------------------ | --------------------- | ----------------------------------------------------- |
+| `Architecture Decision (ADR)`         | 어떤 결정을 왜 내렸는지 남겨야 할 때                      | 결정, 근거, 결과            | 실행 순서를 적는 `Plan`과 다릅니다                                |
+| `Product Requirement (PRD)`           | 제품 문제, 사용자, 목표, 성공 기준을 정의할 때               | 제품 의도와 수용 결과          | 시스템 계약인 `Software Requirements (SRS)`와 다릅니다           |
+| `Software Requirements (SRS)`         | 시스템이 무엇을 해야 하는지 정의할 때                      | 기능/비기능 요구사항           | 구현 상세 계약인 `Implementation Specification (SPEC)`와 다릅니다 |
+| `Implementation Specification (SPEC)` | 모듈 동작, 인터페이스, 상태, 검증 기준을 고정할 때             | 구현 계약                 | 위상 설명 문서인 `Phase and Binding Documents (PBD)`와 다릅니다   |
+| `Plan`                                | 마일스톤, 작업 분해, 실행 순서를 정리할 때                  | 실행 계획과 작업 구조          | 안정화된 결정 기록인 `ADR`와 다릅니다                               |
+| `Domain-Driven Design (DDD)`          | bounded context, aggregate, 도메인 경계를 모델링할 때 | 도메인 구조와 개념 경계         | 용어 사전인 `Glossary`와 다릅니다                               |
+| `Glossary`                            | 반복되는 용어의 의미를 하나로 고정해야 할 때                  | 공통 어휘                 | 구조/경계를 설명하는 `DDD`와 다릅니다                               |
+| `Phase and Binding Documents (PBD)`   | 위상 구조, 결속, 상호작용 경로, 드리프트 지점을 설명할 때         | topology와 binding map | 기능 계약 문서인 `Implementation Specification (SPEC)`와 다릅니다 |
+
+빠른 구분 기준 [#빠른-구분-기준]
+
+* `Product Requirement (PRD)` vs `Software Requirements (SRS)`: `PRD`는 왜 이 제품/기능이 필요한지와 어떤 결과가 중요한지를 다룹니다. `SRS`는 시스템이 무엇을 제공해야 하는지를 다룹니다.
+* `Software Requirements (SRS)` vs `Implementation Specification (SPEC)`: `SRS`는 시스템 수준 계약이고, `SPEC`는 구현체 수준 동작과 인터페이스 계약입니다.
+* `Implementation Specification (SPEC)` vs `Phase and Binding Documents (PBD)`: `SPEC`는 한 구현 단위가 무엇을 해야 하는지 설명하고, `PBD`는 여러 위상과 결속이 어떻게 연결되는지 설명합니다.
+* `Architecture Decision (ADR)` vs `Plan`: `ADR`는 결정 자체를 남기고, `Plan`은 실행 순서를 남깁니다.
+* `Domain-Driven Design (DDD)` vs `Glossary`: `DDD`는 도메인 구조와 경계를 모델링하고, `Glossary`는 용어 의미를 고정합니다.
+
+왜 RAGit은 SPEC와 PBD를 분리하는가 [#왜-ragit은-spec와-pbd를-분리하는가]
+
+* `SPEC`는 "이 구현체는 무엇을 해야 하는가?" 같은 기능 계약 질문에 답하기 좋습니다.
+* `PBD`는 "이 단계들은 어떻게 연결되는가?" 또는 "어디서 드리프트가 나는가?" 같은 위상 질문에 답하기 좋습니다.
+* 두 타입을 분리하면 에이전트가 기능 계약 검색과 topology 검색을 더 정확하게 나눠서 수행할 수 있습니다.
+
+무엇부터 쓰면 좋은가 [#무엇부터-쓰면-좋은가]
+
+* 새 기능이나 워크플로를 정의할 때는 `PRD`에서 시작하고, 필요하면 `SRS`, `SPEC`로 내려가십시오.
+* 이미 기능 방향은 정해졌고 한 구현 단위의 동작을 명확히 해야 한다면 `SPEC`부터 쓰십시오.
+* 어려운 지점이 위상 연결, 단계 간 결속, 실패 지점이라면 `PBD`를 추가하십시오.
+* 대안을 비교해 하나를 확정해야 한다면 `ADR`를 쓰십시오.
+* 팀 안에서 같은 용어를 서로 다르게 쓰고 있다면 `Glossary`를, 경계 자체가 흐리다면 `DDD`를 우선 쓰십시오.
+
+다음 단계 [#다음-단계]
+
+<a href="/ko/docs/quickstart">Quickstart</a> 문서에서 실행 절차를 확인하세요.
+저장소 안에서 authoring system을 어떻게 준비하는지 보려면 <a href="/ko/docs/init-guide">Init Guide</a>를 읽어보세요.
+명령어별 예시와 옵션 설명이 필요하시면 <a href="/ko/docs/commands">Commands</a>부터 보시면 됩니다.
+왜 메모리를 control plane과 searchable docs로 나누는지 알고 싶다면 <a href="/ko/docs/memory-model">Memory Model Guide</a>를 읽어보세요.
+에이전트 워크플로에 RAGit을 넣고 싶다면 <a href="/ko/docs/agent-cli">Agent CLI Contract</a>에서 `--format json`, `--view minimal`, `--input`, `--dry-run` 규약을 먼저 확인하세요.

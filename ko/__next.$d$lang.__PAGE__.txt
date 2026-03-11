@@ -1,0 +1,6 @@
+1:"$Sreact.fragment"
+2:I[70065,["/ragit/_next/static/chunks/16f74d9fada83a7b.js","/ragit/_next/static/chunks/157c013d9eec30d3.js","/ragit/_next/static/chunks/1fbb3ad0a9189ec3.js","/ragit/_next/static/chunks/c69aa24890a42975.js","/ragit/_next/static/chunks/91afb53e2b7f6b3d.js","/ragit/_next/static/chunks/b069d1dcb4c03f87.js","/ragit/_next/static/chunks/f8c659f3b3d06f8a.js","/ragit/_next/static/chunks/a639ffe1d17c23b3.js"],""]
+3:I[35417,["/ragit/_next/static/chunks/26ca110782d86623.js","/ragit/_next/static/chunks/65a7cfe1138c48ce.js"],"OutletBoundary"]
+4:"$Sreact.suspense"
+0:{"buildId":"e18Gtew2NTnhTCe5AVmDk","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"flex flex-col justify-center text-center flex-1 gap-3","children":[["$","h1",null,{"className":"text-2xl font-bold","children":"ragit documentation"}],["$","p",null,{"children":["Open"," ",["$","$L2",null,{"href":"/ko/docs","className":"font-medium underline","children":["/","ko","/docs"]}]," ","to read docs."]}]]}],null,["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"loading":null,"isPartial":false}
+5:null
