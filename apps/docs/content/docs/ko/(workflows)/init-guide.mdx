@@ -1,80 +1,38 @@
 ---
 title: Init 가이드
-description: AGENTS 연동 인터랙티브 초기화 흐름
+description: Discover-first 저장소 초기화 흐름
 ---
 
-저장소 체크아웃 안에서 저장소 init 명령은 기본적으로 7단계 인터랙티브 흐름으로 동작합니다. Git worktree 내부의 하위 경로에서 실행해도 실제 초기화 기준점은 저장소 루트입니다.
+저장소 init 명령은 이제 discover-first bootstrap 흐름입니다. 저장소 루트 정규화, `.ragit/**` 준비, `AGENTS.md`, guide 자산, 빈 zvec store bootstrap은 유지하지만, 그 전에 먼저 저장소를 스캔해서 무엇을 이미 알고 있는지 판정합니다.
 
-1. 환경 검사 (`git init` 선택 포함)
-2. 초기화 모드 확인
-3. 루트 `AGENTS.md` 로드/생성
-4. 지원 문서 템플릿 안내 (Architecture Decision (ADR), Product Requirement (PRD), Software Requirements (SRS), Implementation Specification (SPEC), Plan, Domain-Driven Design (DDD), Glossary, Phase and Binding Documents (PBD))
-5. `.ragit/guide` 증분 생성
-6. zvec 저장소 bootstrap
-7. 요약 및 다음 액션 출력
+## 흐름
 
-## 시각 개요
+1. Git 문맥 확인 및 필요 시 `git init`
+2. 저장소 코드/문서/빌드 파일 스캔
+3. `empty`, `existing`, `docs-heavy`, `monorepo` 모드 판정
+4. 문서 census, coverage 평가, maturity 평가 수행
+5. 기존 저장소 소스로 knowledge-slot map 구성
+6. 누락된 기초 문서를 계획하고 기존 문서를 먼저 재사용
+7. 1단계 draft 문서 작성, `.ragit/**` bootstrap, zvec store bootstrap
+8. 최종 리포트와 next actions 출력
 
-![7단계 init 흐름과 지원 템플릿 세트가 드러나는 단계를 보여주는 다이어그램](/guide-visuals/init-flow.svg)
+## 1단계 생성 문서
 
-이 그림은 `init` 명령을 가장 빠르게 읽는 요약입니다. 1단계부터 4단계까지는 저장소 계약과 authoring system을 준비하고, 5단계와 6단계는 그 구조를 실제 파일과 저장소 골격으로 만듭니다. 마지막 7단계는 결과와 다음 행동을 출력할 뿐, 저장소를 검색 가능 상태로 만들지는 않습니다.
+`init`은 1단계에서 아래 draft 문서만 생성할 수 있습니다.
 
-<Callout title="이 다이어그램을 읽는 핵심">
-  중심은 4단계입니다. 여기서 문서 역할이 분리되기 때문에, 이후 ingest와 retrieval이 모든 Markdown 파일을 같은 물건으로 보지 않고 역할 기준으로 해석할 수 있습니다.
-</Callout>
+- `RAGIT.md`
+- `docs/workspace-map.md`
+- `docs/ragit/ingestion-policy.md`
+- `docs/known-gaps.md`
+- `docs/adr/README.md`
 
-4단계는 단순히 디렉터리를 만드는 단계가 아니라, 저장소 안에 공통 authoring system을 준비하는 단계입니다. RAGit은 8개 문서 템플릿을 설치하여 사람과 에이전트가 제품 의도(`Product Requirement (PRD)`), 시스템 요구사항(`Software Requirements (SRS)`), 구현 계약(`Implementation Specification (SPEC)`), 위상/결속 설명(`Phase and Binding Documents (PBD)`), 안정화된 결정(`Architecture Decision (ADR)`), 실행 순서(`Plan`), 도메인 구조(`Domain-Driven Design (DDD)`), 공통 어휘(`Glossary`)를 서로 다른 역할로 분리해서 기록하도록 만듭니다.
-
-`Implementation Specification (SPEC)` 템플릿은 구현체 상세 기능 명세에, `Phase and Binding Documents (PBD)` 템플릿은 위상 구조와 결속 아키텍처 설명에 사용됩니다.
-
-## 템플릿 범위를 이해하는 기준
-
-<Cards>
-  <Card title="제품 정의">
-    문제, 사용자, 결과를 먼저 정의할 때는 `Product Requirement (PRD)`로 시작하고, 시스템이 무엇을 보장해야 하는지로 내려갈 때 `Software Requirements (SRS)`로 이동하십시오.
-  </Card>
-  <Card title="구현 계약">
-    모듈 동작, 인터페이스, acceptance detail을 명확히 고정해야 할 때는 `Implementation Specification (SPEC)`가 가장 직접적인 문서 타입입니다.
-  </Card>
-  <Card title="위상 설명">
-    어려운 지점이 위상 연결, 컴포넌트 결속, agent 간 연결이라면 `Phase and Binding Documents (PBD)`가 더 정확한 설명 표면입니다.
-  </Card>
-  <Card title="결정 기록">
-    실행 순서를 적는 것이 아니라 대안 사이에서 오래 남을 결정을 고정하는 것이라면 `Architecture Decision (ADR)`를 사용하십시오.
-  </Card>
-</Cards>
-
-- 문제, 사용자, 결과를 먼저 정의할 때는 `Product Requirement (PRD)`부터 시작하십시오.
-- 시스템 수준 요구사항과 제약을 정리할 때는 `Software Requirements (SRS)`로 이동하십시오.
-- 모듈 동작, 인터페이스, acceptance detail을 고정할 때는 `Implementation Specification (SPEC)`를 사용하십시오.
-- 어려운 지점이 위상 연결, 컴포넌트 결속, agent 간 연결이라면 `Phase and Binding Documents (PBD)`를 사용하십시오.
-- 실행 순서가 아니라 오래 남을 결정을 기록할 때는 `Architecture Decision (ADR)`를 사용하십시오.
-
-어떤 템플릿을 쓸지 헷갈릴 때는 파일명보다 역할 기준으로 고르십시오. requirements 문서는 `SRS`, 기능 계약 문서는 `SPEC`, topology 설명 문서는 `PBD`로 두는 편이 이후 검색과 재진입에 가장 유리합니다.
-
-## 문서 타입 인식 방식
-
-- frontmatter의 `type`이 가장 강한 신호입니다.
-- frontmatter가 없으면 `docs/specs/`, `docs/requirements/`, `docs/ddd/` 같은 경로명이 힌트가 됩니다.
-- 경로도 모호하면 `# Glossary`, `# PBD` 같은 첫 헤딩을 기준으로 추론합니다.
-- 실무적으로는 `type`을 명시하고, 제목도 문서 역할과 일치시키는 패턴이 가장 안전합니다.
+생성 문서는 모두 inferred draft로 표시되므로, 사람이 검증한 저장소 문서와 쉽게 구분할 수 있습니다.
 
 ## `init`이 준비하는 것
 
-![init이 즉시 만드는 것과 ingest 전까지 아직 생기지 않는 것을 대비해 보여주는 다이어그램](/guide-visuals/init-boundary.svg)
-
-이 경계가 중요한 이유는, 많은 사용자가 `init`이 저장소 문서를 이미 인덱싱했다고 오해하기 쉽기 때문입니다. 실제로는 비어 있지만 사용 가능한 control plane과 비어 있지만 사용 가능한 canonical store까지만 준비됩니다.
-
-<Callout type="warning" title="중요한 경계">
-  `init`은 저장소를 control-plane ready 및 zvec-store ready 상태로 만듭니다. 저장소 문서를 검색 가능한 지식으로 바꾸는 단계는 `ingest`입니다.
-</Callout>
-
-<Callout title="플랫폼 참고">
-  zvec bootstrap은 현재 `darwin/arm64`, `linux/arm64`, `linux/x64`만 지원합니다.
-</Callout>
-
-- `.ragit/` 기준의 Git 인지 control plane 준비
-- 루트 `AGENTS.md`의 로드 또는 생성 흐름
+- Git 인지 저장소 루트 정규화
+- 기존 문서 탐지와 coverage 평가
+- 부족한 영역만 메우는 draft foundational docs
 - `.ragit/config.toml`
 - `.ragit/guide/templates/*`
 - `.ragit/guide/guide-index.json`
@@ -84,76 +42,68 @@ description: AGENTS 연동 인터랙티브 초기화 흐름
 ## `init`이 준비하지 않는 것
 
 - searchable corpus 생성 없음
-- chunk 레코드 또는 manifest 생성 없음
-- 저장소 문서 스캔 또는 chunk 생성 없음
-- 빈 zvec 컬렉션에 대한 실제 벡터 upsert 없음
+- zvec document/chunk 레코드 생성 없음
+- snapshot manifest 생성 없음
+- query-ready knowledge state 생성 없음
 
-즉, `init`은 저장소를 **control-plane ready** 및 **zvec-store ready** 상태로 만들지만, **search-ready** 상태로 만들지는 않습니다.
-검색 가능한 지식 상태는 저장소 ingest 명령을 실행한 뒤에 형성됩니다.
+즉, `init`은 저장소 문서를 읽고 분류할 수는 있지만, searchable knowledge는 여전히 <a href="/ko/docs/commands/ingest">`ingest`</a>부터 시작합니다.
 
-`storage.backend = "zvec"`는 이제 canonical backend를 의미하며, `init`은 저장소 문서를 인덱싱하지 않은 빈 zvec 저장소만 bootstrap합니다.
+## 대표 시나리오
 
-핵심은 `init`이 먼저 이름 체계, 템플릿 체계, 타입 인식 힌트를 준비해 둔다는 점입니다. 그래야 이후 ingest와 retrieval 단계가 모든 Markdown 파일을 동일하게 다루지 않고, 문서의 역할에 맞는 검색과 재진입을 수행할 수 있습니다.
+### 비어 있는 저장소
 
-## 대표 사용자 시나리오
+- `pnpm ragit init --yes --git-init`
+- 선택 모드: `empty`
+- 기대 결과: foundational draft + control-plane/bootstrap 자산 생성
 
-### U1. 신규 로컬 부트스트랩
+### 기존 코드베이스
 
-현재 디렉터리가 Git 저장소가 아니고 `AGENTS.md`와 `.ragit/`도 아직 없을 때의 흐름입니다.
+- `pnpm ragit init`
+- 선택 모드: `existing`
+- 기대 결과: 기존 문서 재사용, 누락된 draft만 추가, 핵심 문서 덮어쓰기 없음
 
-1. 저장소 init 명령 실행
-2. Git 부재 감지
-3. 대화형에서 `git init` 제안
-4. `AGENTS.md` 생성
-5. `.ragit/config.toml`, `.ragit/guide/templates/*`, `guide-index.json`, 빈 zvec 저장소 생성
-6. 다음 액션 출력: `ragit hooks install`, `ragit ingest --all`
+### 문서가 풍부한 저장소
 
-핵심은 초기화는 끝나지만, 아직 검색 가능한 지식 인덱스는 만들어지지 않는다는 점입니다.
+- `pnpm ragit init`
+- 선택 모드: `docs-heavy`
+- 기대 결과: 재사용 비율 높음, 생성 문서 수 낮음
 
-### U2. 기존 Git 저장소 + 기존 `AGENTS.md`
+### 모노레포
 
-이미 Git 저장소이며 루트 `AGENTS.md`가 존재할 때의 흐름입니다.
+- `pnpm ragit init`
+- 선택 모드: `monorepo`
+- 기대 결과: apps/packages 구조가 workspace map과 knowledge map에 반영됨
 
-1. 저장소 init 명령 실행
-2. `AGENTS.md`를 읽기 전용으로 로드
-3. 누락된 `.ragit` control-plane 파일만 생성하고 필요 시 zvec 저장소 bootstrap
-4. `guide-index.json` 재생성
+### Dry-run
 
-핵심은 기존 지침문은 수정되지 않고, 표준 가이드 구조만 증분 보강된다는 점입니다.
+```bash
+pnpm ragit init --dry-run --output json
+```
 
-### U3. 부분 초기화된 저장소 재실행
+기대 결과:
 
-`.ragit/`은 이미 있지만 일부 템플릿 또는 인덱스만 빠져 있을 때의 흐름입니다.
+- 전체 scan/coverage/maturity report 반환
+- create/reuse/skip 계획 반환
+- 파일 시스템 변경 없음
 
-1. 저장소 init 명령 실행
-2. 기존 파일 유지
-3. 누락 템플릿만 생성
-4. `guide-index.json` 최신화
-
-핵심은 `init`이 idempotent/incremental하게 동작하여 안전하게 재실행 가능하다는 점입니다.
-
-### U4. 비대화형 또는 CI 초기화
-
-TTY가 없거나 자동화 환경에서 기본값으로 실행해야 할 때의 흐름입니다.
-
-1. 비대화형 init 명령 실행
-2. Git 저장소면 바로 진행
-3. 비Git이면 `--git-init` 없을 때 실패, 있으면 자동 `git init`
-4. 동일한 guide + zvec-store 결과를 table 또는 JSON summary로 반환
-
-핵심은 CI에서도 guide/control-plane 준비와 빈 canonical store 준비까지는 가능하지만, 실제 인덱싱은 이후 `ingest` 단계가 담당한다는 점입니다.
-
-## 비대화형 실행
+## 비대화형 예시
 
 ```bash
 pnpm ragit init --yes
 pnpm ragit init --yes --git-init
-pnpm ragit init --yes --output json
+pnpm ragit init --mode auto --strategy balanced --merge-existing --output json
+pnpm ragit init --dry-run --output json
 ```
 
 ## 생성 구조
 
 ```text
+RAGIT.md
+docs/
+  adr/README.md
+  known-gaps.md
+  ragit/ingestion-policy.md
+  workspace-map.md
 .ragit/
   config.toml
   guide/

@@ -2,106 +2,136 @@
 
 ## Summary
 
-This document fixes the user and system scenarios for `ragit init`.
-`ragit init` is defined as a **guide/control-plane + zvec-store bootstrap command**, not a full RAG construction command.
+This document fixes the current product boundary for `ragit init`.
+`ragit init` is a **discover-first bootstrap command**: it inspects repository state, reuses existing knowledge sources, fills only missing foundations, and then prepares the control plane and canonical zvec store.
 
-Current behavior boundary:
+Current stage-1 behavior:
 
-- It checks Git state
-- It loads or creates the root `AGENTS.md`
-- It creates `.ragit/config.toml`
-- It incrementally creates `.ragit/guide/templates/*`
-- It writes `.ragit/guide/guide-index.json`
-- It bootstraps empty zvec collections and writes `.ragit/store/meta.json`
+- checks Git state and normalizes nested paths to the repository root
+- scans repository code/docs/build files
+- selects `empty`, `existing`, `docs-heavy`, or `monorepo` mode
+- runs documentation census, coverage scoring, maturity scoring, and knowledge-slot mapping
+- plans missing foundational docs and reuses existing sources when possible
+- writes only the missing foundational docs for stage 1:
+  - `RAGIT.md`
+  - `docs/workspace-map.md`
+  - `docs/ragit/ingestion-policy.md`
+  - `docs/known-gaps.md`
+  - `docs/adr/README.md`
+- writes `.ragit/config.toml`, `.ragit/guide/templates/*`, `.ragit/guide/guide-index.json`
+- bootstraps empty zvec collections and writes `.ragit/store/meta.json`
 
-It does **not**:
+It still does **not**:
 
-- discover repository documents
-- chunk markdown content
-- create manifests
-- upsert chunk/document records into zvec
-- create searchable knowledge
+- chunk repository documents into queryable records
+- create snapshot manifests
+- upsert document/chunk records into zvec
+- make the repository search-ready
+- introduce separate `adopt`, `map`, or `sync` commands
 
-`storage.backend = "zvec"` now means the canonical backend, and `init` prepares an empty store without indexing repository documents.
+The key interpretation rule is:
+
+- `init` may read and classify repository documents
+- only `ingest` turns repository documents into searchable knowledge
 
 ## User Scenarios
 
-### U1. New local bootstrap
+### U1. Empty repository bootstrap
 
 **Preconditions**
-- Current directory is not a Git repository
+- Current directory is not a Git repository, or is a fresh repository with almost no code/docs
 - No root `AGENTS.md`
 - No usable `.ragit/` structure
 
 **User goal**
-- Prepare the repository for RAGit-guided documentation work
+- Bootstrap a foundational knowledge operating system from almost nothing
 
 **Expected flow**
-1. User runs `pnpm ragit init`
-2. RAGit detects that Git is missing
-3. Interactive mode proposes `git init`
-4. RAGit creates `AGENTS.md`
-5. RAGit creates `.ragit/config.toml`, guide templates, and `guide-index.json`
-6. RAGit prints next actions for `hooks install` and `ingest`
+1. User runs `pnpm ragit init --yes --git-init`
+2. RAGit initializes Git if needed
+3. RAGit scans the repository and classifies it as `empty`
+4. RAGit plans the foundational draft docs
+5. RAGit writes the missing docs plus `.ragit/**`, `AGENTS.md`, guide assets, and empty zvec store
+6. RAGit returns summary + next actions
 
 **Expected outcome**
 - The repository becomes control-plane ready and zvec-store ready
+- Foundational docs are present as drafts
 - Searchable knowledge is still absent
 
-### U2. Existing Git repository with existing `AGENTS.md`
+### U2. Existing codebase adoption
 
 **Preconditions**
-- Current directory is a Git repository
-- Root `AGENTS.md` already exists
+- Current directory is a Git repository with source code and some existing docs
 
 **User goal**
-- Attach the RAGit standard guide structure without mutating the existing instruction file
+- Reuse existing repository intent and fill only missing foundations
 
 **Expected flow**
 1. User runs `pnpm ragit init`
-2. RAGit loads `AGENTS.md` in read-only mode
-3. RAGit creates only missing `.ragit` files
-4. RAGit regenerates `guide-index.json`
+2. RAGit scans repository structure and classifies it as `existing`
+3. RAGit reuses primary sources like `README.md`, `CONTRIBUTING.md`, and architecture docs
+4. RAGit generates only missing stage-1 foundational docs
+5. RAGit bootstraps `.ragit/**`, guide index, and zvec store
 
 **Expected outcome**
-- Existing instructions remain unchanged
-- Standard guide structure is incrementally added
+- Existing docs are not overwritten
+- Generated drafts are additive and clearly marked as inferred
 
-### U3. Re-run on a partially initialized repository
+### U3. Docs-heavy repository adoption
 
 **Preconditions**
-- `.ragit/` exists
-- Some templates or index files are missing
+- Repository already contains substantial docs such as `docs/`, `adr/`, architecture docs, or glossary material
 
 **User goal**
-- Repair or complete the guide structure without destructive reset
+- Build a machine-readable knowledge map without drowning the repository in duplicate templates
 
 **Expected flow**
 1. User runs `pnpm ragit init`
-2. Existing files are preserved
-3. Missing templates are created
-4. `guide-index.json` is refreshed
+2. RAGit classifies the repository as `docs-heavy`
+3. Coverage and maturity are computed from existing documentation
+4. Only missing foundational docs are created, often fewer than in other modes
+5. Guide/bootstrap steps run normally
 
 **Expected outcome**
-- `init` behaves incrementally and idempotently
+- Existing docs dominate as source of truth
+- Generated file count stays low
 
-### U4. Non-interactive or CI initialization
+### U4. Monorepo adoption
 
 **Preconditions**
-- TTY is unavailable, or the caller intentionally uses `--yes`
+- Repository contains workspace markers such as `pnpm-workspace.yaml`, `turbo.json`, `apps/*`, or `packages/*`
 
 **User goal**
-- Prepare the same control-plane structure from automation
+- Establish root-level guidance while acknowledging app/package boundaries
 
 **Expected flow**
-1. User runs `pnpm ragit init --yes`
-2. If Git already exists, initialization proceeds
-3. If Git does not exist, `--git-init` is required for automatic Git initialization
-4. RAGit returns a table or JSON summary
+1. User runs `pnpm ragit init`
+2. RAGit classifies the repository as `monorepo`
+3. Apps/packages/workspace files are mapped into the workspace slot
+4. `docs/workspace-map.md` is created when needed
+5. Control-plane and zvec bootstrap complete
 
 **Expected outcome**
-- CI can prepare guide/control-plane state
-- Searchable knowledge still requires a later `ingest`
+- Root-level bootstrap remains centralized
+- Workspace structure becomes explicit for agents
+
+### U5. Dry-run / CI planning
+
+**Preconditions**
+- Caller wants a plan without mutations
+
+**User goal**
+- Preview scan, mode, coverage, and planned files before writing
+
+**Expected flow**
+1. User runs `pnpm ragit init --dry-run --output json`
+2. RAGit performs repository analysis and gap-fill planning
+3. RAGit reports planned control-plane/bootstrap outcomes without writing files
+
+**Expected outcome**
+- No file system changes
+- Full initialization report is still available
 
 ## System Scenario
 
@@ -109,27 +139,30 @@ It does **not**:
 
 - `S0 Unprepared`
 - `S1 Git Ready`
-- `S2 Instruction Ready`
-- `S3 Guide Ready`
-- `S4 Init Complete (Guide + Zvec Store Ready)`
+- `S2 Repository Diagnosed`
+- `S3 Foundations Planned`
+- `S4 Control Plane Ready`
+- `S5 Init Complete (Control Plane + Zvec Store Ready)`
 
 ### Allowed Transitions
 
 - `S0 -> S1`
   - Trigger: existing Git repository is detected, or `git init` is approved/executed
 - `S1 -> S2`
-  - Trigger: root `AGENTS.md` is loaded or created
+  - Trigger: repository scan, mode selection, documentation census, coverage, maturity, and knowledge mapping complete
 - `S2 -> S3`
-  - Trigger: guide templates are incrementally ensured, boundaries are parsed, and `guide-index.json` is written
+  - Trigger: gap-fill plan is computed
 - `S3 -> S4`
-  - Trigger: zvec is initialized, collections are created/opened, and summary is returned
+  - Trigger: stage-1 draft docs, `.ragit/config.toml`, guide assets, and `AGENTS.md` are written
+- `S4 -> S5`
+  - Trigger: empty zvec store is created/opened and summary is returned
 
 ### Forbidden Transitions
 
-- `S4 -> Index Ready`
-- `S4 -> Search Ready`
+- `S5 -> Index Ready`
+- `S5 -> Search Ready`
 
-Those states are outside `init` and belong to later commands such as `ragit ingest`.
+Those states still belong to `ragit ingest`.
 
 ## Inputs, Outputs, and Side Effects
 
@@ -138,18 +171,34 @@ Those states are outside `init` and belong to later commands such as `ragit inge
 - Working directory
 - Interactive or non-interactive mode
 - Optional `--git-init`
+- Optional `--mode auto|empty|existing|monorepo|docs-heavy`
+- Optional `--strategy minimal|balanced|full`
+- Optional `--dry-run`
+- Optional `--merge-existing`
 - Optional summary output format
 
 ### Outputs
 
 - Summary table or JSON summary
-- Next actions:
-  - `ragit migrate from-json-store` (when legacy JSON store is detected)
-  - `ragit hooks install`
-  - `ragit ingest --all`
+- JSON keys:
+  - `executionMode`
+  - `repositoryMode`
+  - `strategy`
+  - `scan`
+  - `coverage`
+  - `maturity`
+  - `knowledgeMap`
+  - `actions`
+  - `bootstrap`
+  - `nextActions`
 
 ### Allowed Side Effects
 
+- Create or update `RAGIT.md`
+- Create or update `docs/workspace-map.md`
+- Create or update `docs/ragit/ingestion-policy.md`
+- Create or update `docs/known-gaps.md`
+- Create or update `docs/adr/README.md`
 - Create or update `.ragit/config.toml`
 - Create or update `.ragit/guide/templates/*`
 - Create or update `.ragit/guide/guide-index.json`
@@ -161,10 +210,10 @@ Those states are outside `init` and belong to later commands such as `ragit inge
 ### Explicit Non-Effects
 
 - No `.ragit/manifest/*` creation
-- No zvec chunk/document record creation
-- No document index records
-- No repository-wide markdown traversal
-- No repository knowledge embedding job
+- No zvec document/chunk record creation
+- No query-ready knowledge state
+- No repository-wide embedding job
+- No `map`, `sync`, or `adopt` command rollout in stage 1
 
 ## Error and Boundary Paths
 
@@ -174,12 +223,14 @@ Those states are outside `init` and belong to later commands such as `ragit inge
   - Result: fail immediately
 - Interactive mode outside Git with `git init` declined
   - Result: abort initialization
-- Existing `AGENTS.md`
-  - Result: load only, do not mutate source content
+- Existing source docs
+  - Result: reused as first-class inputs and not overwritten during stage 1
+- `--dry-run`
+  - Result: no mutations, but full analysis and planned actions are returned
 
 ## `init` vs `ingest`
 
-`init` prepares the control plane.
+`init` prepares the repository operating model.
 `ingest` prepares searchable knowledge.
 
 Operational sequence:
@@ -190,5 +241,5 @@ Operational sequence:
 
 Interpretation rule:
 
-- After `init`, the repository is **guide-ready + zvec-store-ready**
+- After `init`, the repository is **diagnosed + foundation-ready + zvec-store-ready**
 - After `ingest`, the repository becomes **search-ready**

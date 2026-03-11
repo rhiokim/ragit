@@ -194,47 +194,60 @@ This split is intentional:
 - Prefer `--input <path|->` for structured agent payloads.
 - Run mutating commands with `--dry-run` first: `ingest`, `hooks install`, `hooks uninstall`, `memory wrap`, `memory promote`.
 
-## Interactive `init` Guide
+## Discover-First `init`
 
-By default, `pnpm ragit init` runs a 7-step interactive wizard:
+`pnpm ragit init` is now a discover-first bootstrap command.
+It still prepares `.ragit/**`, `AGENTS.md`, guide assets, and the local zvec store, but it does that only after it inspects the repository and decides what knowledge already exists.
 
-1. Check Git environment (suggest `git init` if not a repository)
-2. Confirm initialization mode
-3. Load or create root `AGENTS.md`
-4. Show supported document templates (Architecture Decision (ADR) / Product Requirement (PRD) / Software Requirements (SRS) / Implementation Specification (SPEC) / Plan / Domain-Driven Design (DDD) / Glossary / Phase and Binding Documents (PBD))
-5. Incrementally generate `.ragit/guide` and refresh `guide-index.json`
-6. Bootstrap the zvec canonical store
-7. Print summary table and next actions
+Default flow:
+
+1. Check Git environment (and optionally run `git init`)
+2. Scan repository code/docs/build files
+3. Select `empty`, `existing`, `docs-heavy`, or `monorepo`
+4. Compute documentation coverage, maturity, and knowledge-slot mapping
+5. Reuse existing repository docs first and plan missing foundational docs
+6. Write stage-1 draft docs plus `.ragit/**`
+7. Bootstrap the zvec canonical store
+8. Print the final summary and next actions
 
 What `init` prepares:
 
-- Git-aware control-plane setup for `.ragit/`
-- Root `AGENTS.md` load-or-create flow
+- Git-aware repository normalization
+- Existing-doc discovery and coverage evaluation
+- Stage-1 foundational drafts when missing:
+  - `RAGIT.md`
+  - `docs/workspace-map.md`
+  - `docs/ragit/ingestion-policy.md`
+  - `docs/known-gaps.md`
+  - `docs/adr/README.md`
 - `.ragit/config.toml`, `.ragit/guide/templates/*`, and `.ragit/guide/guide-index.json`
 - Empty zvec collections under `.ragit/store/`
-- Store metadata for canonical backend, schema version, and embedding contract
 - Next-action guidance for `hooks install` and `ingest`
 
 What `init` does not prepare:
 
 - No searchable corpus, chunk records, or manifests
-- No document scan, chunk generation, or vector upsert
+- No zvec document/chunk upsert
 - No query-ready knowledge state during `init`
-- No query-ready knowledge state until `pnpm ragit ingest ...` runs
 
-In other words, `init` makes the repository **guide-ready** and **zvec-store-ready**, not **search-ready**.
-`storage.backend = "zvec"` now means the canonical backend, and `init` bootstraps empty collections without indexing repository documents.
+In other words, `init` makes the repository **diagnosed**, **foundation-ready**, and **zvec-store-ready**, not **search-ready**.
+`storage.backend = "zvec"` still means the canonical backend, and searchable knowledge still begins only after `pnpm ragit ingest ...` runs.
 
 Supported options:
 
 ```bash
+pnpm ragit init --mode auto --strategy balanced --merge-existing
 pnpm ragit init --yes              # non-interactive with defaults
 pnpm ragit init --non-interactive  # alias of --yes
 pnpm ragit init --git-init         # allow git init in non-interactive mode
+pnpm ragit init --dry-run --output json
 pnpm ragit init --output json      # JSON summary output
 ```
 
 - `--cwd` may point to the repository root or any nested path inside the worktree; `init` normalizes to the Git root before writing `.ragit` or `AGENTS.md`.
+- `--mode` overrides repository-mode detection.
+- `--strategy` controls how aggressively stage-1 draft docs are generated.
+- `--dry-run` computes the full analysis report without writing files or bootstrapping storage.
 - zvec bootstrap currently supports `darwin/arm64`, `linux/arm64`, and `linux/x64`.
 
 Recommended flow after `init`:
