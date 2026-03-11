@@ -30,6 +30,18 @@ export interface RagitConfig {
   project: {
     name: string;
     default_branch: string;
+    mode: "auto" | "empty" | "existing" | "docs-heavy" | "monorepo";
+  };
+  init: {
+    strategy: "minimal" | "balanced" | "full";
+    merge_existing: boolean;
+  };
+  docs: {
+    entrypoint: string;
+    workspace_map: string;
+    ingestion_policy: string;
+    known_gaps: string;
+    adr_dir: string;
   };
   storage: {
     backend: "zvec";
@@ -45,6 +57,8 @@ export interface RagitConfig {
     supported_types: DocType[];
     type_detection: "frontmatter-first";
     doc_globs: string[];
+    include: string[];
+    exclude: string[];
   };
   hooks: {
     post_commit: boolean;

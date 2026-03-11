@@ -2,6 +2,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { CONFIG_PATH, RAGIT_DIR, defaultConfig, stringifyToml } from "./config.js";
+import { RagitConfig } from "./types.js";
 
 export interface RagitPaths {
   root: string;
@@ -35,7 +36,7 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
   hooksDir: path.join(cwd, ".ragit", "hooks"),
 });
 
-export const ensureRagitStructure = async (cwd: string): Promise<RagitPaths> => {
+export const ensureRagitDirectories = async (cwd: string): Promise<RagitPaths> => {
   const paths = resolveRagitPaths(cwd);
   await mkdir(paths.ragitDir, { recursive: true });
   await mkdir(paths.manifestDir, { recursive: true });
@@ -45,11 +46,28 @@ export const ensureRagitStructure = async (cwd: string): Promise<RagitPaths> => 
   await mkdir(paths.storeDir, { recursive: true });
   await mkdir(paths.cacheDir, { recursive: true });
   await mkdir(paths.hooksDir, { recursive: true });
+  return paths;
+};
+
+export const ensureConfigFile = async (cwd: string, config: RagitConfig = defaultConfig()): Promise<string> => {
+  const paths = resolveRagitPaths(cwd);
   try {
     await access(paths.configPath, constants.F_OK);
   } catch {
-    await writeFile(paths.configPath, stringifyToml(defaultConfig()), "utf8");
+    await writeFile(paths.configPath, stringifyToml(config), "utf8");
   }
+  return paths.configPath;
+};
+
+export const writeRagitConfig = async (cwd: string, config: RagitConfig): Promise<string> => {
+  const paths = resolveRagitPaths(cwd);
+  await writeFile(paths.configPath, stringifyToml(config), "utf8");
+  return paths.configPath;
+};
+
+export const ensureRagitStructure = async (cwd: string, config: RagitConfig = defaultConfig()): Promise<RagitPaths> => {
+  const paths = await ensureRagitDirectories(cwd);
+  await ensureConfigFile(cwd, config);
   return paths;
 };
 

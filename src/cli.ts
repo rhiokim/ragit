@@ -118,6 +118,10 @@ program
   .option("--cwd <path>", "대상 저장소 루트 또는 그 하위 경로")
   .option("--yes", "질문 없이 기본값으로 초기화")
   .option("--non-interactive", "질문 없이 기본값으로 초기화")
+  .option("--mode <mode>", "auto|empty|existing|monorepo|docs-heavy", "auto")
+  .option("--strategy <strategy>", "minimal|balanced|full", "balanced")
+  .option("--dry-run", "쓰기 없이 계획만 계산")
+  .option("--merge-existing", "기존 문서를 우선 재사용", true)
   .option("--output <format>", "text|json|both", "text")
   .option("--git-init", "비대화형 모드에서 git 저장소 자동 초기화")
   .action(async (options) => {
@@ -126,6 +130,10 @@ program
     const summary = await runInit(cwd, {
       nonInteractive: Boolean(options.yes || options.nonInteractive),
       gitInit: Boolean(options.gitInit),
+      mode: options.mode as string | undefined,
+      strategy: options.strategy as string | undefined,
+      dryRun: Boolean(options.dryRun),
+      mergeExisting: Boolean(options.mergeExisting),
       quiet: format === "json",
     });
     const envelope = buildCliEnvelope("init", cwd, summary);

@@ -50,11 +50,17 @@ export interface GuideIndex {
   };
 }
 
-export interface AgentsInstructionResult {
-  path: string;
+export interface MaterializedAgentsInstructionResult extends AgentsInstructionResult {
   mode: "created" | "loaded";
   content: string;
   sha256: string;
+}
+
+export interface AgentsInstructionResult {
+  path: string;
+  mode: "created" | "loaded" | "planned";
+  content: string | null;
+  sha256: string | null;
 }
 
 export interface GuideStructureResult {
@@ -313,7 +319,7 @@ export const parseGuideBoundaries = (content: string): { boundaries: GuideBounda
   return { boundaries, sections };
 };
 
-export const ensureAgentsInstruction = async (cwd: string): Promise<AgentsInstructionResult> => {
+export const ensureAgentsInstruction = async (cwd: string): Promise<MaterializedAgentsInstructionResult> => {
   const target = path.join(cwd, "AGENTS.md");
   try {
     const content = await readFile(target, "utf8");
@@ -331,6 +337,26 @@ export const ensureAgentsInstruction = async (cwd: string): Promise<AgentsInstru
       mode: "created",
       content: seed,
       sha256: computeSha256(seed),
+    };
+  }
+};
+
+export const inspectAgentsInstruction = async (cwd: string): Promise<AgentsInstructionResult> => {
+  const target = path.join(cwd, "AGENTS.md");
+  try {
+    const content = await readFile(target, "utf8");
+    return {
+      path: target,
+      mode: "loaded",
+      content,
+      sha256: computeSha256(content),
+    };
+  } catch {
+    return {
+      path: target,
+      mode: "planned",
+      content: null,
+      sha256: null,
     };
   }
 };
@@ -367,7 +393,31 @@ export const ensureGuideStructure = async (cwd: string): Promise<GuideStructureR
   };
 };
 
-export const buildGuideIndex = (agents: AgentsInstructionResult, parsed: ReturnType<typeof parseGuideBoundaries>): GuideIndex => ({
+export const inspectGuideStructure = async (cwd: string): Promise<GuideStructureResult> => {
+  const guideDir = path.join(cwd, ".ragit", "guide");
+  const templatesDir = path.join(guideDir, "templates");
+  const indexPath = path.join(guideDir, "guide-index.json");
+  const createdFiles: string[] = [];
+  const skippedFiles: string[] = [];
+  for (const fileName of Object.keys(templateSeed)) {
+    const absolutePath = path.join(templatesDir, fileName);
+    const relativePath = path.relative(cwd, absolutePath).replaceAll(path.sep, "/");
+    try {
+      await access(absolutePath, constants.F_OK);
+      skippedFiles.push(relativePath);
+    } catch {
+      createdFiles.push(relativePath);
+    }
+  }
+  return {
+    guideDir,
+    indexPath,
+    createdFiles,
+    skippedFiles,
+  };
+};
+
+export const buildGuideIndex = (agents: MaterializedAgentsInstructionResult, parsed: ReturnType<typeof parseGuideBoundaries>): GuideIndex => ({
   version: RAGIT_VERSION,
   generatedAt: new Date().toISOString(),
   source: {
