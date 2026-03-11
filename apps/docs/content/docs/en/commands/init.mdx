@@ -1,52 +1,67 @@
 ---
 title: init
-description: Initialize a repository for RAGit
+description: Inspect a repository, reuse existing knowledge sources, and bootstrap RAGit foundations
 command_path: init
 ---
 
 ## What It Does
 
-`init` prepares a repository for RAGit. It checks git context, normalizes to the repository root when you point at a nested Git path, creates the RAGit structure, loads or creates `AGENTS.md`, prepares guide files, and bootstraps the local zvec storage layout.
+`init` is a discover-first bootstrap command. It normalizes to the repository root, checks Git context, scans the repository, classifies it as `empty`, `existing`, `docs-heavy`, or `monorepo`, evaluates documentation coverage/maturity, plans missing foundational docs, and then bootstraps the control plane and local zvec store.
 
 ## When To Use / When Not To Use
 
 ### When to use it
 
 - You are setting up RAGit in a repository for the first time.
-- You want the standard `.ragit/**` structure and guide scaffolding.
-- You want to confirm whether a legacy JSON store still needs migration.
+- You want existing docs to be reused before new draft docs are generated.
+- You want a machine-readable initialization report for agents or CI.
 
 ### When not to use it
 
-- The repository is already initialized and you only want to index new docs. Use <a href="/en/docs/commands/ingest">`ingest`</a>.
-- You only need to inspect current setup health. Use <a href="/en/docs/commands/status">`status`</a> or <a href="/en/docs/commands/doctor">`doctor`</a>.
+- You only want searchable knowledge. Use <a href="/en/docs/commands/ingest">`ingest`</a> after init.
+- You only want current health/status checks. Use <a href="/en/docs/commands/status">`status`</a> or <a href="/en/docs/commands/doctor">`doctor`</a>.
 
 ## Syntax
 
 ```bash
-pnpm ragit init [--cwd <path>] [--yes|--non-interactive] [--git-init] [--output text|json|both]
+pnpm ragit init [--cwd <path>] [--yes|--non-interactive] [--mode auto|empty|existing|monorepo|docs-heavy] [--strategy minimal|balanced|full] [--dry-run] [--merge-existing] [--git-init] [--output text|json|both]
 ```
 
 ## Arguments And Options
 
-- `--cwd <path>`: Run initialization against another repository path. If the path is inside a Git working tree, `init` anchors to the repository root.
+- `--cwd <path>`: Run initialization against another repository path. If the path is inside a Git worktree, `init` anchors to the repository root.
 - `--yes`: Accept defaults and skip prompts.
 - `--non-interactive`: Same intent as `--yes`, useful in scripted flows.
+- `--mode auto|empty|existing|monorepo|docs-heavy`: Override repository mode detection. Default is `auto`.
+- `--strategy minimal|balanced|full`: Control how aggressively stage-1 foundational docs are generated. Default is `balanced`.
+- `--dry-run`: Compute the full report without writing files or bootstrapping storage.
+- `--merge-existing`: Reuse existing docs as primary sources before creating draft files. This is the default behavior.
 - `--git-init`: Create a git repository automatically in non-interactive mode.
-- `--output text|json|both`: Choose the human table, JSON summary, or both.
+- `--output text|json|both`: Choose the human summary, JSON summary, or both.
 
 ## Input And Output Contract
 
 - Input is flag-based only. There is no `--input <path|->` payload mode.
-- JSON output includes the high-level setup summary: `mode`, `git`, `agents`, `guide`, `storage`, and `nextActions`.
-- `--output json` is useful when an agent needs to check whether migration is still required.
+- JSON output includes:
+  - `executionMode`
+  - `repositoryMode`
+  - `strategy`
+  - `scan`
+  - `coverage`
+  - `maturity`
+  - `knowledgeMap`
+  - `actions`
+  - `bootstrap`
+  - `nextActions`
+- `actions` reports planned create/reuse/skip outcomes for stage-1 foundational docs.
+- `bootstrap` reports the AGENTS/guide/zvec state or planned state during `--dry-run`.
 
 ## Examples
 
 Human terminal flow:
 
 ```bash
-pnpm ragit init
+pnpm ragit init --mode auto --strategy balanced --merge-existing
 ```
 
 Agent-oriented flow:
@@ -55,12 +70,19 @@ Agent-oriented flow:
 pnpm ragit init --yes --git-init --output json
 ```
 
+Preview-only flow:
+
+```bash
+pnpm ragit init --dry-run --output json
+```
+
 ## Failures And Cautions
 
 - In non-interactive mode, `init` fails if the directory is not a git repository and `--git-init` is missing.
 - In TTY-less environments, interactive mode is not available.
+- `--dry-run` performs repository analysis but does not write files or create the zvec store.
 - zvec bootstrap currently supports `darwin/arm64`, `linux/arm64`, and `linux/x64`.
-- `init` prepares the repository but does not index docs yet. Run <a href="/en/docs/commands/ingest">`ingest`</a> after setup.
+- `init` can inspect repository docs, but it still does **not** make the repository search-ready. Run <a href="/en/docs/commands/ingest">`ingest`</a> after setup.
 
 ## Related Commands
 

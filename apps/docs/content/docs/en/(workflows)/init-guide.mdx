@@ -1,80 +1,38 @@
 ---
 title: Init Guide
-description: Interactive AGENTS-aware initialization flow
+description: Discover-first repository initialization flow
 ---
 
-The repository init command runs a 7-step interactive flow by default when you are inside the repository checkout. If you launch it from a nested path inside a Git worktree, `init` still anchors to the repository root.
+The repository init command is now a discover-first bootstrap flow. It still anchors to the repository root, still prepares `.ragit/**`, `AGENTS.md`, guide assets, and the empty zvec store, but it does that only after it scans the repository and decides what knowledge already exists.
 
-1. Environment check (and optional `git init`)
-2. Mode confirmation
-3. Load/create root `AGENTS.md`
-4. Show supported document templates (Architecture Decision (ADR), Product Requirement (PRD), Software Requirements (SRS), Implementation Specification (SPEC), Plan, Domain-Driven Design (DDD), Glossary, Phase and Binding Documents (PBD))
-5. Build `.ragit/guide` incrementally
-6. Bootstrap the zvec store
-7. Print summary + next actions
+## Flow
 
-## Visual Overview
+1. Check Git context and optionally run `git init`
+2. Scan repository code/docs/build files
+3. Select `empty`, `existing`, `docs-heavy`, or `monorepo` mode
+4. Run documentation census, coverage scoring, and maturity scoring
+5. Build a knowledge-slot map from existing repository sources
+6. Plan missing foundational docs and reuse existing sources first
+7. Write stage-1 drafts, bootstrap `.ragit/**`, and bootstrap the zvec store
+8. Print the final report and next actions
 
-![Repository init flow diagram showing the seven setup steps and where the supported template set becomes explicit.](/guide-visuals/init-flow.svg)
+## Stage-1 generated docs
 
-This diagram is the fastest way to read the command. Steps 1 through 4 establish the repository contract and authoring system. Steps 5 and 6 create scaffolding. Step 7 reports status and next actions, but it does not make the repository searchable yet.
+`init` can generate only these draft docs in stage 1:
 
-<Callout title="How to read this flow">
-  The center of gravity is Step 4. That is where document roles become explicit, so later ingest and retrieval can interpret files by purpose instead of treating every Markdown file as the same artifact.
-</Callout>
+- `RAGIT.md`
+- `docs/workspace-map.md`
+- `docs/ragit/ingestion-policy.md`
+- `docs/known-gaps.md`
+- `docs/adr/README.md`
 
-Step 4 is where `init` prepares a shared authoring system, not just a directory tree. RAGit installs eight document templates so humans and agents can separate product intent (`Product Requirement (PRD)`), system requirements (`Software Requirements (SRS)`), implementation contracts (`Implementation Specification (SPEC)`), topology and bindings (`Phase and Binding Documents (PBD)`), stable decisions (`Architecture Decision (ADR)`), execution sequencing (`Plan`), domain structure (`Domain-Driven Design (DDD)`), and shared vocabulary (`Glossary`).
-
-`Implementation Specification (SPEC)` templates are used for implementation-level functional specifications, while `Phase and Binding Documents (PBD)` templates describe phase topology and binding structure.
-
-## How to think about template scope
-
-<Cards>
-  <Card title="Product framing">
-    Start with `Product Requirement (PRD)` when you are defining the problem, user, and outcome. Move to `Software Requirements (SRS)` when the question becomes what the system must provide.
-  </Card>
-  <Card title="Implementation contract">
-    Use `Implementation Specification (SPEC)` when module behavior, interfaces, and acceptance details must become explicit for humans and agents.
-  </Card>
-  <Card title="Topology reasoning">
-    Use `Phase and Binding Documents (PBD)` when the hard part is how phases, components, or agents connect and where drift can appear between them.
-  </Card>
-  <Card title="Stable choices">
-    Use `Architecture Decision (ADR)` when you are recording a durable choice between alternatives rather than an execution sequence.
-  </Card>
-</Cards>
-
-- Start with `Product Requirement (PRD)` when you are defining the problem, user, and outcome.
-- Move to `Software Requirements (SRS)` when you need system-level requirements and constraints.
-- Use `Implementation Specification (SPEC)` when you are defining module behavior, interfaces, and acceptance details.
-- Use `Phase and Binding Documents (PBD)` when the hard part is how phases, components, or agents bind together.
-- Use `Architecture Decision (ADR)` when you are recording a durable decision instead of an execution sequence.
-
-If you are unsure which template to start with, pick by role rather than filename style. A requirements document should become `SRS`, a feature contract should become `SPEC`, and a topology explanation should become `PBD`.
-
-## How document type recognition works
-
-- Frontmatter `type` is the strongest signal.
-- If frontmatter is missing, RAGit looks at path names such as `docs/specs/`, `docs/requirements/`, or `docs/ddd/`.
-- If the path is still ambiguous, RAGit falls back to the first heading, such as `# Glossary` or `# PBD`.
-- In practice, the safest authoring pattern is to set `type` explicitly and keep the title aligned with the document role.
+Every generated doc is marked as inferred draft content so humans can distinguish generated scaffolding from validated repository truth.
 
 ## What `init` prepares
 
-![Diagram contrasting what init creates immediately versus what still waits for ingest.](/guide-visuals/init-boundary.svg)
-
-This boundary matters because users often assume `init` already indexed repository documents. It does not. The command ends with an empty but usable control plane and an empty but usable canonical store.
-
-<Callout type="warning" title="Important boundary">
-  `init` makes the repository control-plane ready and zvec-store ready. `ingest` is the step that turns repository documents into searchable knowledge.
-</Callout>
-
-<Callout title="Platform note">
-  zvec bootstrap currently supports `darwin/arm64`, `linux/arm64`, and `linux/x64`.
-</Callout>
-
-- Git-aware control-plane preparation for `.ragit/`
-- Load or create flow for the root `AGENTS.md`
+- Git-aware repository normalization
+- Existing-doc discovery and coverage evaluation
+- Draft foundational docs for missing gaps only
 - `.ragit/config.toml`
 - `.ragit/guide/templates/*`
 - `.ragit/guide/guide-index.json`
@@ -84,77 +42,68 @@ This boundary matters because users often assume `init` already indexed reposito
 ## What `init` does not prepare
 
 - No searchable corpus
-- No chunk records or manifests
-- No repository document scan or chunk generation
-- No vector upsert into the empty zvec collections
+- No chunk/document record creation in zvec
+- No snapshot manifests
+- No query-ready knowledge state
 
-`init` makes the repository **control-plane ready** and **zvec-store ready**.
-It does **not** make the repository **search-ready**.
-Searchable knowledge appears only after the repository ingest command runs.
+`init` can inspect repository docs, but searchable knowledge still begins with <a href="/en/docs/commands/ingest">`ingest`</a>.
 
-`storage.backend = "zvec"` now means the canonical backend, and `init` bootstraps an empty store without indexing repository documents.
+## Representative scenarios
 
-The important takeaway is that `init` prepares the naming system, template system, and detection hints first, so later ingest and retrieval can interpret documents by role instead of treating every Markdown file as the same kind of artifact.
+### Empty repository
 
-## Representative User Scenarios
+- `pnpm ragit init --yes --git-init`
+- Mode selected: `empty`
+- Expected result: foundational drafts plus control-plane/bootstrap assets
 
-### U1. New local bootstrap
+### Existing codebase
 
-Use this flow when the current directory is not a Git repository and neither `AGENTS.md` nor `.ragit/` exists yet.
+- `pnpm ragit init`
+- Mode selected: `existing`
+- Expected result: existing docs are reused, missing drafts are added, no core docs are overwritten
 
-1. Run the repository init command
-2. RAGit detects that Git is missing
-3. Interactive mode proposes `git init`
-4. RAGit creates `AGENTS.md`
-5. RAGit creates `.ragit/config.toml`, `.ragit/guide/templates/*`, `guide-index.json`, and the empty zvec store
-6. RAGit prints the next actions: `ragit hooks install`, `ragit ingest --all`
+### Docs-heavy repository
 
-The important outcome is that initialization is complete, but searchable knowledge is not created yet.
+- `pnpm ragit init`
+- Mode selected: `docs-heavy`
+- Expected result: high reuse ratio, low generated-doc count
 
-### U2. Existing Git repository with existing `AGENTS.md`
+### Monorepo
 
-Use this flow when the repository already has Git history and a root `AGENTS.md`.
+- `pnpm ragit init`
+- Mode selected: `monorepo`
+- Expected result: apps/packages are reflected in the workspace map and knowledge map
 
-1. Run the repository init command
-2. RAGit loads `AGENTS.md` in read-only mode
-3. RAGit creates only the missing `.ragit` control-plane files and bootstraps zvec if needed
-4. RAGit refreshes `guide-index.json`
+### Dry-run
 
-The important outcome is that the existing instruction file stays unchanged while the standard guide structure is incrementally attached.
+```bash
+pnpm ragit init --dry-run --output json
+```
 
-### U3. Re-running on a partially initialized repository
+Expected result:
 
-Use this flow when `.ragit/` already exists but some templates or index files are missing.
+- full scan/coverage/maturity report
+- planned create/reuse/skip actions
+- no file system mutations
 
-1. Run the repository init command
-2. Existing files are preserved
-3. Missing templates are added
-4. `guide-index.json` is regenerated
-
-The important outcome is that `init` behaves incrementally and can be re-run safely.
-
-### U4. Non-interactive or CI initialization
-
-Use this flow when TTY is unavailable or when automation requires defaults.
-
-1. Run the repository init command in non-interactive mode
-2. If the directory is already a Git repository, initialization proceeds immediately
-3. If it is not a Git repository, `--git-init` is required for automatic initialization
-4. RAGit returns the same guide + zvec-store summary with table or JSON output
-
-The important outcome is that CI can prepare guide/control-plane state and an empty canonical store, but indexing still belongs to a later `ingest` step.
-
-## Non-interactive
+## Non-interactive examples
 
 ```bash
 pnpm ragit init --yes
 pnpm ragit init --yes --git-init
-pnpm ragit init --yes --output json
+pnpm ragit init --mode auto --strategy balanced --merge-existing --output json
+pnpm ragit init --dry-run --output json
 ```
 
 ## Generated structure
 
 ```text
+RAGIT.md
+docs/
+  adr/README.md
+  known-gaps.md
+  ragit/ingestion-policy.md
+  workspace-map.md
 .ragit/
   config.toml
   guide/
