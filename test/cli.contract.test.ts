@@ -32,7 +32,8 @@ describe("CLI machine contract", () => {
       expect(initOutput.command).toBe("init");
       expect(initOutput.ok).toBe(true);
       expect(initOutput.cwd).toBe(expectedRoot);
-      expect(initOutput.data.agents.path).toBe("AGENTS.md");
+      expect(initOutput.data.executionMode).toBe("non-interactive");
+      expect(initOutput.data.bootstrap.agents.path).toBe("AGENTS.md");
     },
     15_000,
   );

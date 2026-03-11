@@ -9,6 +9,18 @@ export const defaultConfig = (): RagitConfig => ({
   project: {
     name: "ragit-project",
     default_branch: "main",
+    mode: "auto",
+  },
+  init: {
+    strategy: "balanced",
+    merge_existing: true,
+  },
+  docs: {
+    entrypoint: "RAGIT.md",
+    workspace_map: "docs/workspace-map.md",
+    ingestion_policy: "docs/ragit/ingestion-policy.md",
+    known_gaps: "docs/known-gaps.md",
+    adr_dir: "docs/adr",
   },
   storage: {
     backend: "zvec",
@@ -24,6 +36,8 @@ export const defaultConfig = (): RagitConfig => ({
     supported_types: [...KNOWN_DOC_TYPES],
     type_detection: "frontmatter-first",
     doc_globs: ["**/*.md", "**/*.mdx"],
+    include: ["README.md", "docs/**"],
+    exclude: ["**/.git/**", "**/.ragit/**", "**/node_modules/**", "**/dist/**", "**/coverage/**", "**/.next/**"],
   },
   hooks: {
     post_commit: true,

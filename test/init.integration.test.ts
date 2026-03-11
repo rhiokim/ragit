@@ -9,19 +9,26 @@ import { runInit } from "../src/commands/init.js";
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
 describe("init command integration", () => {
-  it("creates AGENTS and guide index in git repo", async () => {
-    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-git-"));
-    git(temp, ["init"]);
-    const summary = await runInit(temp, { nonInteractive: true });
-    expect(summary.mode).toBe("non-interactive");
-    expect(summary.agents.mode).toBe("created");
-    expect(summary.guide.indexPath).toBe(".ragit/guide/guide-index.json");
-    expect(summary.guide.templates).toContain(".ragit/guide/templates/spec.template.md");
-    expect(summary.guide.templates).toContain(".ragit/guide/templates/pbd.template.md");
-    expect(summary.steps).toContain("doc-types=adr,prd,srs,spec,plan,ddd,glossary,pbd");
-    expect(summary.storage.status).toBe("created");
-    expect(summary.storage.collections).toEqual(["documents", "chunks"]);
-    expect(summary.storage.searchReady).toBe(false);
+  it("detects empty repositories and creates foundational drafts", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-empty-"));
+
+    const summary = await runInit(temp, {
+      nonInteractive: true,
+      gitInit: true,
+    });
+
+    expect(summary.executionMode).toBe("non-interactive");
+    expect(summary.repositoryMode).toBe("empty");
+    expect(summary.actions.created).toContain("RAGIT.md");
+    expect(summary.actions.created).toContain("docs/ragit/ingestion-policy.md");
+    expect(summary.bootstrap.agents.mode).toBe("created");
+    expect(summary.bootstrap.storage.status).toBe("created");
+    expect(summary.bootstrap.storage.collections).toEqual(["documents", "chunks"]);
+    expect(summary.bootstrap.storage.searchReady).toBe(false);
+
+    const ragitContent = await readFile(path.join(temp, "RAGIT.md"), "utf8");
+    expect(ragitContent).toContain("status: draft");
+    expect(ragitContent).toContain("last_generated_by: ragit init");
   });
 
   it("anchors nested git paths to the repository root", async () => {
@@ -32,41 +39,98 @@ describe("init command integration", () => {
 
     const summary = await runInit(nested, { nonInteractive: true });
 
-    expect(summary.agents.path).toBe("AGENTS.md");
-    expect(summary.guide.indexPath).toBe(".ragit/guide/guide-index.json");
+    expect(summary.bootstrap.agents.path).toBe("AGENTS.md");
+    expect(summary.bootstrap.guide.indexPath).toBe(".ragit/guide/guide-index.json");
     await access(path.join(temp, "AGENTS.md"), constants.F_OK);
     await access(path.join(temp, ".ragit", "guide", "guide-index.json"), constants.F_OK);
     await expect(access(path.join(nested, ".ragit"), constants.F_OK)).rejects.toThrow();
   });
 
-  it("loads existing AGENTS without mutating source content", async () => {
+  it("reuses existing documents without overwriting them", async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-existing-"));
     git(temp, ["init"]);
-    const agentsPath = path.join(temp, "AGENTS.md");
-    const seed = "## [B1] Custom\n## [B2] Another\n## [Rule 1] Rule";
-    await writeFile(agentsPath, seed, "utf8");
-    const before = await readFile(agentsPath, "utf8");
+    await writeFile(path.join(temp, "README.md"), "# Existing README\n", "utf8");
+    await writeFile(path.join(temp, "CONTRIBUTING.md"), "# Contributing\n", "utf8");
+    await mkdir(path.join(temp, "docs"), { recursive: true });
+    await writeFile(path.join(temp, "docs", "architecture.md"), "# Architecture\n", "utf8");
+
     const summary = await runInit(temp, { nonInteractive: true });
-    const after = await readFile(agentsPath, "utf8");
-    expect(summary.agents.mode).toBe("loaded");
-    expect(before).toBe(after);
+
+    expect(summary.repositoryMode).toBe("existing");
+    expect(summary.actions.reused).toContain("README.md");
+    expect(summary.actions.reused).toContain("CONTRIBUTING.md");
+    expect(summary.coverage.projectOverview.status).toBe("sufficient");
+    expect(summary.coverage.localDevelopmentGuide.status).toBe("sufficient");
+    expect(summary.coverage.architectureRationale.status).toBe("sufficient");
+    expect(await readFile(path.join(temp, "README.md"), "utf8")).toBe("# Existing README\n");
   });
 
-  it("fails in non-git without --git-init and succeeds with it", async () => {
-    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-nongit-"));
-    await expect(runInit(temp, { nonInteractive: true })).rejects.toThrow("Git 저장소가 아닙니다.");
-    const summary = await runInit(temp, { nonInteractive: true, gitInit: true });
-    expect(summary.git.initialized).toBe(true);
-    expect(summary.agents.mode).toBe("created");
+  it("prefers docs-heavy mode when docs dominate the repository", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-docs-heavy-"));
+    git(temp, ["init"]);
+    await mkdir(path.join(temp, "docs", "adr"), { recursive: true });
+    await mkdir(path.join(temp, "docs", "ragit"), { recursive: true });
+    await mkdir(path.join(temp, "src"), { recursive: true });
+    await writeFile(path.join(temp, "README.md"), "# Product\n", "utf8");
+    await writeFile(path.join(temp, "CONTRIBUTING.md"), "# Contributing\n", "utf8");
+    await writeFile(path.join(temp, "docs", "architecture.md"), "# Architecture\n", "utf8");
+    await writeFile(path.join(temp, "docs", "workspace-map.md"), "# Workspace Map\n", "utf8");
+    await writeFile(path.join(temp, "docs", "ragit", "ingestion-policy.md"), "# Ingestion Policy\n", "utf8");
+    await writeFile(path.join(temp, "docs", "adr", "0001-example.md"), "---\ntype: adr\n---\n# Decision\n", "utf8");
+    await writeFile(path.join(temp, "docs", "glossary.md"), "---\ntype: glossary\n---\n# Terms\n", "utf8");
+    await writeFile(path.join(temp, "docs", "operations.md"), "# Operations\n", "utf8");
+    await writeFile(path.join(temp, "src", "index.ts"), "export const ready = true;\n", "utf8");
+
+    const summary = await runInit(temp, { nonInteractive: true });
+
+    expect(summary.repositoryMode).toBe("docs-heavy");
+    expect(summary.actions.created.length).toBeLessThanOrEqual(2);
+    expect(summary.coverage.ingestionPolicy.status).toBe("sufficient");
+    expect(summary.coverage.decisionRecords.status).toBe("sufficient");
   });
 
-  it("marks migrationRequired when legacy json store exists", async () => {
+  it("detects monorepo layout and plans workspace docs", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-monorepo-"));
+    git(temp, ["init"]);
+    await writeFile(path.join(temp, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n  - packages/*\n", "utf8");
+    await writeFile(path.join(temp, "package.json"), JSON.stringify({ packageManager: "pnpm@10.13.1" }, null, 2), "utf8");
+    await mkdir(path.join(temp, "apps", "web"), { recursive: true });
+    await mkdir(path.join(temp, "packages", "editor"), { recursive: true });
+    await writeFile(path.join(temp, "apps", "web", "README.md"), "# Web\n", "utf8");
+    await writeFile(path.join(temp, "packages", "editor", "README.md"), "# Editor\n", "utf8");
+
+    const summary = await runInit(temp, { nonInteractive: true });
+
+    expect(summary.repositoryMode).toBe("monorepo");
+    expect(summary.scan.apps).toContain("apps/web");
+    expect(summary.scan.packages).toContain("packages/editor");
+    expect(summary.actions.created).toContain("docs/workspace-map.md");
+  });
+
+  it("supports dry-run without mutating the repository", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-dry-run-"));
+    git(temp, ["init"]);
+    await writeFile(path.join(temp, "README.md"), "# Existing README\n", "utf8");
+
+    const summary = await runInit(temp, { nonInteractive: true, dryRun: true });
+
+    expect(summary.actions.created).toContain("RAGIT.md");
+    expect(summary.bootstrap.agents.mode).toBe("planned");
+    expect(summary.bootstrap.storage.status).toBe("planned");
+    await expect(access(path.join(temp, "RAGIT.md"), constants.F_OK)).rejects.toThrow();
+    await expect(access(path.join(temp, ".ragit"), constants.F_OK)).rejects.toThrow();
+  });
+
+  it("fails in non-git without --git-init and reports legacy store migration", async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-init-legacy-"));
+    await expect(runInit(temp, { nonInteractive: true })).rejects.toThrow("Git 저장소가 아닙니다.");
     git(temp, ["init"]);
     await mkdir(path.join(temp, ".ragit", "store"), { recursive: true });
     await writeFile(path.join(temp, ".ragit", "store", "index.json"), JSON.stringify({ documents: {}, chunks: {} }, null, 2), "utf8");
+
     const summary = await runInit(temp, { nonInteractive: true });
-    expect(summary.storage.migrationRequired).toBe(true);
+
+    expect(summary.bootstrap.storage.migrationRequired).toBe(true);
     expect(summary.nextActions[0]).toBe("ragit migrate from-json-store");
   });
 });
