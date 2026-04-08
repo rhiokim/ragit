@@ -102,6 +102,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeOutput.data.spec.path).toBe("query");
       expect(describeOutput.data.spec.supportsRawJsonInput).toBe(true);
 
+      const describeDocOutput = JSON.parse(runCli(["describe", "doc", "create", "--format", "json"]));
+      expect(describeDocOutput.command).toBe("describe");
+      expect(describeDocOutput.ok).toBe(true);
+      expect(describeDocOutput.data.spec.path).toBe("doc create");
+      expect(describeDocOutput.data.spec.options.some((option: { name: string }) => option.name === "--type")).toBe(true);
+
       const queryOutput = JSON.parse(runCli(["query", "--input", "query.json", "--cwd", temp, "--format", "json", "--view", "minimal"]));
       expect(queryOutput.command).toBe("query");
       expect(queryOutput.ok).toBe(true);

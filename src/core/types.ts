@@ -43,6 +43,11 @@ export interface RagitConfig {
     known_gaps: string;
     adr_dir: string;
   };
+  docs_authority: {
+    auto_refresh_on_hook: boolean;
+    validate_on_ingest: boolean;
+    canonical_root: string;
+  };
   storage: {
     backend: "zvec";
     manifest_dir: string;

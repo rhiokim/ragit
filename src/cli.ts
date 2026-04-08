@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { resolveCwd, runConfigSet, runDoctor, runStatus } from "./commands/bootstrap.js";
+import { runDocCreateCommand, runDocReconcileCommand, runDocRefreshCommand, runDocValidateCommand } from "./commands/doc.js";
 import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
 import { formatInitSummaryTable, resolveInitRoot, runInit } from "./commands/init.js";
 import { runMemoryPromoteCommand, runMemoryRecallCommand, runMemoryWrapCommand } from "./commands/memory.js";
@@ -35,6 +36,9 @@ const formatStatusText = (status: Awaited<ReturnType<typeof runStatus>>): string
     `- zvec: ${status.zvec.status}`,
     `- search_ready: ${status.zvec.searchReady}`,
     `- migration_required: ${status.zvec.migrationRequired}`,
+    `- docs_tracked: ${status.docsAuthority.tracked}`,
+    `- docs_violations: ${status.docsAuthority.violations}`,
+    `- docs_last_reconciled_at: ${status.docsAuthority.lastReconciledAt ?? "none"}`,
     `- format: ${status.format}`,
   ].join("\n");
 
@@ -58,6 +62,9 @@ const formatIngestText = (summary: Awaited<ReturnType<typeof runIngest>>): strin
     `- full_snapshot: ${summary.fullSnapshot}`,
     `- planned_files: ${summary.plannedFiles.length}`,
     `- deleted_document_ids: ${summary.deletedDocumentIds.length}`,
+    `- docs_validated: ${summary.docAuthority.validated}`,
+    `- doc_contract_violations: ${summary.docAuthority.violations}`,
+    `- doc_contract_skipped: ${summary.docAuthority.skipped}`,
   ].join("\n");
 
 const formatDescribeText = (spec: ReturnType<typeof describeCommandPath>): string =>
@@ -164,6 +171,81 @@ program
     });
   });
 
+const doc = program.command("doc").description("표준 문서 타입 생성/정합/검증");
+doc
+  .command("create")
+  .description("표준 문서를 생성합니다.")
+  .requiredOption("--type <docType>", "adr|prd|srs|spec|plan|ddd|glossary|pbd")
+  .requiredOption("--title <title>", "문서 제목")
+  .option("--path <path>", "생성할 repo 상대 경로")
+  .option("--dry-run", "쓰기 없이 계획만 계산")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const cwd = resolveCwd(options.cwd);
+    await runDocCreateCommand(
+      cwd,
+      {
+        docType: String(options.type),
+        title: String(options.title),
+        path: options.path ? String(options.path) : undefined,
+      },
+      normalizeCliFormat(options.format, "json"),
+      Boolean(options.dryRun),
+    );
+  });
+
+doc
+  .command("refresh")
+  .description("표준 문서 구조를 비파괴 정합화합니다.")
+  .option("--type <docType>", "adr|prd|srs|spec|plan|ddd|glossary|pbd")
+  .option("--files <glob>", "정합화 대상 glob")
+  .option("--dry-run", "쓰기 없이 계획만 계산")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const cwd = resolveCwd(options.cwd);
+    await runDocRefreshCommand(
+      cwd,
+      {
+        docType: options.type ? String(options.type) : undefined,
+        files: options.files ? assertSafeGlobText(String(options.files), "doc.refresh.files") : undefined,
+      },
+      normalizeCliFormat(options.format, "json"),
+      Boolean(options.dryRun),
+    );
+  });
+
+doc
+  .command("validate")
+  .description("표준 문서 계약 위반 여부를 검사합니다.")
+  .option("--type <docType>", "adr|prd|srs|spec|plan|ddd|glossary|pbd")
+  .option("--all", "전체 타입 검사")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const cwd = resolveCwd(options.cwd);
+    await runDocValidateCommand(
+      cwd,
+      {
+        docType: options.type ? String(options.type) : undefined,
+        all: Boolean(options.all),
+      },
+      normalizeCliFormat(options.format, "json"),
+    );
+  });
+
+doc
+  .command("reconcile")
+  .description("기존 문서를 canonical 경로로 비파괴 매핑하고 인덱스를 갱신합니다.")
+  .option("--dry-run", "쓰기 없이 계획만 계산")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const cwd = resolveCwd(options.cwd);
+    await runDocReconcileCommand(cwd, normalizeCliFormat(options.format, "json"), Boolean(options.dryRun));
+  });
+
 program
   .command("config")
   .description("설정 관리")
@@ -251,9 +333,9 @@ program
       files: input.files,
       dryRun: Boolean(options.dryRun),
     });
-    const envelope = buildCliEnvelope("ingest", cwd, summary);
+    const warnings = summary.warnings;
     emitCliOutput({
-      envelope,
+      envelope: buildCliEnvelope("ingest", cwd, summary, warnings),
       format: normalizeCliFormat(options.format, "json"),
       text: formatIngestText(summary),
     });
