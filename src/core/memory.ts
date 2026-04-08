@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { assertAllowedKeys, assertRepoRelativePathArray } from "./cliInput.js";
 import { CliView } from "./cliContract.js";
 import { loadConfig } from "./config.js";
+import { createDoc, reconcileDocs } from "./doc-authority.js";
 import { toRepoPath } from "./identity.js";
 import { runIngest } from "./ingest.js";
 import {
@@ -531,8 +532,11 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
   const searchGoal = working?.goal && working.goal !== goal ? `${goal}\n${working.goal}` : goal;
   const search = await runRecallSearch(cwd, searchGoal, config.memory.recall_top_k);
   const retrievedHits = search.result?.hits ?? [];
+  const canonicalRoot = (config.docs_authority.canonical_root || "docs").replaceAll("\\", "/").replace(/\/+$/, "");
+  const canonicalDecisionPrefix = `${canonicalRoot}/adr/`;
+  const legacyDecisionPrefix = `${config.memory.corpus_dir.replace(/\\/g, "/")}/decisions/`;
   const decisionHits = retrievedHits
-    .filter((hit) => hit.path.startsWith(`${config.memory.corpus_dir.replace(/\\/g, "/")}/decisions/`))
+    .filter((hit) => hit.path.startsWith(canonicalDecisionPrefix) || hit.path.startsWith(legacyDecisionPrefix))
     .map(hitToDecision);
 
   const openLoops = working?.openLoops ?? activeOpenLoops(latestSession?.openLoops ?? []);
@@ -559,28 +563,6 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
     markdown: formatted.markdown,
     json: formatted.json,
   };
-};
-
-const slugify = (value: string): string => {
-  const normalized = value
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^\w\s-]/g, " ")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-  return normalized || "memory-artifact";
-};
-
-const uniqueTargetPath = async (dir: string, baseName: string): Promise<string> => {
-  let candidate = path.join(dir, `${baseName}.md`);
-  let suffix = 2;
-  while (await fileExists(candidate)) {
-    candidate = path.join(dir, `${baseName}-${suffix}.md`);
-    suffix += 1;
-  }
-  return candidate;
 };
 
 const quoteFrontmatter = (value: string): string => value.replaceAll('"', '\\"');
@@ -649,30 +631,31 @@ const renderPromotionDocument = (candidate: PromotionCandidate, promotedAt: stri
   return renderPlanDoc(candidate, promotedAt, sourceSessionId);
 };
 
-const targetDirectoryForCandidate = (paths: ResolvedMemoryPaths, candidate: PromotionCandidate): string => {
-  if (candidate.kind === "decision") return paths.decisionsDir;
-  if (candidate.kind === "glossary") return paths.glossaryDir;
-  return paths.plansDir;
-};
-
 export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dryRun = false): Promise<MemoryPromoteResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const paths = resolveMemoryPaths(cwd, config);
-  await ensureMemoryLayout(paths, { includeCorpus: !dryRun });
+  await ensureMemoryLayout(paths, { includeCorpus: false });
 
   const promotedAt = new Date().toISOString();
   const plannedFiles: string[] = [];
   const createdFiles: string[] = [];
   for (const candidate of input.promotionCandidates) {
-    const baseName = slugify(candidate.id ?? candidate.title);
-    const target = await uniqueTargetPath(targetDirectoryForCandidate(paths, candidate), baseName);
     const content = renderPromotionDocument(candidate, promotedAt, input.sourceSessionId);
-    const repoPath = toRepoPath(cwd, target);
-    plannedFiles.push(repoPath);
-    if (dryRun) continue;
-    await writeFile(target, content, "utf8");
-    createdFiles.push(repoPath);
+    const docType = candidate.kind === "decision" ? "adr" : candidate.kind === "glossary" ? "glossary" : "plan";
+    const created = await createDoc(
+      cwd,
+      {
+        docType,
+        title: candidate.title,
+        content,
+      },
+      dryRun,
+    );
+    plannedFiles.push(created.path);
+    if (!dryRun) {
+      createdFiles.push(created.path);
+    }
   }
 
   const currentHeadSha = await safeHeadSha(cwd);
@@ -681,6 +664,9 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
 
   if (plannedFiles.length === 0) {
     warnings.push("promotionCandidates가 비어 있어 생성된 문서가 없습니다.");
+  }
+  if (!dryRun && (plannedFiles.length > 0 || createdFiles.length > 0)) {
+    await reconcileDocs(cwd, { dryRun: false, config, ensureStructure: false });
   }
 
   let ingested = false;
