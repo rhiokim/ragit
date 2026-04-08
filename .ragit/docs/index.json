@@ -1,0 +1,99 @@
+{
+  "version": "1.0.1",
+  "generatedAt": "2026-03-14T08:31:23.369Z",
+  "lastReconciledAt": "2026-03-14T08:31:23.369Z",
+  "tracked": 10,
+  "violations": 6,
+  "entries": [
+    {
+      "sourcePath": "docs/plan/document.md",
+      "canonicalPath": "docs/plan/document.md",
+      "docType": "plan",
+      "hash": "14fe9ac838665f0621174e4db4e1bac98700e49d6f930c811d0960cb2050a911",
+      "status": "canonical",
+      "violations": []
+    },
+    {
+      "sourcePath": "docs/plans/2026-03-08-ragit-log-design.md",
+      "canonicalPath": "docs/plan/2026-03-08-ragit-log-design.md",
+      "docType": "plan",
+      "hash": "0f95bb61e440133d54ea2836cb32205d8f0f4f15f73398e58b0a868cdfced5db",
+      "status": "mapped",
+      "violations": [
+        "필수 섹션 누락: Milestones",
+        "필수 섹션 누락: Work Breakdown"
+      ]
+    },
+    {
+      "sourcePath": "testbed/docs/adr/adr-local-pnpm-runner.md",
+      "canonicalPath": "docs/adr/adr-local-pnpm-runner.md",
+      "docType": "adr",
+      "hash": "1efefd90844bea12c102f54a2d013a6adb1d254bc5d862c5da0105c5a4894c46",
+      "status": "mapped",
+      "violations": []
+    },
+    {
+      "sourcePath": "testbed/docs/ddd/ddd-core-models.md",
+      "canonicalPath": "docs/ddd/ddd-core-models.md",
+      "docType": "ddd",
+      "hash": "421115c05315f2a8ae2e0073a8e85cd8ddf8b7da785f38efdf341c4c3b2a8c9c",
+      "status": "mapped",
+      "violations": []
+    },
+    {
+      "sourcePath": "testbed/docs/glossary/glossary-testbed.md",
+      "canonicalPath": "docs/glossary/glossary-testbed.md",
+      "docType": "glossary",
+      "hash": "c7188274cf848d87b8d0c103c1ab37955c74ec968c2b3318f0a75ac859250886",
+      "status": "mapped",
+      "violations": [
+        "필수 섹션 누락: Terms"
+      ]
+    },
+    {
+      "sourcePath": "testbed/docs/pbd/pbd-phase-bindings.md",
+      "canonicalPath": "docs/pbd/pbd-phase-bindings.md",
+      "docType": "pbd",
+      "hash": "82af8346a8dd85b2b625fb866f7a17f077adf3cd3e8480457c17d8e1089e4fd6",
+      "status": "mapped",
+      "violations": [
+        "pbd 문서에 위상 식별자 헤더([B1] 등)가 없습니다."
+      ]
+    },
+    {
+      "sourcePath": "testbed/docs/plan/plan-round-1.md",
+      "canonicalPath": "docs/plan/plan-round-1.md",
+      "docType": "plan",
+      "hash": "005fc006095a9da8c4a6e58502e9500fa2dcc699db6b65469f98006f6a8218d9",
+      "status": "mapped",
+      "violations": []
+    },
+    {
+      "sourcePath": "testbed/docs/prd/prd-self-referential-testbed.md",
+      "canonicalPath": "docs/prd/prd-self-referential-testbed.md",
+      "docType": "prd",
+      "hash": "2795f6bb4ea1bf844ac4a412d4e4a85b403075f182eed202c7088bd6698ee68f",
+      "status": "mapped",
+      "violations": [
+        "필수 섹션 누락: User Stories",
+        "필수 섹션 누락: Acceptance Criteria"
+      ]
+    },
+    {
+      "sourcePath": "testbed/docs/spec/spec-round-1-execution.md",
+      "canonicalPath": "docs/spec/spec-round-1-execution.md",
+      "docType": "spec",
+      "hash": "a74525a7a0e42624d022a16564ba69db26f76fa49fd78b3599b7aae43f823be2",
+      "status": "mapped",
+      "violations": []
+    },
+    {
+      "sourcePath": "testbed/docs/srs/srs-round-1-testbed.md",
+      "canonicalPath": "docs/srs/srs-round-1-testbed.md",
+      "docType": "srs",
+      "hash": "b898cc6a936b25b837a6ba41611489bcc8bd4de1eb0d02152b7664f1feb94113",
+      "status": "mapped",
+      "violations": []
+    }
+  ]
+}
