@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import path from "node:path";
 import { chunkSections, parseSections } from "./chunk.js";
 import { loadConfig } from "./config.js";
+import { validateKnownDoc } from "./doc-authority.js";
 import { detectDocType } from "./docType.js";
 import { hashFileContent, listAllDocumentFiles, listDocumentFilesByGlob } from "./files.js";
 import { getHeadSha, getParentSha, listChangedFilesSince } from "./git.js";
@@ -11,7 +12,7 @@ import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, latestSnapshotSha, loadSnapshotManifestIfExists, writeSnapshotManifest } from "./manifest.js";
 import { ensureRagitStructure } from "./project.js";
 import { bootstrapCanonicalStore, closeCanonicalStore, writeChunksToCanonicalStore, writeDocumentsToCanonicalStore } from "./store.js";
-import { ChunkRecord, DocType, DocumentRecord } from "./types.js";
+import { ChunkRecord, DocType, DocumentRecord, isKnownDocType } from "./types.js";
 import { embedWithLocalPlaceholder } from "./embedding.js";
 
 export interface IngestOptions {
@@ -103,6 +104,12 @@ export interface IngestSummary {
   plannedFiles: string[];
   deletedDocumentIds: string[];
   fullSnapshot: boolean;
+  docAuthority: {
+    validated: boolean;
+    violations: number;
+    skipped: number;
+  };
+  warnings: string[];
 }
 
 const sortDocuments = (documents: DocumentRecord[]): DocumentRecord[] =>
@@ -123,6 +130,9 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
   const changedDocuments = new Map<string, DocumentRecord>();
   const changedChunks = new Map<string, ChunkRecord[]>();
   const plannedFiles = candidates.files.map((file) => toRepoPath(cwd, file));
+  const warnings: string[] = [];
+  let contractViolations = 0;
+  let contractSkipped = 0;
 
   for (const absolutePath of candidates.files) {
     const { content, hash } = await hashFileContent(absolutePath);
@@ -134,6 +144,15 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       continue;
     }
     const repoPath = toRepoPath(cwd, absolutePath);
+    if (config.docs_authority.validate_on_ingest && isKnownDocType(detection.docType)) {
+      const validation = validateKnownDoc(detection.docType, repoPath, maskedContent.text, config);
+      if (validation.violations.length > 0) {
+        contractViolations += validation.violations.length;
+        warnings.push(
+          `문서 계약 위반이 감지되었습니다: ${repoPath} (${validation.violations.join("; ")})`,
+        );
+      }
+    }
     const logicalDocumentId = documentIdFromPath(repoPath);
     const versionId = documentVersionId(logicalDocumentId, headSha, hash);
     const sections = parseSections(detection.body);
@@ -180,6 +199,12 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       plannedFiles,
       deletedDocumentIds: candidates.deletedDocumentIds,
       fullSnapshot: candidates.fullSnapshot,
+      docAuthority: {
+        validated: config.docs_authority.validate_on_ingest,
+        violations: contractViolations,
+        skipped: contractSkipped,
+      },
+      warnings,
     };
   }
 
@@ -255,6 +280,12 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       plannedFiles,
       deletedDocumentIds: candidates.deletedDocumentIds,
       fullSnapshot: candidates.fullSnapshot,
+      docAuthority: {
+        validated: config.docs_authority.validate_on_ingest,
+        violations: contractViolations,
+        skipped: contractSkipped,
+      },
+      warnings,
     };
   } finally {
     closeCanonicalStore(store);

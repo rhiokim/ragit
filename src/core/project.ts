@@ -8,6 +8,8 @@ export interface RagitPaths {
   root: string;
   ragitDir: string;
   configPath: string;
+  docsDir: string;
+  docsIndexPath: string;
   manifestDir: string;
   memoryDir: string;
   memorySessionsDir: string;
@@ -24,6 +26,8 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
   root: cwd,
   ragitDir: path.join(cwd, RAGIT_DIR),
   configPath: path.join(cwd, CONFIG_PATH),
+  docsDir: path.join(cwd, ".ragit", "docs"),
+  docsIndexPath: path.join(cwd, ".ragit", "docs", "index.json"),
   manifestDir: path.join(cwd, ".ragit", "manifest"),
   memoryDir: path.join(cwd, ".ragit", "memory"),
   memorySessionsDir: path.join(cwd, ".ragit", "memory", "sessions"),
@@ -39,6 +43,7 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
 export const ensureRagitDirectories = async (cwd: string): Promise<RagitPaths> => {
   const paths = resolveRagitPaths(cwd);
   await mkdir(paths.ragitDir, { recursive: true });
+  await mkdir(paths.docsDir, { recursive: true });
   await mkdir(paths.manifestDir, { recursive: true });
   await mkdir(paths.memoryDir, { recursive: true });
   await mkdir(paths.memorySessionsDir, { recursive: true });

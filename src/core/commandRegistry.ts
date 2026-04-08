@@ -17,7 +17,7 @@ export interface CommandOptionSpec {
 export interface CommandDescribeSpec {
   path: string;
   description: string;
-  group: "root" | "config" | "context" | "hooks" | "memory" | "migrate";
+  group: "root" | "config" | "context" | "hooks" | "memory" | "migrate" | "doc";
   docSlug: string;
   relatedCommands: string[];
   stability: "read-only" | "mutating";
@@ -87,6 +87,96 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     examples: [
       "ragit describe query --format json",
       "ragit describe memory promote --format both",
+    ],
+  },
+  {
+    path: "doc create",
+    description: "표준 문서 타입 문서를 생성합니다.",
+    group: "doc",
+    docSlug: "commands/doc/create",
+    relatedCommands: ["doc refresh", "doc validate", "doc reconcile"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: false,
+    outputSchemaSummary: ["dryRun", "docType", "path", "canonicalPath", "status", "usedTemplate", "reconcile"],
+    arguments: [],
+    options: [
+      { name: "--type", type: "enum", description: "문서 타입", enum: ["adr", "prd", "srs", "spec", "plan", "ddd", "glossary", "pbd"], required: true },
+      { name: "--title", type: "string", description: "문서 제목", required: true },
+      { name: "--path", type: "path", description: "생성할 repo 상대 경로" },
+      { name: "--dry-run", type: "boolean", description: "쓰기 없이 계획만 계산" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit doc create --type adr --title \"Token Rotation Policy\"",
+      "ragit doc create --type spec --title \"Auth API\" --dry-run --format json",
+    ],
+  },
+  {
+    path: "doc refresh",
+    description: "표준 문서 계약에 맞게 문서를 비파괴 정합화합니다.",
+    group: "doc",
+    docSlug: "commands/doc/refresh",
+    relatedCommands: ["doc create", "doc validate", "ingest"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: false,
+    outputSchemaSummary: ["dryRun", "plannedFiles", "refreshedFiles", "unchangedFiles", "violationsBefore", "violationsAfter", "reconcile"],
+    arguments: [],
+    options: [
+      { name: "--type", type: "enum", description: "문서 타입 필터", enum: ["adr", "prd", "srs", "spec", "plan", "ddd", "glossary", "pbd"] },
+      { name: "--files", type: "string", description: "정합화 대상 glob" },
+      { name: "--dry-run", type: "boolean", description: "쓰기 없이 계획만 계산" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit doc refresh --type adr",
+      "ragit doc refresh --files \"docs/**/*.md\" --dry-run --format json",
+    ],
+  },
+  {
+    path: "doc validate",
+    description: "표준 문서 계약 위반을 검사합니다.",
+    group: "doc",
+    docSlug: "commands/doc/validate",
+    relatedCommands: ["doc refresh", "doc reconcile", "ingest"],
+    stability: "read-only",
+    mutating: false,
+    supportsDryRun: false,
+    supportsRawJsonInput: false,
+    outputSchemaSummary: ["checkedFiles", "tracked", "violations", "files[]"],
+    arguments: [],
+    options: [
+      { name: "--type", type: "enum", description: "문서 타입 필터", enum: ["adr", "prd", "srs", "spec", "plan", "ddd", "glossary", "pbd"] },
+      { name: "--all", type: "boolean", description: "전체 타입 검사" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit doc validate --all",
+      "ragit doc validate --type pbd --format json",
+    ],
+  },
+  {
+    path: "doc reconcile",
+    description: "기존 문서를 canonical 경로에 비파괴 매핑하고 인덱스를 기록합니다.",
+    group: "doc",
+    docSlug: "commands/doc/reconcile",
+    relatedCommands: ["doc validate", "status", "init"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: false,
+    outputSchemaSummary: ["dryRun", "indexPath", "status", "tracked", "violations", "lastReconciledAt"],
+    arguments: [],
+    options: [
+      { name: "--dry-run", type: "boolean", description: "쓰기 없이 계획만 계산" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit doc reconcile",
+      "ragit doc reconcile --dry-run --format json",
     ],
   },
   {
@@ -185,7 +275,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["mode", "processed", "skipped", "masked", "commitSha", "manifestPath", "plannedFiles", "deletedDocumentIds"],
+    outputSchemaSummary: ["mode", "processed", "skipped", "masked", "commitSha", "manifestPath", "plannedFiles", "deletedDocumentIds", "docAuthority", "warnings"],
     arguments: [],
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
@@ -234,7 +324,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["branch", "head", "backend", "zvec", "supported_types", "manifests", "embedding", "format"],
+    outputSchemaSummary: ["branch", "head", "backend", "zvec", "supported_types", "docsAuthority", "manifests", "embedding", "format"],
     arguments: [],
     options: [
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
@@ -335,7 +425,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
   },
   {
     path: "memory promote",
-    description: "promotion candidate를 docs/memory 문서로 승격합니다.",
+    description: "promotion candidate를 표준 문서 타입(canonical docs/{type}/)으로 승격합니다.",
     group: "memory",
     docSlug: "commands/memory/promote",
     relatedCommands: ["memory wrap", "memory recall", "ingest"],

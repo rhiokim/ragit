@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, setConfigValue, writeConfig } from "../core/config.js";
+import { readDocAuthorityIndex } from "../core/doc-authority.js";
 import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
@@ -27,6 +28,12 @@ export interface StatusResult {
     stats: Record<string, unknown> | null;
   };
   supported_types: string[];
+  docsAuthority: {
+    tracked: number;
+    violations: number;
+    lastReconciledAt: string | null;
+    indexPath: string;
+  };
   manifests: number;
   embedding: Awaited<ReturnType<typeof loadConfig>>["embedding"];
   format: Awaited<ReturnType<typeof loadConfig>>["output"]["format"];
@@ -59,7 +66,7 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   } catch {
     zvecStatus = "missing";
   }
-  const status = {
+  const status: StatusResult = {
     branch,
     head: sha,
     backend: config.storage.backend,
@@ -72,10 +79,25 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
       stats,
     },
     supported_types: config.ingest.supported_types,
+    docsAuthority: {
+      tracked: 0,
+      violations: 0,
+      lastReconciledAt: null,
+      indexPath: ".ragit/docs/index.json",
+    },
     manifests: manifests.length,
     embedding: config.embedding,
     format: config.output.format,
   };
+  const docAuthorityIndex = await readDocAuthorityIndex(cwd);
+  status.docsAuthority = docAuthorityIndex
+    ? {
+        tracked: docAuthorityIndex.tracked,
+        violations: docAuthorityIndex.violations,
+        lastReconciledAt: docAuthorityIndex.lastReconciledAt,
+        indexPath: ".ragit/docs/index.json",
+      }
+    : status.docsAuthority;
   return status;
 };
 

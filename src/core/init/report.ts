@@ -34,6 +34,8 @@ export const formatInitSummaryTable = (summary: InitReport): string => {
     "bootstrap:",
     `- agents: ${summary.bootstrap.agents.mode} (${summary.bootstrap.agents.path})`,
     `- guide-index: ${summary.bootstrap.guide.indexPath}`,
+    `- docs-authority-index: ${summary.bootstrap.docsAuthority.status} (${summary.bootstrap.docsAuthority.indexPath})`,
+    `- docs-authority-tracked: ${summary.bootstrap.docsAuthority.tracked}, violations=${summary.bootstrap.docsAuthority.violations}`,
     `- zvec: ${summary.bootstrap.storage.status} (${summary.bootstrap.storage.collections.join(", ") || "documents,chunks"})`,
     "",
     "next actions:",

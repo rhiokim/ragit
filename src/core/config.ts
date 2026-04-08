@@ -22,6 +22,11 @@ export const defaultConfig = (): RagitConfig => ({
     known_gaps: "docs/known-gaps.md",
     adr_dir: "docs/adr",
   },
+  docs_authority: {
+    auto_refresh_on_hook: false,
+    validate_on_ingest: true,
+    canonical_root: "docs",
+  },
   storage: {
     backend: "zvec",
     manifest_dir: ".ragit/manifest",

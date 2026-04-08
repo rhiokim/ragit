@@ -1,5 +1,6 @@
 import path from "node:path";
 import { defaultConfig } from "../core/config.js";
+import { inspectDocAuthority, reconcileDocs } from "../core/doc-authority.js";
 import {
   buildGuideIndex,
   createTopologicalAgentsSeed,
@@ -146,6 +147,7 @@ const inspectBootstrapSummary = async (
       };
     }
   })();
+  const docsAuthority = await inspectDocAuthority(root);
 
   return {
     git,
@@ -161,6 +163,13 @@ const inspectBootstrapSummary = async (
       templates: templatePathsForSummary(),
     },
     storage,
+    docsAuthority: {
+      indexPath: docsAuthority.indexPath,
+      status: docsAuthority.status,
+      tracked: docsAuthority.tracked,
+      violations: docsAuthority.violations,
+      lastReconciledAt: docsAuthority.lastReconciledAt,
+    },
   };
 };
 
@@ -181,6 +190,7 @@ const applyBootstrap = async (
   ensureZvecRuntime();
   const store = await bootstrapCanonicalStore(root, config.embedding, false);
   try {
+    const docsAuthority = await reconcileDocs(root, { dryRun: false, ensureStructure: false });
     return {
       git,
       agents: {
@@ -200,6 +210,13 @@ const applyBootstrap = async (
         collections: [store.meta.collections.documents, store.meta.collections.chunks],
         searchReady: false,
         migrationRequired: await hasLegacyJsonStore(root),
+      },
+      docsAuthority: {
+        indexPath: docsAuthority.indexPath,
+        status: docsAuthority.status,
+        tracked: docsAuthority.tracked,
+        violations: docsAuthority.violations,
+        lastReconciledAt: docsAuthority.lastReconciledAt,
       },
     };
   } finally {

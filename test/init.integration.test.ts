@@ -25,6 +25,8 @@ describe("init command integration", () => {
     expect(summary.bootstrap.storage.status).toBe("created");
     expect(summary.bootstrap.storage.collections).toEqual(["documents", "chunks"]);
     expect(summary.bootstrap.storage.searchReady).toBe(false);
+    expect(summary.bootstrap.docsAuthority.indexPath).toBe(".ragit/docs/index.json");
+    await access(path.join(temp, ".ragit", "docs", "index.json"), constants.F_OK);
 
     const ragitContent = await readFile(path.join(temp, "RAGIT.md"), "utf8");
     expect(ragitContent).toContain("status: draft");

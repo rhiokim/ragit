@@ -106,6 +106,13 @@ export interface InitBootstrapSummary {
     searchReady: false;
     migrationRequired: boolean;
   };
+  docsAuthority: {
+    indexPath: string;
+    status: "created" | "loaded" | "planned";
+    tracked: number;
+    violations: number;
+    lastReconciledAt: string | null;
+  };
 }
 
 export interface InitReport {
