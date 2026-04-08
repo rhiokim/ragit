@@ -54,6 +54,29 @@ The acronyms below are shorthand for the canonical document names, so first-time
 - `Architecture Decision (ADR)` vs `Plan`: `ADR` records a stable decision. `Plan` records the sequence of work to execute.
 - `Domain-Driven Design (DDD)` vs `Glossary`: `DDD` models structure and boundaries in the domain. `Glossary` stabilizes the meaning of recurring terms.
 
+### SAD/HLD/LLD Compatibility Layer
+
+`SAD`, `HLD`, and `LLD` are supported as external architecture views, not as new canonical document types.
+They help teams map familiar architecture language onto RAGit's existing document system without changing ingest or retrieval semantics.
+
+| External view | Use it when | Primary RAGit mapping |
+| --- | --- | --- |
+| `SAD` | You are explaining the whole system shape, major constraints, and architecture direction | Architecture overview plus related `ADR` documents, with `SRS` or `PBD` when needed |
+| `HLD` | You are explaining module boundaries, flows, and higher-level topology | `SRS`, `DDD`, and `PBD` |
+| `LLD` | You are locking down implementation-unit behavior, interfaces, and state | `SPEC` |
+
+If authors want to make that view explicit, they can add an optional frontmatter hint:
+
+```yaml
+---
+type: spec
+architecture_view: lld
+---
+```
+
+`architecture_view` is advisory only.
+RAGit still classifies documents by canonical `type`, so `SPEC`, `SRS`, `DDD`, `PBD`, and `ADR` remain the source of truth for document behavior.
+
 ### Why RAGit Keeps `SPEC` and `PBD` Separate
 
 - `SPEC` is optimized for questions like "what should this module do?" and "what interface contract must be preserved?"

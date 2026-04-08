@@ -37,6 +37,7 @@ type: plan
         path.join(temp, "docs", "cache.spec.md"),
         `---
 type: spec
+architecture_view: lld
 ---
 # 상세 명세
 cache adapter`,
@@ -46,6 +47,7 @@ cache adapter`,
         path.join(temp, "docs", "runtime.pbd.md"),
         `---
 type: pbd
+architecture_view: hld
 ---
 # PBD
 phase and binding documents`,
@@ -61,6 +63,7 @@ phase and binding documents`,
       expect(types.has("plan")).toBe(true);
       expect(types.has("spec")).toBe(true);
       expect(types.has("pbd")).toBe(true);
+      expect(manifest.docs.find((doc) => doc.path === "docs/runtime.pbd.md")?.docType).toBe("pbd");
     },
     15_000,
   );

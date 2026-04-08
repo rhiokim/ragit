@@ -1,5 +1,6 @@
 ---
 type: spec
+architecture_view: lld
 ---
 # SPEC: Implementation Specification
 

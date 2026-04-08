@@ -1,5 +1,6 @@
 ---
 type: ddd
+architecture_view: hld
 ---
 # DDD
 

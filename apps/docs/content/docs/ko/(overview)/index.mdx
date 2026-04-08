@@ -54,6 +54,29 @@ RAGit은 Apache-2.0으로 라이선스됩니다.
 - `Architecture Decision (ADR)` vs `Plan`: `ADR`는 결정 자체를 남기고, `Plan`은 실행 순서를 남깁니다.
 - `Domain-Driven Design (DDD)` vs `Glossary`: `DDD`는 도메인 구조와 경계를 모델링하고, `Glossary`는 용어 의미를 고정합니다.
 
+### SAD/HLD/LLD 호환 계층
+
+`SAD`, `HLD`, `LLD`는 새로운 canonical document type이 아니라 외부 아키텍처 관습을 RAGit 문서 체계 위에 얹어 읽는 호환용 시야입니다.
+즉, 익숙한 아키텍처 용어를 유지하면서도 ingest와 retrieval의 기준은 기존 canonical type에 그대로 두려는 목적입니다.
+
+| 외부 관점 | 언제 쓰는가 | RAGit 기본 대응 |
+| --- | --- | --- |
+| `SAD` | 시스템 전체 구조, 주요 제약, 아키텍처 방향을 설명할 때 | architecture overview와 관련 `ADR`, 필요 시 `SRS`/`PBD` 참조 |
+| `HLD` | 상위 모듈 경계, 흐름, topology를 설명할 때 | `SRS`, `DDD`, `PBD` |
+| `LLD` | 구현 단위의 동작, 인터페이스, 상태를 고정할 때 | `SPEC` |
+
+이 관점을 문서에 드러내고 싶다면 선택적 frontmatter 힌트를 사용할 수 있습니다.
+
+```yaml
+---
+type: spec
+architecture_view: lld
+---
+```
+
+`architecture_view`는 권고형 메타데이터일 뿐입니다.
+RAGit은 문서 동작과 분류를 여전히 canonical `type` 기준으로 판단합니다.
+
 ### 왜 RAGit은 `SPEC`와 `PBD`를 분리하는가
 
 - `SPEC`는 "이 구현체는 무엇을 해야 하는가?" 같은 기능 계약 질문에 답하기 좋습니다.

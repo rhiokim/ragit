@@ -117,6 +117,7 @@ type: prd
 `,
   "srs.template.md": `---
 type: srs
+architecture_view: hld
 ---
 # SRS: Software Requirements
 
@@ -128,6 +129,7 @@ type: srs
 `,
   "spec.template.md": `---
 type: spec
+architecture_view: lld
 ---
 # SPEC: Implementation Specification
 
@@ -159,6 +161,7 @@ type: plan
 `,
   "ddd.template.md": `---
 type: ddd
+architecture_view: hld
 ---
 # DDD
 
@@ -178,6 +181,7 @@ type: glossary
 `,
   "pbd.template.md": `---
 type: pbd
+architecture_view: hld
 ---
 # PBD: Phase and Binding Documents
 

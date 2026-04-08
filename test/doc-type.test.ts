@@ -53,4 +53,16 @@ type: specification
     const result = detectDocType(path.join(cwd, "notes.md"), source, cwd);
     expect(result.docType).toBe("glossary");
   });
+
+  it("ignores architecture_view when resolving canonical doc type", () => {
+    const source = `---
+type: pbd
+architecture_view: hld
+---
+# PBD
+phase and binding documents`;
+    const result = detectDocType(path.join(cwd, "notes.md"), source, cwd);
+    expect(result.docType).toBe("pbd");
+    expect(result.frontmatter.architecture_view).toBe("hld");
+  });
 });

@@ -1,5 +1,6 @@
 ---
 type: srs
+architecture_view: hld
 ---
 # SRS: Software Requirements
 

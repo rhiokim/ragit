@@ -54,6 +54,27 @@ sequenceDiagram
 - `Glossary`: shared vocabulary for stable project terms
 - `Phase and Binding Documents (PBD)`: phase and binding topology for understanding implementation structure and coupling
 
+## SAD/HLD/LLD Compatibility Layer
+
+RAGit does not add `SAD`, `HLD`, or `LLD` as new canonical document types.
+Instead, it treats them as external architecture views layered on top of the existing document system.
+
+- `SAD`: repository or system-wide architecture explanation, usually read across architecture overviews plus related `ADR` documents
+- `HLD`: higher-level module boundaries, data flow, and topology, usually expressed with `SRS`, `DDD`, and `PBD`
+- `LLD`: implementation-unit contracts, interfaces, and state details, usually expressed with `SPEC`
+
+When authors want to make that view explicit, they can add an optional frontmatter hint:
+
+```yaml
+---
+type: spec
+architecture_view: lld
+---
+```
+
+`architecture_view` is advisory only.
+RAGit still classifies, validates, ingests, and retrieves documents by canonical `type`.
+
 ## Installation
 
 Requirements:

@@ -1,5 +1,6 @@
 ---
 type: pbd
+architecture_view: hld
 ---
 # PBD: Phase and Binding Documents
 
