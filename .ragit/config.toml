@@ -1,6 +1,18 @@
 [project]
-name = "ragit-project"
+name = "ragit"
 default_branch = "main"
+mode = "monorepo"
+
+[init]
+strategy = "balanced"
+merge_existing = true
+
+[docs]
+entrypoint = "RAGIT.md"
+workspace_map = "docs/workspace-map.md"
+ingestion_policy = "docs/ragit/ingestion-policy.md"
+known_gaps = "docs/known-gaps.md"
+adr_dir = "docs/adr"
 
 [storage]
 backend = "zvec"
@@ -16,6 +28,8 @@ version = "v1"
 supported_types = ["adr", "prd", "srs", "spec", "plan", "ddd", "glossary", "pbd"]
 type_detection = "frontmatter-first"
 doc_globs = ["**/*.md", "**/*.mdx"]
+include = ["README.md", "docs/**", "apps/**/README.md", "packages/**/README.md"]
+exclude = ["**/.git/**", "**/.ragit/**", "**/node_modules/**", "**/dist/**", "**/coverage/**", "**/.next/**"]
 
 [hooks]
 post_commit = true

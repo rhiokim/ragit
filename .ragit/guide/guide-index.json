@@ -1,10 +1,10 @@
 {
   "version": "1.0.1",
-  "generatedAt": "2026-03-07T00:13:42.183Z",
+  "generatedAt": "2026-03-14T03:59:44.218Z",
   "source": {
     "path": "/Users/rhio/Works/my/ragit/AGENTS.md",
     "mode": "loaded",
-    "sha256": "7ab6e1ae64f3679dd8dd14d34e22aa4b1a3ff4ae5b6be0bcbc93251b00abfcf1"
+    "sha256": "54ea322bdb9f60d3b9cd939557137f6697f51c37ac8961622fbec128628cc1e2"
   },
   "parser": {
     "boundaryRegex": "^#{2,6}\\s*(\\[[A-Z][0-9]+(?:\\.[a-z0-9]+)*\\])\\s+([^\\n]+)$",
@@ -184,7 +184,71 @@
       "title": "헤더-인덱스 강제 정합 규칙 (Mandatory Header-Index Alignment Rule)",
       "level": 3,
       "startLine": 255,
-      "endLine": 270,
+      "endLine": 272,
+      "parentId": null
+    },
+    {
+      "id": "Ground 2",
+      "title": "Agent-Centered Collaborative Memory Substrate",
+      "level": 2,
+      "startLine": 273,
+      "endLine": 281,
+      "parentId": null
+    },
+    {
+      "id": "[G2.1]",
+      "title": "인간 기억 한계 보완 원칙",
+      "level": 3,
+      "startLine": 282,
+      "endLine": 289,
+      "parentId": null
+    },
+    {
+      "id": "[G2.2]",
+      "title": "Agent 편향 설계 원칙",
+      "level": 3,
+      "startLine": 290,
+      "endLine": 296,
+      "parentId": null
+    },
+    {
+      "id": "[G2.3]",
+      "title": "협업 기억의 구성 요소",
+      "level": 3,
+      "startLine": 297,
+      "endLine": 307,
+      "parentId": null
+    },
+    {
+      "id": "Rule 2",
+      "title": "Agent-First Collaboration Memory Protocol",
+      "level": 2,
+      "startLine": 308,
+      "endLine": 312,
+      "parentId": null
+    },
+    {
+      "id": "[R2.1]",
+      "title": "명령 설계 우선순위",
+      "level": 3,
+      "startLine": 313,
+      "endLine": 320,
+      "parentId": null
+    },
+    {
+      "id": "[R2.2]",
+      "title": "기억 계층 해석 규칙",
+      "level": 3,
+      "startLine": 321,
+      "endLine": 328,
+      "parentId": null
+    },
+    {
+      "id": "[R2.3]",
+      "title": "`ragit log` 해석 규칙",
+      "level": 3,
+      "startLine": 329,
+      "endLine": 340,
       "parentId": null
     }
   ],
@@ -309,7 +373,55 @@
     {
       "rootId": "[R1.7]",
       "blockStartLine": 255,
-      "blockEndLine": 270,
+      "blockEndLine": 272,
+      "childIds": []
+    },
+    {
+      "rootId": "Ground 2",
+      "blockStartLine": 273,
+      "blockEndLine": 281,
+      "childIds": []
+    },
+    {
+      "rootId": "[G2.1]",
+      "blockStartLine": 282,
+      "blockEndLine": 289,
+      "childIds": []
+    },
+    {
+      "rootId": "[G2.2]",
+      "blockStartLine": 290,
+      "blockEndLine": 296,
+      "childIds": []
+    },
+    {
+      "rootId": "[G2.3]",
+      "blockStartLine": 297,
+      "blockEndLine": 307,
+      "childIds": []
+    },
+    {
+      "rootId": "Rule 2",
+      "blockStartLine": 308,
+      "blockEndLine": 312,
+      "childIds": []
+    },
+    {
+      "rootId": "[R2.1]",
+      "blockStartLine": 313,
+      "blockEndLine": 320,
+      "childIds": []
+    },
+    {
+      "rootId": "[R2.2]",
+      "blockStartLine": 321,
+      "blockEndLine": 328,
+      "childIds": []
+    },
+    {
+      "rootId": "[R2.3]",
+      "blockStartLine": 329,
+      "blockEndLine": 340,
       "childIds": []
     }
   ],
