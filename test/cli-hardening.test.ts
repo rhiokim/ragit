@@ -94,7 +94,7 @@ Dry-run should not mutate tracked state.`,
       const promoteOutput = JSON.parse(runCli(["memory", "promote", "--input", "promote.json", "--dry-run", "--format", "json", "--cwd", temp]));
       expect(promoteOutput.data.dryRun).toBe(true);
       expect(promoteOutput.data.createdFiles).toHaveLength(0);
-      expect(promoteOutput.data.plannedFiles[0]).toMatch(/^docs\/memory\/decisions\//);
+      expect(promoteOutput.data.plannedFiles[0]).toMatch(/^docs\/adr\//);
 
       const ingestOutput = JSON.parse(runCli(["ingest", "--input", "ingest.json", "--dry-run", "--format", "json", "--cwd", temp]));
       expect(ingestOutput.data.mode).toBe("dry-run");

@@ -49,10 +49,10 @@ describe("memory integration", () => {
 
       expect(result.createdFiles).toHaveLength(3);
       expect(result.ingested).toBe(true);
-      expect(result.createdFiles.some((entry) => entry.startsWith("docs/memory/decisions/"))).toBe(true);
+      expect(result.createdFiles.some((entry) => entry.startsWith("docs/adr/"))).toBe(true);
 
       const query = await searchKnowledge(temp, "restore active work instead of replaying raw logs", { topK: 3 });
-      expect(query.hits[0]?.path.startsWith("docs/memory/decisions/")).toBe(true);
+      expect(query.hits[0]?.path.startsWith("docs/adr/")).toBe(true);
     },
     15_000,
   );
@@ -73,7 +73,7 @@ describe("memory integration", () => {
       ],
     });
 
-    expect(result.createdFiles[0]).toMatch(/^docs\/memory\/decisions\//);
+    expect(result.createdFiles[0]).toMatch(/^docs\/adr\//);
     expect(result.ingested).toBe(false);
     expect(result.warnings[0]).toContain("HEAD commit");
   });
