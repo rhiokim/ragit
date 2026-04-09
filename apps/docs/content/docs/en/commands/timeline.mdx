@@ -1,0 +1,74 @@
+---
+title: timeline
+description: Read the append-only collaboration event ledger for session, memory, harness, and ingest workflows
+command_path: timeline
+---
+
+## What It Does
+
+`timeline` reads the append-only event ledger under `.ragit/log/events/*.jsonl` and projects the operational time axis for session materialization, artifact review, memory workflows, harness workflows, and ingest completion.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You want to know what happened across collaboration workflows, not just what changed in snapshot history.
+- You want to trace a specific `goalId`, `episodeId`, or `sessionId`.
+- You want a compact operational audit trail before resuming work.
+
+### When not to use it
+
+- You want commit-ordered semantic snapshot deltas. Use <a href="/en/docs/commands/log">`log`</a>.
+- You want the current repository summary only. Use <a href="/en/docs/commands/status">`status`</a>.
+- You want direct retrieval hits for a question. Use <a href="/en/docs/commands/query">`query`</a>.
+
+## Syntax
+
+```bash
+pnpm ragit timeline [--goal <goalId>] [--episode <episodeId>] [--session <sessionId>] [--kind <kind>] [--since <iso>] [--until <iso>] [--max-count <n>] [--view minimal|default|full] [--format text|json|both] [--cwd <path>]
+```
+
+## Arguments And Options
+
+- `--goal <goalId>`: Filter to one goal identifier.
+- `--episode <episodeId>`: Filter to one episode identifier.
+- `--session <sessionId>`: Filter to one source session identifier.
+- `--kind <kind>`: Limit results to `session`, `artifact`, `memory`, `harness`, or `ingest`.
+- `--since <iso>`: Lower bound for `recordedAt`.
+- `--until <iso>`: Upper bound for `recordedAt`.
+- `-n, --max-count <n>`: Limit the final number of emitted events.
+- `--view minimal|default|full`: Choose one-line scan output, structured event blocks, or richer provenance detail.
+- `--format text|json|both`: Choose human text, JSON, or both.
+- `--cwd <path>`: Run against another repository.
+
+## Input And Output Contract
+
+- There is no JSON payload input for `timeline`.
+- JSON output includes `filters`, `summary`, and `events`.
+- Each event record includes `eventId`, `eventType`, `recordedAt`, `goalId`, `episodeId`, `sessionId`, `sourceHeadSha`, `summary`, `artifactIds`, `relatedPaths`, `openLoops`, `nextActions`, and `provenance`.
+
+## Examples
+
+Scan the latest memory workflow events:
+
+```bash
+pnpm ragit timeline --kind memory --max-count 10
+```
+
+Inspect one session in JSON:
+
+```bash
+pnpm ragit timeline --session 20260410T090000Z-a1b2c3d4 --format json
+```
+
+## Failures And Cautions
+
+- `timeline` is an event ledger reader, not a repair tool.
+- Dry-run commands do not write ledger events.
+- The ledger is append-only and operational. It complements <a href="/en/docs/commands/log">`log`</a>; it does not replace snapshot history.
+
+## Related Commands
+
+- <a href="/en/docs/commands/log">`log`</a>
+- <a href="/en/docs/commands/status">`status`</a>
+- <a href="/en/docs/commands/memory/wrap">`memory wrap`</a>
