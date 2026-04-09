@@ -9,6 +9,7 @@ import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } 
 import { formatInitSummaryTable, resolveInitRoot, runInit } from "./commands/init.js";
 import { runMemoryPromoteCommand, runMemoryRecallCommand, runMemoryWrapCommand } from "./commands/memory.js";
 import { runSessionMaterializeCommand } from "./commands/session.js";
+import { runTimelineCommand } from "./commands/timeline.js";
 import { buildCliEnvelope, CliFormat, CliView, emitCliOutput, normalizeCliFormat, normalizeCliView } from "./core/cliContract.js";
 import { assertSafeGlobText, readJsonInput } from "./core/cliInput.js";
 import { normalizeContextPackCommandInput, normalizeIngestCommandInput, normalizeQueryCommandInput } from "./core/commandInputs.js";
@@ -48,6 +49,11 @@ const formatStatusText = (status: Awaited<ReturnType<typeof runStatus>>): string
     `- session_artifacts: ${status.knowledge.sessionArtifactCount}`,
     `- harness_artifacts: ${status.knowledge.harnessArtifactCount}`,
     `- pending_bindings: ${status.knowledge.pendingBindings}`,
+    `- event_count: ${status.events.eventCount}`,
+    `- events_last_recorded_at: ${status.events.lastRecordedAt ?? "none"}`,
+    `- events_latest_goal: ${status.events.latestGoalId ?? "none"}`,
+    `- events_latest_episode: ${status.events.latestEpisodeId ?? "none"}`,
+    `- events_latest_session: ${status.events.latestSessionId ?? "none"}`,
     `- embedding_configured: ${status.embedding.configured.provider}/${status.embedding.configured.model}/${status.embedding.configured.version}/${status.embedding.configured.dimensions}`,
     `- embedding_store: ${status.embedding.store ? `${status.embedding.store.provider}/${status.embedding.store.version}/${status.embedding.store.dimensions}` : "none"}`,
     `- embedding_ready: ${status.embedding.ready}`,
@@ -198,6 +204,41 @@ program
       format: normalizeCliFormat(options.format, "text"),
       text: formatRagitLogText(result, view),
     });
+  });
+
+program
+  .command("timeline")
+  .description("append-only collaboration event timeline")
+  .option("--goal <goalId>", "goalId 필터")
+  .option("--episode <episodeId>", "episodeId 필터")
+  .option("--session <sessionId>", "sessionId 필터")
+  .option("--kind <kind>", "session|artifact|memory|harness|ingest")
+  .option("--since <iso>", "ISO-8601 lower bound")
+  .option("--until <iso>", "ISO-8601 upper bound")
+  .option("-n, --max-count <n>", "최종 출력 event 개수")
+  .option("--view <view>", "minimal|default|full", "default")
+  .option("--format <format>", "text|json|both", "text")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const cwd = resolveCwd(options.cwd);
+    const kind = options.kind ? String(options.kind).trim().toLowerCase() : undefined;
+    if (kind && !["session", "artifact", "memory", "harness", "ingest"].includes(kind)) {
+      throw new Error(`지원하지 않는 timeline kind입니다: ${options.kind}`);
+    }
+    await runTimelineCommand(
+      cwd,
+      {
+        goalId: options.goal ? String(options.goal) : undefined,
+        episodeId: options.episode ? String(options.episode) : undefined,
+        sessionId: options.session ? String(options.session) : undefined,
+        kind: kind as "session" | "artifact" | "memory" | "harness" | "ingest" | undefined,
+        since: options.since ? String(options.since) : undefined,
+        until: options.until ? String(options.until) : undefined,
+        maxCount: parseOptionalPositiveNumber(options.maxCount as string | undefined, "timeline.maxCount"),
+      },
+      normalizeCliFormat(options.format, "text"),
+      normalizeCliView(options.view, "default"),
+    );
   });
 
 program

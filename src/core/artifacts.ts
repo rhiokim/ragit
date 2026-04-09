@@ -6,6 +6,7 @@ import { assertAllowedKeys, assertRepoRelativePathArray } from "./cliInput.js";
 import { chunkSections, parseSections } from "./chunk.js";
 import { loadConfig } from "./config.js";
 import { cosineSimilarity, embedText, embedTexts, resolveEmbeddingProfile } from "./embedding.js";
+import { appendLedgerEvent, eventLedgerRepoPath } from "./event-ledger.js";
 import { getHeadSha, tryGetGitRoot } from "./git.js";
 import { chunkVersionId, toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
@@ -100,7 +101,6 @@ const compactText = (text: string, max = 200): string => {
   if (normalized.length <= max) return normalized;
   return `${normalized.slice(0, max)}...`;
 };
-const toDayKey = (iso: string): string => iso.slice(0, 10);
 const safeReadHeadSha = async (cwd: string): Promise<string | null> => {
   try {
     return await getHeadSha(cwd);
@@ -234,7 +234,6 @@ const createArtifactId = (scope: ArtifactScope, kind: ArtifactKind, goalId: stri
 const sessionArtifactPath = (cwd: string, artifactId: string): string => path.join(resolveRagitPaths(cwd).sessionArtifactsDir, `${artifactId}.json`);
 const harnessArtifactPath = (cwd: string, kind: HarnessArtifactKind, artifactId: string): string =>
   path.join(resolveRagitPaths(cwd).harnessArtifactsDir, kind, `${artifactId}.json`);
-const eventLedgerPath = (cwd: string, recordedAt: string): string => path.join(resolveRagitPaths(cwd).eventDir, `${toDayKey(recordedAt)}.jsonl`);
 const transcriptPath = (cwd: string, sessionId: string): string => path.join(resolveRagitPaths(cwd).transcriptDir, `${sessionId}.jsonl`);
 
 const pathForArtifact = (cwd: string, artifact: ArtifactRecord): string =>
@@ -546,7 +545,6 @@ export const sessionMaterialize = async (cwd: string, input: SessionMaterializeI
   const goalId = createGoalId(input.goal);
   const episodeId = input.episode?.id ?? null;
   const transcriptFile = transcriptPath(cwd, sessionId);
-  const eventFile = eventLedgerPath(cwd, createdAt);
 
   const redactedTurns = input.turns.map((turn) => ({
     ...turn,
@@ -580,32 +578,34 @@ export const sessionMaterialize = async (cwd: string, input: SessionMaterializeI
     for (const artifact of artifacts) {
       outputRefs.push(await persistArtifactRecord(cwd, artifact, false));
     }
-    await appendJsonLine(eventFile, {
-      eventId: `evt_${sha1("session.materialize", sessionId, createdAt).slice(0, 16)}`,
+    await appendLedgerEvent(cwd, {
       eventType: "session.materialize",
       recordedAt: createdAt,
       goalId,
       episodeId,
-      sourceSessionId: sessionId,
+      sessionId,
       sourceHeadSha: currentHeadSha,
       summary: `Materialized ${artifacts.length} session artifacts`,
+      artifactIds: artifacts.map((artifact) => artifact.artifactId),
+      relatedPaths: input.relatedPaths ?? [],
       openLoops: artifacts.filter((artifact) => artifact.kind === "openLoop").map((artifact) => artifact.artifactId),
-      nextActions: [],
-      actor: "assistant",
-      producer: "ragit",
-      producerVersion: RAGIT_VERSION,
-      inputRefs: [toRepoPath(cwd, transcriptFile)],
-      outputRefs,
-      evidenceRefs: artifacts.flatMap((artifact) => artifact.evidenceRefs.map((item) => item.evidenceId)),
-      operation: "session.materialize",
-      contentHash: sha1(sessionId, createdAt, ...artifacts.map((artifact) => artifact.artifactId)),
+      provenance: {
+        actor: "assistant",
+        producer: "ragit",
+        producerVersion: RAGIT_VERSION,
+        operation: "session.materialize",
+        inputRefs: [toRepoPath(cwd, transcriptFile)],
+        outputRefs,
+        evidenceRefs: artifacts.flatMap((artifact) => artifact.evidenceRefs.map((item) => item.evidenceId)),
+        contentHash: sha1(sessionId, createdAt, ...artifacts.map((artifact) => artifact.artifactId)),
+      },
     });
   }
 
   return {
     sessionId,
     transcriptPath: toRepoPath(cwd, transcriptFile),
-    eventPath: toRepoPath(cwd, eventFile),
+    eventPath: eventLedgerRepoPath(cwd, createdAt),
     artifactIds: artifacts.map((artifact) => artifact.artifactId),
     dryRun,
     warnings: artifacts.length === 0 ? ["추출 조건을 만족한 artifact가 없습니다."] : [],
@@ -647,25 +647,26 @@ export const reviewArtifacts = async (cwd: string, input: ArtifactReviewInput, d
     };
     if (!dryRun) {
       await persistArtifactRecord(cwd, next, false);
-      await appendJsonLine(eventLedgerPath(cwd, now), {
-        eventId: `evt_${sha1("artifact.review", next.artifactId, now).slice(0, 16)}`,
+      await appendLedgerEvent(cwd, {
         eventType: "artifact.review",
         recordedAt: now,
         goalId: next.goalId,
         episodeId: next.episodeId,
-        sourceSessionId: next.sourceSessionId,
+        sessionId: next.sourceSessionId,
         sourceHeadSha: next.sourceHeadSha,
         summary: update.reason ?? `Artifact ${next.artifactId} -> ${next.status}`,
-        openLoops: [],
-        nextActions: [],
-        actor: "assistant",
-        producer: "ragit",
-        producerVersion: RAGIT_VERSION,
-        inputRefs: [next.artifactId],
-        outputRefs: [next.artifactId],
-        evidenceRefs: next.evidenceRefs.map((item) => item.evidenceId),
-        operation: "artifact.review",
-        contentHash: sha1(next.artifactId, next.status, now),
+        artifactIds: [next.artifactId],
+        relatedPaths: next.relatedPaths,
+        provenance: {
+          actor: "assistant",
+          producer: "ragit",
+          producerVersion: RAGIT_VERSION,
+          operation: "artifact.review",
+          inputRefs: [next.artifactId],
+          outputRefs: [next.artifactId],
+          evidenceRefs: next.evidenceRefs.map((item) => item.evidenceId),
+          contentHash: sha1(next.artifactId, next.status, now),
+        },
       });
     }
     updated.push(next.artifactId);

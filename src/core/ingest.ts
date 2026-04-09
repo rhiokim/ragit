@@ -6,6 +6,7 @@ import { chunkSections, parseSections } from "./chunk.js";
 import { loadConfig } from "./config.js";
 import { validateKnownDoc } from "./doc-authority.js";
 import { detectDocType } from "./docType.js";
+import { appendLedgerEvent } from "./event-ledger.js";
 import { hashFileContent, listAllDocumentFiles, listDocumentFilesByGlob } from "./files.js";
 import { getHeadSha, getParentSha, listChangedFilesSince } from "./git.js";
 import { chunkVersionId, documentIdFromPath, documentVersionId, toRepoPath } from "./identity.js";
@@ -15,6 +16,7 @@ import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embe
 import { ensureRagitStructure } from "./project.js";
 import { bootstrapCanonicalStore, closeCanonicalStore, writeChunksToCanonicalStore, writeDocumentsToCanonicalStore } from "./store.js";
 import { ChunkRecord, DocType, DocumentRecord, isKnownDocType } from "./types.js";
+import { RAGIT_VERSION } from "./version.js";
 
 export interface IngestOptions {
   all?: boolean;
@@ -317,6 +319,26 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
     );
     await writeSnapshotManifest(cwd, manifest);
     const manifestPath = `.ragit/manifest/${headSha}.json`;
+    await appendLedgerEvent(cwd, {
+      eventType: "ingest.completed",
+      goalId: null,
+      episodeId: null,
+      sessionId: null,
+      sourceHeadSha: headSha,
+      summary: `Ingested ${processed} document${processed === 1 ? "" : "s"} into ${scope} scope`,
+      artifactIds: boundArtifactIds,
+      relatedPaths: plannedFiles,
+      provenance: {
+        actor: "assistant",
+        producer: "ragit",
+        producerVersion: RAGIT_VERSION,
+        operation: "ingest.completed",
+        inputRefs: plannedFiles,
+        outputRefs: [manifestPath],
+        evidenceRefs: [],
+        contentHash: `${headSha}:${processed}:${scope}:${manifestPath}`,
+      },
+    });
     return {
       mode: "apply",
       processed,

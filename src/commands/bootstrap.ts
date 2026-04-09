@@ -4,6 +4,7 @@ import { countArtifactState } from "../core/artifacts.js";
 import { loadConfig, setConfigValue, writeConfig } from "../core/config.js";
 import { readDocAuthorityIndex } from "../core/doc-authority.js";
 import { EmbeddingProviderError, resolveEmbeddingConfiguredState, resolveEmbeddingProfile } from "../core/embedding.js";
+import { readEventLedgerStats } from "../core/event-ledger.js";
 import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
@@ -73,6 +74,13 @@ export interface StatusResult {
     harnessArtifactCount: number;
     pendingBindings: number;
   };
+  events: {
+    eventCount: number;
+    lastRecordedAt: string | null;
+    latestEpisodeId: string | null;
+    latestGoalId: string | null;
+    latestSessionId: string | null;
+  };
   manifests: number;
   embedding: StatusEmbeddingState;
   format: Awaited<ReturnType<typeof loadConfig>>["output"]["format"];
@@ -136,6 +144,13 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
       harnessArtifactCount: 0,
       pendingBindings: 0,
     },
+    events: {
+      eventCount: 0,
+      lastRecordedAt: null,
+      latestEpisodeId: null,
+      latestGoalId: null,
+      latestSessionId: null,
+    },
     manifests: manifests.length,
     embedding: {
       configured: configuredProfile,
@@ -165,6 +180,7 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
     durableReady: manifests.length > 0,
     ...(await countArtifactState(cwd)),
   };
+  status.events = await readEventLedgerStats(cwd);
   return status;
 };
 

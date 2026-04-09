@@ -7,6 +7,7 @@ import { CliView } from "./cliContract.js";
 import { loadArtifactRecord, loadRecallArtifacts } from "./artifacts.js";
 import { loadConfig } from "./config.js";
 import { createDoc, reconcileDocs } from "./doc-authority.js";
+import { appendLedgerEvent } from "./event-ledger.js";
 import { toRepoPath } from "./identity.js";
 import { runIngest } from "./ingest.js";
 import {
@@ -27,6 +28,7 @@ import { ensureRagitStructure } from "./project.js";
 import { QueryResult, searchKnowledge } from "./retrieval.js";
 import { projectRetrievalHits } from "./output.js";
 import { RagitConfig, RetrievalHit } from "./types.js";
+import { RAGIT_VERSION } from "./version.js";
 import { getHeadSha } from "./git.js";
 
 interface ResolvedMemoryPaths {
@@ -77,6 +79,7 @@ const asStringArray = (value: unknown): string[] => {
 };
 
 const stableId = (...parts: string[]): string => createHash("sha1").update(parts.join(":")).digest("hex");
+const createGoalId = (goal: string): string => `goal_${stableId(goal).slice(0, 12)}`;
 
 const normalizeDecision = (value: unknown): MemoryDecision => {
   if (!value || typeof value !== "object") {
@@ -510,6 +513,28 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
     await writeJson(sessionPath, record);
     await writeJson(paths.currentPath, working);
     await writeJson(paths.openLoopsPath, registry);
+    await appendLedgerEvent(cwd, {
+      eventType: "memory.wrap",
+      recordedAt: createdAt,
+      goalId: createGoalId(payload.goal),
+      episodeId: payload.episode?.id ?? null,
+      sessionId,
+      sourceHeadSha,
+      summary: `Wrapped session state for ${payload.goal}`,
+      artifactIds: payload.artifactRefs ?? [],
+      openLoops: working.openLoops.map((item) => item.id),
+      nextActions: payload.nextActions,
+      provenance: {
+        actor: "assistant",
+        producer: "ragit",
+        producerVersion: RAGIT_VERSION,
+        operation: "memory.wrap",
+        inputRefs: [],
+        outputRefs: [toRepoPath(cwd, sessionPath), toRepoPath(cwd, paths.currentPath), toRepoPath(cwd, paths.openLoopsPath)],
+        evidenceRefs: [],
+        contentHash: stableId(sessionId, payload.goal, createdAt),
+      },
+    });
   }
 
   const warnings = currentHeadSha ? [] : ["HEAD commit이 없어 sourceHeadSha를 null로 저장했습니다."];
@@ -786,6 +811,30 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
   }
   if (dryRun && plannedFiles.length > 0 && config.memory.auto_ingest_promotions && !currentHeadSha) {
     warnings.push("HEAD commit이 없어 dry-run 이후 실제 promote 시 인덱싱이 건너뛰어집니다.");
+  }
+
+  if (!dryRun && createdFiles.length > 0) {
+    await appendLedgerEvent(cwd, {
+      eventType: "memory.promote",
+      recordedAt: promotedAt,
+      goalId: null,
+      episodeId: null,
+      sessionId: input.sourceSessionId ?? null,
+      sourceHeadSha,
+      summary: `Promoted ${createdFiles.length} memory document${createdFiles.length === 1 ? "" : "s"}`,
+      artifactIds: input.artifactRefs ?? [],
+      relatedPaths: createdFiles,
+      provenance: {
+        actor: "assistant",
+        producer: "ragit",
+        producerVersion: RAGIT_VERSION,
+        operation: "memory.promote",
+        inputRefs: input.artifactRefs ?? [],
+        outputRefs: createdFiles,
+        evidenceRefs: [],
+        contentHash: stableId(sourceHeadSha ?? "none", promotedAt, ...createdFiles, ...(input.artifactRefs ?? [])),
+      },
+    });
   }
 
   return {

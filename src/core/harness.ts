@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { assertAllowedKeys } from "./cliInput.js";
+import { appendLedgerEvent } from "./event-ledger.js";
 import {
   ArtifactRecord,
   HarnessArtifactKind,
@@ -373,6 +374,29 @@ export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dr
     artifactIds.push(suite.artifactId);
   }
 
+  if (!dryRun && artifactIds.length > 0) {
+    await appendLedgerEvent(cwd, {
+      eventType: "harness.capture",
+      recordedAt: createdAt,
+      goalId,
+      episodeId: input.episodeId ?? null,
+      sessionId: input.sourceSessionId ?? null,
+      sourceHeadSha: headSha,
+      summary: `Captured ${artifactIds.length} harness artifact${artifactIds.length === 1 ? "" : "s"}`,
+      artifactIds,
+      provenance: {
+        actor: "assistant",
+        producer: "ragit",
+        producerVersion: RAGIT_VERSION,
+        operation: "harness.capture",
+        inputRefs: [...(input.artifactRefs ?? [])],
+        outputRefs: artifactIds,
+        evidenceRefs: [],
+        contentHash: sha1(goalId, createdAt, ...artifactIds),
+      },
+    });
+  }
+
   return {
     artifactIds,
     suiteId: suite.artifactId,
@@ -440,6 +464,24 @@ export const promoteHarness = async (cwd: string, input: HarnessPromoteInput, dr
     } else {
       warnings.push("HEAD commit이 없어 harness promotion 문서 인덱싱을 건너뛰었습니다.");
     }
+  }
+  if (!dryRun && createdFiles.length > 0) {
+    await appendLedgerEvent(cwd, {
+      eventType: "harness.promote",
+      summary: `Promoted ${createdFiles.length} harness document${createdFiles.length === 1 ? "" : "s"}`,
+      artifactIds: input.artifactRefs,
+      relatedPaths: createdFiles,
+      provenance: {
+        actor: "assistant",
+        producer: "ragit",
+        producerVersion: RAGIT_VERSION,
+        operation: "harness.promote",
+        inputRefs: input.artifactRefs,
+        outputRefs: createdFiles,
+        evidenceRefs: [],
+        contentHash: sha1(...input.artifactRefs, ...createdFiles),
+      },
+    });
   }
   return {
     createdFiles,

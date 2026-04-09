@@ -4,6 +4,7 @@ export type KnownDocType = (typeof KNOWN_DOC_TYPES)[number];
 export type DocType = KnownDocType | "unknown";
 export type RetrievalScope = "durable" | "session" | "harness" | "evidence" | "all";
 export type EmbeddingProvider = "local-placeholder" | "openai" | "ollama";
+export type TimelineKind = "session" | "artifact" | "memory" | "harness" | "ingest";
 export type ArtifactStatus = "captured" | "reviewed" | "promoted" | "superseded" | "retracted" | "archived";
 export type ArtifactBindingStatus = "pending" | "bound" | "local_only";
 export type ArtifactTier = "candidate" | "durable";
@@ -24,6 +25,14 @@ export type HarnessArtifactKind =
   | "envAssumption"
   | "suite";
 export type ArtifactKind = SessionArtifactKind | HarnessArtifactKind;
+export type RagitEventType =
+  | "session.materialize"
+  | "artifact.review"
+  | "memory.wrap"
+  | "memory.promote"
+  | "harness.capture"
+  | "harness.promote"
+  | "ingest.completed";
 
 export const isKnownDocType = (value: string): value is KnownDocType =>
   KNOWN_DOC_TYPES.includes(value as KnownDocType);
@@ -229,6 +238,23 @@ export interface BaseArtifactRecord {
 }
 
 export interface ArtifactRecord extends BaseArtifactRecord {}
+
+export interface RagitEventRecord {
+  version: 1;
+  eventId: string;
+  eventType: RagitEventType;
+  recordedAt: string;
+  goalId: string | null;
+  episodeId: string | null;
+  sessionId: string | null;
+  sourceHeadSha: string | null;
+  summary: string;
+  artifactIds: string[];
+  relatedPaths: string[];
+  openLoops: string[];
+  nextActions: string[];
+  provenance: ArtifactEventProvenance;
+}
 
 export interface ArtifactManifestEntry {
   artifactId: string;
