@@ -3,6 +3,7 @@
   "pages": [
     "agent-cli",
     "cli-reference",
+    "ragit-skill",
     "release-notes"
   ]
 }

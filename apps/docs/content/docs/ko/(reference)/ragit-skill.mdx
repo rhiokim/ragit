@@ -1,0 +1,61 @@
+---
+title: RAGit Agent Skill
+description: 에이전트 워크플로에서 RAGit을 안전하게 운용하기 위한 canonical skill 소스
+---
+
+`use-ragit`는 Codex 안에서 RAGit을 운영하기 위한 저장소 관리형 canonical skill 소스입니다. 동시에 핵심 규칙은 공통 reference 파일로 분리해 Claude와 Gemini에서도 재사용할 수 있게 구성합니다.
+
+## 무엇을 해결하는가
+
+- 첫 RAGit 호출 전에 올바른 runtime을 해석합니다.
+- `status --format json`으로 저장소 readiness를 확인합니다.
+- 에이전트 intent를 적절한 명령으로 라우팅합니다.
+- `query`, `context pack`, `memory recall`, `memory wrap`, `memory promote`, `hooks install`의 역할 혼동을 줄입니다.
+- mutating 명령 앞에 `--dry-run` 규율을 강제합니다.
+
+## 명령 선택 기준
+
+- 첫 readiness check는 `status`를 사용합니다.
+- `doctor`는 실패 이후 또는 구조화된 진단이 필요할 때만 사용합니다.
+- 처음 붙이는 명령은 `describe`로 계약을 먼저 읽습니다.
+- raw retrieval hit가 필요하면 `query`를 사용합니다.
+- goal 기준의 bounded handoff packet이 필요하면 `context pack`을 사용합니다.
+- working memory에서 활성 작업을 재개하려면 `memory recall`을 사용합니다.
+- 세션 연속성을 보존하려면 `memory wrap`을 사용합니다.
+- 안정된 searchable knowledge만 `memory promote`로 승격합니다.
+- `hooks install`은 자동 ingest를 명시적으로 원할 때만 사용합니다.
+
+## Codex 설치 경로
+
+이 저장소 안의 canonical source:
+
+```text
+skills/use-ragit
+```
+
+권장 Codex 설치 위치:
+
+```text
+${CODEX_HOME:-$HOME/.codex}/skills/use-ragit
+```
+
+대표적인 symlink 흐름:
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+ln -s "/absolute/path/to/ragit/skills/use-ragit" "${CODEX_HOME:-$HOME/.codex}/skills/use-ragit"
+```
+
+symlink를 원하지 않으면 폴더를 복사해도 됩니다.
+
+## Claude 와 Gemini 에서의 재사용
+
+Claude와 Gemini를 위한 별도 v1 wrapper pack은 만들지 않습니다.
+대신 프로젝트 지침에서 아래 공통 reference를 재사용하십시오.
+
+- `skills/use-ragit/references/command-routing.md`
+- `skills/use-ragit/references/memory-discipline.md`
+- `skills/use-ragit/references/payload-patterns.md`
+- `skills/use-ragit/references/interop.md`
+
+이렇게 하면 command routing, safety rule, memory discipline은 공통으로 유지하고, metadata와 trigger wording만 agent product별로 다르게 둘 수 있습니다.
