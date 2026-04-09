@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use RAGit"
+  short_description: "Run RAGit safely in agent workflows"
+  default_prompt: "Resolve the RAGit runtime, check readiness with status, route the request to the correct command, and enforce JSON plus dry-run discipline for agent workflows."
