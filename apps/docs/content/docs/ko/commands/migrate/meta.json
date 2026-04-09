@@ -2,6 +2,7 @@
   "title": "Migrate",
   "pages": [
     "index",
+    "embeddings",
     "from-json-store",
     "from-sqlitevss"
   ]

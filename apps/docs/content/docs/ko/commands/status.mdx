@@ -6,7 +6,7 @@ command_path: status
 
 ## 무엇을 하는 명령인가
 
-`status`는 현재 브랜치, HEAD, backend, manifest 개수, embedding 설정, zvec 가용성처럼 RAGit에 중요한 현재 상태를 빠르게 보여줍니다.
+`status`는 현재 브랜치, HEAD, backend, manifest 개수, knowledge readiness, 그리고 현재 설정된 embedding profile과 store에 저장된 contract의 분리를 빠르게 보여줍니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -35,7 +35,7 @@ pnpm ragit status [--format text|json|both] [--cwd <path>]
 ## 입력/출력 계약
 
 - positional 입력도 JSON payload 입력도 없습니다.
-- JSON 출력에는 `branch`, `head`, `backend`, `zvec`, `supported_types`, `manifests`, `embedding`, `format`이 포함됩니다.
+- JSON 출력에는 `branch`, `head`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.ready`, `embedding.needsMigration`, `format`이 포함됩니다.
 - 에이전트는 보통 `--format json`을 사용하는 편이 좋습니다.
 
 ## 대표 사용 예시
@@ -56,9 +56,11 @@ pnpm ragit status --format json
 
 - `status`는 요약 명령이지 복구 명령이 아닙니다.
 - store가 로드되었다고 해서 최신 문서가 인덱싱되었다는 뜻은 아닙니다. 문서 변경 후에는 <a href="/ko/docs/commands/ingest">`ingest`</a>를 실행하십시오.
+- `embedding.needsMigration=true`이면 새로운 provider contract에 맞게 쓰기 경로를 쓰기 전에 <a href="/ko/docs/commands/migrate/embeddings">`migrate embeddings`</a>를 실행하십시오.
 
 ## 관련 명령
 
 - <a href="/ko/docs/commands/doctor">`doctor`</a>
 - <a href="/ko/docs/commands/ingest">`ingest`</a>
+- <a href="/ko/docs/commands/migrate/embeddings">`migrate embeddings`</a>
 - <a href="/ko/docs/commands/config/set">`config set`</a>

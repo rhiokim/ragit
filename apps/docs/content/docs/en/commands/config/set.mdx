@@ -54,10 +54,13 @@ pnpm ragit config set ingest.supported_types '["adr","spec"]'
 ## Failures And Cautions
 
 - Invalid keys or invalid values fail before the config file is written.
+- For real providers, use `embedding.provider`, `embedding.model`, `embedding.base_url`, and `embedding.timeout_ms` as the supported knobs. `embedding.dimensions` and `embedding.version` are legacy-only and only remain meaningful for `local-placeholder`.
+- Changing the target embedding provider does not rewrite the persisted store contract by itself. Follow up with <a href="/en/docs/commands/migrate/embeddings">`migrate embeddings`</a> when `status` reports `embedding.needsMigration=true`.
 - Because output is text-only, agents should validate follow-up state with <a href="/en/docs/commands/status">`status`</a>.
 
 ## Related Commands
 
 - <a href="/en/docs/commands/status">`status`</a>
 - <a href="/en/docs/commands/doctor">`doctor`</a>
+- <a href="/en/docs/commands/migrate/embeddings">`migrate embeddings`</a>
 - <a href="/en/docs/commands/init">`init`</a>
