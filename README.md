@@ -215,6 +215,12 @@ This split is intentional:
 - Prefer `--input <path|->` for structured agent payloads.
 - Run mutating commands with `--dry-run` first: `ingest`, `hooks install`, `hooks uninstall`, `memory wrap`, `memory promote`.
 
+## Canonical Agent Skill
+
+- Repository-managed source: [`skills/use-ragit`](./skills/use-ragit)
+- Codex install target: `${CODEX_HOME:-$HOME/.codex}/skills/use-ragit` via copy or symlink
+- Shared agent-neutral references for Claude and Gemini: [`skills/use-ragit/references/`](./skills/use-ragit/references/)
+
 ## Discover-First `init`
 
 `pnpm ragit init` is now a discover-first bootstrap command.
