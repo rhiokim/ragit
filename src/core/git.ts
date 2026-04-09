@@ -55,3 +55,38 @@ export const listChangedFilesSince = async (cwd: string, since: string): Promise
 };
 
 export const currentBranch = async (cwd: string): Promise<string> => execGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
+
+export interface GitCommitInfo {
+  sha: string;
+  subject: string;
+  authorName: string;
+  authoredAt: string;
+}
+
+export const listGitCommits = async (
+  cwd: string,
+  options: {
+    revRange?: string;
+  } = {},
+): Promise<GitCommitInfo[]> => {
+  const format = ["--format=%H%x1f%s%x1f%an%x1f%aI%x1e"];
+  const args = ["log", ...format];
+  if (options.revRange) {
+    args.push(options.revRange);
+  }
+  const output = await execGit(cwd, args);
+  if (!output) return [];
+  return output
+    .split("\x1e")
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const [sha, subject, authorName, authoredAt] = record.split("\x1f");
+      return {
+        sha,
+        subject,
+        authorName,
+        authoredAt,
+      };
+    });
+};
