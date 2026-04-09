@@ -39,7 +39,7 @@ describe("CLI machine contract", () => {
   );
 
   it(
-    "emits JSON envelopes for describe, log, query, context pack, memory recall, and status",
+    "emits JSON envelopes for describe, log, timeline, query, context pack, memory recall, and status",
     async () => {
       const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-contract-"));
       git(temp, ["init"]);
@@ -108,6 +108,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeLogOutput.data.spec.path).toBe("log");
       expect(describeLogOutput.data.spec.options.some((option: { name: string }) => option.name === "--show-missing")).toBe(true);
 
+      const describeTimelineOutput = JSON.parse(runCli(["describe", "timeline", "--format", "json"]));
+      expect(describeTimelineOutput.command).toBe("describe");
+      expect(describeTimelineOutput.ok).toBe(true);
+      expect(describeTimelineOutput.data.spec.path).toBe("timeline");
+      expect(describeTimelineOutput.data.spec.options.some((option: { name: string }) => option.name === "--kind")).toBe(true);
+
       const describeDocOutput = JSON.parse(runCli(["describe", "doc", "create", "--format", "json"]));
       expect(describeDocOutput.command).toBe("describe");
       expect(describeDocOutput.ok).toBe(true);
@@ -144,10 +150,17 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(logOutput.data.entries[0].snapshot.status).toBe("indexed");
       expect(logOutput.data.entries[0].snapshot.changed).toBeTruthy();
 
+      const timelineOutput = JSON.parse(runCli(["timeline", "--cwd", temp, "--format", "json", "--kind", "memory", "--max-count", "5"]));
+      expect(timelineOutput.command).toBe("timeline");
+      expect(timelineOutput.ok).toBe(true);
+      expect(timelineOutput.data.summary.eventCount).toBeGreaterThan(0);
+      expect(timelineOutput.data.events.every((event: { eventType: string }) => event.eventType.startsWith("memory."))).toBe(true);
+
       const statusOutput = JSON.parse(runCli(["status", "--cwd", temp, "--format", "json"]));
       expect(statusOutput.command).toBe("status");
       expect(statusOutput.ok).toBe(true);
       expect(statusOutput.data.zvec.searchReady).toBe(true);
+      expect(statusOutput.data.events.eventCount).toBeGreaterThan(0);
     },
     20_000,
   );
