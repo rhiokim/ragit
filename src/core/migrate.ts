@@ -1,14 +1,23 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { access, readFile, readdir, rename, rm } from "node:fs/promises";
+import { constants } from "node:fs";
 import path from "node:path";
+import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
 import { loadConfig } from "./config.js";
-import { embedWithLocalPlaceholder } from "./embedding.js";
 import { getHeadSha, getParentSha } from "./git.js";
 import { chunkVersionId, documentIdFromPath, documentVersionId } from "./identity.js";
-import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
-import { ensureRagitStructure } from "./project.js";
+import { buildSnapshotManifest, loadSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
+import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
 import { loadLegacyStore, legacyStorePath } from "./legacy-store.js";
-import { bootstrapCanonicalStore, closeCanonicalStore, writeChunksToCanonicalStore, writeDocumentsToCanonicalStore } from "./store.js";
+import {
+  bootstrapCanonicalStore,
+  bootstrapCanonicalStoreAtPath,
+  closeCanonicalStore,
+  openCanonicalStoreWithContract,
+  readCanonicalStoreMeta,
+  writeChunksToCanonicalStore,
+  writeDocumentsToCanonicalStore,
+} from "./store.js";
 import { ChunkRecord, DocumentRecord, DocType, normalizeKnownDocType } from "./types.js";
 
 interface SqliteVssExport {
@@ -38,6 +47,15 @@ const candidatePaths = [
   ".ragit/sqlite_vss/export.json",
 ];
 
+const fileExists = async (target: string): Promise<boolean> => {
+  try {
+    await access(target, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const loadLegacyPayload = async (cwd: string): Promise<SqliteVssExport> => {
   for (const candidate of candidatePaths) {
     const target = path.join(cwd, candidate);
@@ -58,8 +76,196 @@ export interface MigrationSummary {
   snapshotSha?: string;
 }
 
+export interface EmbeddingMigrationSummary {
+  mode: "dry-run" | "apply";
+  currentContract: {
+    provider: string;
+    dimensions: number;
+    version: string;
+    schemaVersion: number;
+  } | null;
+  targetContract: {
+    provider: string;
+    dimensions: number;
+    version: string;
+  };
+  manifests: number;
+  documents: number;
+  chunks: number;
+  migrationNeeded: boolean;
+}
+
 const coerceLegacyDocType = (value?: string): DocType =>
   normalizeKnownDocType(value) ?? "unknown";
+
+const vectorToNumbers = (value: unknown): number[] => {
+  if (Array.isArray(value)) return value.map((item) => Number(item));
+  if (value && typeof value === "object" && "length" in value) {
+    return Array.from(value as ArrayLike<number>, (item) => Number(item));
+  }
+  return [];
+};
+
+const optionalString = (value: unknown): string | null =>
+  typeof value === "string" && value.length > 0 ? value : null;
+
+const collectManifestDocumentsAndChunkIds = async (
+  cwd: string,
+): Promise<{ manifests: number; documents: DocumentRecord[]; chunkIds: string[] }> => {
+  const manifestDir = path.join(cwd, ".ragit", "manifest");
+  const manifestFiles = (await readdir(manifestDir)).filter((name) => name.endsWith(".json")).sort();
+  const documentsByVersionId = new Map<string, DocumentRecord>();
+  const chunkIds = new Set<string>();
+  for (const fileName of manifestFiles) {
+    const manifest = await loadSnapshotManifest(cwd, fileName.replace(/\.json$/, ""));
+    for (const document of manifest.docs) {
+      documentsByVersionId.set(document.versionId, document);
+    }
+    for (const chunk of manifest.chunks) {
+      chunkIds.add(chunk.id);
+    }
+  }
+  return {
+    manifests: manifestFiles.length,
+    documents: Array.from(documentsByVersionId.values()),
+    chunkIds: Array.from(chunkIds),
+  };
+};
+
+const hydrateFetchedChunk = (raw: {
+  id: string;
+  vectors: Record<string, unknown>;
+  fields: Record<string, unknown>;
+}): ChunkRecord => ({
+  id: raw.id,
+  documentId: String(raw.fields.documentId),
+  documentVersionId: String(raw.fields.documentVersionId),
+  sectionId: String(raw.fields.sectionId),
+  sectionTitle: String(raw.fields.sectionTitle),
+  path: String(raw.fields.path),
+  docType: String(raw.fields.docType) as ChunkRecord["docType"],
+  commitSha: String(raw.fields.commitSha),
+  text: String(raw.fields.text),
+  tokenCount: Number(raw.fields.tokenCount),
+  embedding: vectorToNumbers(raw.vectors.embedding),
+  originType: (optionalString(raw.fields.originType) ?? undefined) as "document" | "artifact" | undefined,
+  artifactId: optionalString(raw.fields.artifactId),
+  artifactKind: optionalString(raw.fields.artifactKind) as ChunkRecord["artifactKind"] | null,
+  tier: optionalString(raw.fields.tier) as ChunkRecord["tier"] | null,
+  status: optionalString(raw.fields.status) as ChunkRecord["status"] | null,
+  authority: optionalString(raw.fields.authority) as ChunkRecord["authority"] | null,
+  confidence: typeof raw.fields.confidence === "number" && raw.fields.confidence >= 0 ? raw.fields.confidence : null,
+  goalId: optionalString(raw.fields.goalId),
+  episodeId: optionalString(raw.fields.episodeId),
+  sourceSessionId: optionalString(raw.fields.sourceSessionId),
+  bindingStatus: optionalString(raw.fields.bindingStatus) as ChunkRecord["bindingStatus"] | null,
+  searchPolicy: optionalString(raw.fields.searchPolicy) as ChunkRecord["searchPolicy"] | null,
+});
+
+const swapStoreDirectories = async (cwd: string): Promise<void> => {
+  const paths = resolveRagitPaths(cwd);
+  const nextStoreDir = path.join(paths.ragitDir, "store.next");
+  const prevStoreDir = path.join(paths.ragitDir, "store.prev");
+  if (await fileExists(prevStoreDir)) {
+    throw new Error("이전 migration backup(.ragit/store.prev)이 남아 있습니다. 수동 정리 후 다시 실행해 주세요.");
+  }
+  if (!(await fileExists(nextStoreDir))) {
+    throw new Error("migration temporary store(.ragit/store.next)를 찾을 수 없습니다.");
+  }
+  await rename(paths.storeDir, prevStoreDir);
+  try {
+    await rename(nextStoreDir, paths.storeDir);
+  } catch (error) {
+    await rename(prevStoreDir, paths.storeDir);
+    throw error;
+  }
+  await rm(prevStoreDir, { recursive: true, force: true });
+};
+
+export const migrateEmbeddings = async (cwd: string, dryRun: boolean): Promise<EmbeddingMigrationSummary> => {
+  await ensureRagitStructure(cwd);
+  const config = await loadConfig(cwd);
+  const targetProfile = resolveEmbeddingProfile(config);
+  const targetContract = toEmbeddingContract(targetProfile);
+  const currentMeta = await readCanonicalStoreMeta(cwd);
+  if (!currentMeta) {
+    throw new Error("현재 canonical store meta를 찾을 수 없습니다. 먼저 ragit init 또는 ragit ingest를 실행해 주세요.");
+  }
+
+  const collected = await collectManifestDocumentsAndChunkIds(cwd);
+  const migrationNeeded =
+    currentMeta.embeddingContract.provider !== targetContract.provider ||
+    currentMeta.embeddingContract.dimensions !== targetContract.dimensions ||
+    currentMeta.embeddingContract.version !== targetContract.version;
+
+  const summary: EmbeddingMigrationSummary = {
+    mode: dryRun ? "dry-run" : "apply",
+    currentContract: {
+      provider: currentMeta.embeddingContract.provider,
+      dimensions: currentMeta.embeddingContract.dimensions,
+      version: currentMeta.embeddingContract.version,
+      schemaVersion: currentMeta.schemaVersion,
+    },
+    targetContract,
+    manifests: collected.manifests,
+    documents: collected.documents.length,
+    chunks: collected.chunkIds.length,
+    migrationNeeded,
+  };
+  if (dryRun || !migrationNeeded) {
+    return summary;
+  }
+
+  const sourceStore = await openCanonicalStoreWithContract(cwd, currentMeta.embeddingContract, true);
+  const nextStoreDir = path.join(resolveRagitPaths(cwd).ragitDir, "store.next");
+  const prevStoreDir = path.join(resolveRagitPaths(cwd).ragitDir, "store.prev");
+  if (await fileExists(nextStoreDir) || await fileExists(prevStoreDir)) {
+    closeCanonicalStore(sourceStore);
+    throw new Error("이전 embedding migration 임시 디렉터리가 남아 있습니다. .ragit/store.next 또는 .ragit/store.prev를 정리해 주세요.");
+  }
+
+  try {
+    const fetched = sourceStore.chunks.fetchSync(collected.chunkIds);
+    if (Object.keys(fetched).length !== collected.chunkIds.length) {
+      const missing = collected.chunkIds.filter((chunkId) => !(chunkId in fetched));
+      throw new Error(`manifest가 참조하는 chunk를 source store에서 찾을 수 없습니다: ${missing[0] ?? "unknown"}`);
+    }
+    const sourceChunks = collected.chunkIds.map((chunkId) => hydrateFetchedChunk(fetched[chunkId]));
+    const embeddings = await embedTexts(
+      sourceChunks.map((chunk) => chunk.text),
+      targetProfile,
+    );
+    const targetChunks = sourceChunks.map((chunk, index) => ({
+      ...chunk,
+      embedding: embeddings[index] ?? [],
+    }));
+
+    const tempStore = await bootstrapCanonicalStoreAtPath(cwd, targetContract, false, nextStoreDir);
+    try {
+      writeDocumentsToCanonicalStore(tempStore, collected.documents);
+      writeChunksToCanonicalStore(tempStore, targetChunks);
+    } finally {
+      closeCanonicalStore(tempStore);
+    }
+  } catch (error) {
+    await rm(nextStoreDir, { recursive: true, force: true });
+    throw error;
+  } finally {
+    closeCanonicalStore(sourceStore);
+  }
+
+  try {
+    await swapStoreDirectories(cwd);
+  } catch (error) {
+    await rm(nextStoreDir, { recursive: true, force: true });
+    throw error;
+  }
+
+  return {
+    ...summary,
+    mode: "apply",
+  };
+};
 
 export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> => {
   await ensureRagitStructure(cwd);
@@ -72,9 +278,10 @@ export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promis
     };
   }
   const config = await loadConfig(cwd);
+  const embeddingProfile = resolveEmbeddingProfile(config);
   const sha = await getHeadSha(cwd);
   const parentSha = await getParentSha(cwd);
-  const store = await bootstrapCanonicalStore(cwd, config.embedding, false);
+  const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), false);
   const docs = new Map<string, DocumentRecord>();
   for (const rawDoc of payload.docs ?? []) {
     const repoPath = rawDoc.path.replaceAll(path.sep, "/");
@@ -91,7 +298,7 @@ export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promis
     };
     docs.set(repoPath, doc);
   }
-  const chunkByDoc = new Map<string, ChunkRecord[]>();
+  const pendingChunks: Array<{ chunk: Omit<ChunkRecord, "embedding"> }> = [];
   for (const rawChunk of payload.chunks ?? []) {
     const repoPath = rawChunk.path.replaceAll(path.sep, "/");
     const doc = docs.get(repoPath) ?? {
@@ -108,29 +315,32 @@ export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promis
       sections: [],
     };
     docs.set(repoPath, doc);
-    const chunk: ChunkRecord = {
-      id: rawChunk.id ?? chunkVersionId(doc.versionId, rawChunk.sectionId ?? "legacy", 0, rawChunk.text),
-      documentId: doc.id,
-      documentVersionId: doc.versionId,
-      sectionId: rawChunk.sectionId ?? "legacy",
-      sectionTitle: rawChunk.sectionTitle ?? "legacy",
-      path: repoPath,
-      docType: coerceLegacyDocType(rawChunk.docType),
-      commitSha: sha,
-      text: rawChunk.text,
-      tokenCount: rawChunk.tokenCount ?? rawChunk.text.split(/\s+/).filter(Boolean).length,
-      embedding: rawChunk.embedding?.length
-        ? rawChunk.embedding
-        : embedWithLocalPlaceholder(rawChunk.text, config.embedding.dimensions),
-    };
-    const previous = chunkByDoc.get(repoPath) ?? [];
-    previous.push(chunk);
-    chunkByDoc.set(repoPath, previous);
+    pendingChunks.push({
+      chunk: {
+        id: rawChunk.id ?? chunkVersionId(doc.versionId, rawChunk.sectionId ?? "legacy", 0, rawChunk.text),
+        documentId: doc.id,
+        documentVersionId: doc.versionId,
+        sectionId: rawChunk.sectionId ?? "legacy",
+        sectionTitle: rawChunk.sectionTitle ?? "legacy",
+        path: repoPath,
+        docType: coerceLegacyDocType(rawChunk.docType),
+        commitSha: sha,
+        text: rawChunk.text,
+        tokenCount: rawChunk.tokenCount ?? rawChunk.text.split(/\s+/).filter(Boolean).length,
+      },
+    });
   }
 
   try {
     const documents = Array.from(docs.values());
-    const chunks = Array.from(chunkByDoc.values()).flat();
+    const embeddings = await embedTexts(
+      pendingChunks.map((item) => item.chunk.text),
+      embeddingProfile,
+    );
+    const chunks = pendingChunks.map((item, index) => ({
+      ...item.chunk,
+      embedding: embeddings[index] ?? [],
+    }));
     writeDocumentsToCanonicalStore(store, documents);
     writeChunksToCanonicalStore(store, chunks);
     const manifest = buildSnapshotManifest(sha, parentSha, documents, chunks);
@@ -168,9 +378,10 @@ export const migrateFromJsonStore = async (cwd: string, dryRun: boolean): Promis
   }
 
   const config = await loadConfig(cwd);
+  const embeddingProfile = resolveEmbeddingProfile(config);
   const sha = await getHeadSha(cwd);
   const parentSha = await getParentSha(cwd);
-  const canonical = await bootstrapCanonicalStore(cwd, config.embedding, false);
+  const canonical = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), false);
 
   try {
     const docByLegacyId = new Map<string, DocumentRecord>();
@@ -190,7 +401,7 @@ export const migrateFromJsonStore = async (cwd: string, dryRun: boolean): Promis
       docByLegacyId.set(legacyDoc.id, normalized);
       return normalized;
     });
-    const normalizedChunks = chunks.map((legacyChunk, index) => {
+    const pendingChunks = chunks.map((legacyChunk, index) => {
       const repoPath = legacyChunk.path.replaceAll(path.sep, "/");
       const document = docByLegacyId.get(legacyChunk.documentId) ??
         normalizedDocs.find((item) => item.path === repoPath) ?? {
@@ -217,11 +428,16 @@ export const migrateFromJsonStore = async (cwd: string, dryRun: boolean): Promis
         commitSha: sha,
         text: legacyChunk.text,
         tokenCount: legacyChunk.tokenCount,
-        embedding: legacyChunk.embedding?.length
-          ? legacyChunk.embedding
-          : embedWithLocalPlaceholder(legacyChunk.text, config.embedding.dimensions),
-      } satisfies ChunkRecord;
+      } satisfies Omit<ChunkRecord, "embedding">;
     });
+    const embeddings = await embedTexts(
+      pendingChunks.map((chunk) => chunk.text),
+      embeddingProfile,
+    );
+    const normalizedChunks = pendingChunks.map((chunk, index) => ({
+      ...chunk,
+      embedding: embeddings[index] ?? [],
+    }));
 
     writeDocumentsToCanonicalStore(canonical, normalizedDocs);
     writeChunksToCanonicalStore(canonical, normalizedChunks);

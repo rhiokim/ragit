@@ -1,5 +1,6 @@
 export {
   bootstrapCanonicalStore,
+  bootstrapCanonicalStoreAtPath,
   canonicalStoreSummary,
   closeCanonicalStore,
   ensureZvecRuntime,
@@ -7,6 +8,8 @@ export {
   getZvecPlatformSupport,
   hasLegacyJsonStore,
   isZvecPlatformSupported,
+  openCanonicalStoreWithContract,
+  readCanonicalStoreMeta,
   writeChunksToCanonicalStore,
   writeDocumentsToCanonicalStore,
   zvecPlatformUnsupportedMessage,

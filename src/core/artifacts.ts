@@ -5,7 +5,7 @@ import path from "node:path";
 import { assertAllowedKeys, assertRepoRelativePathArray } from "./cliInput.js";
 import { chunkSections, parseSections } from "./chunk.js";
 import { loadConfig } from "./config.js";
-import { cosineSimilarity, embedWithLocalPlaceholder } from "./embedding.js";
+import { cosineSimilarity, embedText, embedTexts, resolveEmbeddingProfile } from "./embedding.js";
 import { getHeadSha, tryGetGitRoot } from "./git.js";
 import { chunkVersionId, toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
@@ -22,6 +22,7 @@ import {
   ArtifactTier,
   BaseArtifactRecord,
   ChunkRecord,
+  EmbeddingProfile,
   HarnessArtifactKind,
   RetrievalHit,
   SearchPolicy,
@@ -725,7 +726,7 @@ const artifactChunkRecord = (
   sectionTitle: string,
   text: string,
   headSha: string,
-  dimensions: number,
+  embedding: number[],
   suffix: string,
 ): ChunkRecord => {
   const documentId = `artifact:${artifact.artifactId}`;
@@ -742,7 +743,7 @@ const artifactChunkRecord = (
     commitSha: headSha,
     text,
     tokenCount: text.split(/\s+/).filter(Boolean).length,
-    embedding: embedWithLocalPlaceholder(text, dimensions),
+    embedding,
     originType: "artifact",
     artifactId: artifact.artifactId,
     artifactKind: artifact.kind,
@@ -762,7 +763,7 @@ export const buildArtifactIndexData = async (
   cwd: string,
   headSha: string,
   scope: "durable" | "all",
-  dimensions: number,
+  embeddingProfile: EmbeddingProfile,
 ): Promise<{
   artifactEntries: ArtifactManifestEntry[];
   chunks: ChunkRecord[];
@@ -791,28 +792,52 @@ export const buildArtifactIndexData = async (
     harness: [] as string[],
     evidence: [] as string[],
   };
+  const chunkPlans: Array<{
+    artifact: ArtifactRecord;
+    pathValue: string;
+    sectionTitle: string;
+    text: string;
+    suffix: string;
+    targetScope: "session" | "harness" | "evidence";
+    chunkIds: string[];
+  }> = [];
   for (const artifact of artifacts) {
     const repoPath = toRepoPath(cwd, pathForArtifact(cwd, artifact));
     const chunkIds: string[] = [];
     if (artifact.status === "reviewed" && artifact.bindingStatus !== "local_only") {
       if (artifact.artifactScope === "session") {
-        const chunk = artifactChunkRecord(artifact, repoPath, artifact.title, artifact.text, headSha, dimensions, "artifact");
-        chunks.push(chunk);
-        chunkIds.push(chunk.id);
-        chunkScopes.session.push(chunk.id);
+        chunkPlans.push({
+          artifact,
+          pathValue: repoPath,
+          sectionTitle: artifact.title,
+          text: artifact.text,
+          suffix: "artifact",
+          targetScope: "session",
+          chunkIds,
+        });
       }
       if (artifact.artifactScope === "harness") {
-        const chunk = artifactChunkRecord(artifact, repoPath, artifact.title, artifact.text, headSha, dimensions, "artifact");
-        chunks.push(chunk);
-        chunkIds.push(chunk.id);
-        chunkScopes.harness.push(chunk.id);
+        chunkPlans.push({
+          artifact,
+          pathValue: repoPath,
+          sectionTitle: artifact.title,
+          text: artifact.text,
+          suffix: "artifact",
+          targetScope: "harness",
+          chunkIds,
+        });
       }
     }
     for (const evidence of artifact.evidenceRefs) {
-      const chunk = artifactChunkRecord(artifact, `${repoPath}#evidence`, "Evidence", evidence.excerpt, headSha, dimensions, evidence.evidenceId);
-      chunks.push(chunk);
-      chunkIds.push(chunk.id);
-      chunkScopes.evidence.push(chunk.id);
+      chunkPlans.push({
+        artifact,
+        pathValue: `${repoPath}#evidence`,
+        sectionTitle: "Evidence",
+        text: evidence.excerpt,
+        suffix: evidence.evidenceId,
+        targetScope: "evidence",
+        chunkIds,
+      });
     }
     entries.push({
       artifactId: artifact.artifactId,
@@ -829,6 +854,24 @@ export const buildArtifactIndexData = async (
       episodeId: artifact.episodeId,
       bindingStatus: artifact.bindingStatus,
     });
+  }
+  const embeddings = await embedTexts(
+    chunkPlans.map((plan) => plan.text),
+    embeddingProfile,
+  );
+  for (const [index, plan] of chunkPlans.entries()) {
+    const chunk = artifactChunkRecord(
+      plan.artifact,
+      plan.pathValue,
+      plan.sectionTitle,
+      plan.text,
+      headSha,
+      embeddings[index] ?? [],
+      plan.suffix,
+    );
+    chunks.push(chunk);
+    plan.chunkIds.push(chunk.id);
+    chunkScopes[plan.targetScope].push(chunk.id);
   }
   return { artifactEntries: entries, chunks, chunkScopes };
 };
@@ -861,40 +904,70 @@ export const searchArtifacts = async (
 ): Promise<RetrievalHit[]> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
+  const embeddingProfile = resolveEmbeddingProfile(config);
   const artifacts = await listArtifactRecords(cwd, {
     statuses: scope === "evidence" ? ["captured", "reviewed"] : ["reviewed", "promoted"],
   });
-  const queryEmbedding = embedWithLocalPlaceholder(query, config.embedding.dimensions);
-  const candidates: RetrievalHit[] = [];
+  const queryEmbedding = await embedText(query, embeddingProfile);
+  const candidatesToEmbed: Array<{
+    artifact: ArtifactRecord;
+    text: string;
+    sectionTitle: string;
+    path: string;
+    scopeValue: "session" | "harness" | "evidence";
+  }> = [];
   for (const artifact of artifacts) {
     if (!scopeMatches(artifact, scope)) continue;
     if (artifact.status === "superseded" || artifact.status === "retracted" || artifact.status === "archived") continue;
     const baseTexts =
       scope === "evidence"
-        ? artifact.evidenceRefs.map((item) => ({ text: item.excerpt, sectionTitle: "Evidence", path: `${pathForArtifact(cwd, artifact)}#${item.evidenceId}` }))
-        : [{ text: artifact.text, sectionTitle: artifact.title, path: pathForArtifact(cwd, artifact) }];
+        ? artifact.evidenceRefs.map((item) => ({
+            text: item.excerpt,
+            sectionTitle: "Evidence",
+            path: `${pathForArtifact(cwd, artifact)}#${item.evidenceId}`,
+            scopeValue: "evidence" as const,
+          }))
+        : [{
+            text: artifact.text,
+            sectionTitle: artifact.title,
+            path: pathForArtifact(cwd, artifact),
+            scopeValue: (scope === "all" ? (artifact.searchPolicy === "evidence" ? "evidence" : artifact.artifactScope) : scope) as "session" | "harness" | "evidence",
+          }];
     for (const candidate of baseTexts) {
-      const embedding = embedWithLocalPlaceholder(candidate.text, config.embedding.dimensions);
-      const semantic = cosineSimilarity(queryEmbedding, embedding);
-      const keyword = candidate.text.toLowerCase().includes(query.toLowerCase()) ? 1 : 0;
-      const semanticHybrid = config.retrieval.alpha * semantic + (1 - config.retrieval.alpha) * keyword;
-      const scoreFinal = 0.8 * semanticHybrid + 0.15 * authorityWeight(artifact) + 0.05 * recencyWeight(artifact.updatedAt);
-      candidates.push({
-        chunkId: `${artifact.artifactId}:${sha1(candidate.path).slice(0, 8)}`,
-        path: toRepoPath(cwd, candidate.path.replace(/#.*$/, "")),
-        sectionTitle: candidate.sectionTitle,
-        scoreVector: semantic,
-        scoreKeyword: keyword,
-        scoreFinal,
+      candidatesToEmbed.push({
+        artifact,
         text: candidate.text,
-        scope: scope === "all" ? (artifact.searchPolicy === "evidence" ? "evidence" : artifact.artifactScope) : scope,
-        originType: "artifact",
-        artifactId: artifact.artifactId,
-        artifactKind: artifact.kind,
-        authority: artifact.authority,
-        confidence: artifact.confidence,
+        sectionTitle: candidate.sectionTitle,
+        path: candidate.path,
+        scopeValue: candidate.scopeValue,
       });
     }
+  }
+  const candidateEmbeddings = await embedTexts(
+    candidatesToEmbed.map((candidate) => candidate.text),
+    embeddingProfile,
+  );
+  const candidates: RetrievalHit[] = [];
+  for (const [index, candidate] of candidatesToEmbed.entries()) {
+    const semantic = cosineSimilarity(queryEmbedding, candidateEmbeddings[index] ?? []);
+    const keyword = candidate.text.toLowerCase().includes(query.toLowerCase()) ? 1 : 0;
+    const semanticHybrid = config.retrieval.alpha * semantic + (1 - config.retrieval.alpha) * keyword;
+    const scoreFinal = 0.8 * semanticHybrid + 0.15 * authorityWeight(candidate.artifact) + 0.05 * recencyWeight(candidate.artifact.updatedAt);
+    candidates.push({
+      chunkId: `${candidate.artifact.artifactId}:${sha1(candidate.path).slice(0, 8)}`,
+      path: toRepoPath(cwd, candidate.path.replace(/#.*$/, "")),
+      sectionTitle: candidate.sectionTitle,
+      scoreVector: semantic,
+      scoreKeyword: keyword,
+      scoreFinal,
+      text: candidate.text,
+      scope: candidate.scopeValue,
+      originType: "artifact",
+      artifactId: candidate.artifact.artifactId,
+      artifactKind: candidate.artifact.kind,
+      authority: candidate.artifact.authority,
+      confidence: candidate.artifact.confidence,
+    });
   }
   return candidates.sort((left, right) => right.scoreFinal - left.scoreFinal).slice(0, topK);
 };

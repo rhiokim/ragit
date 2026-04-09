@@ -60,6 +60,13 @@ export interface CanonicalStore {
   status: "created" | "loaded";
 }
 
+interface CanonicalStorePaths {
+  storeDir: string;
+  storeMetaPath: string;
+  documentsCollectionDir: string;
+  chunksCollectionDir: string;
+}
+
 let runtimeInitialized = false;
 
 export interface ZvecPlatformSupport {
@@ -75,6 +82,25 @@ const fileExists = async (target: string): Promise<boolean> => {
   } catch {
     return false;
   }
+};
+
+const resolveCanonicalStorePaths = (cwd: string, customStoreDir?: string): CanonicalStorePaths => {
+  if (!customStoreDir) {
+    const paths = resolveRagitPaths(cwd);
+    return {
+      storeDir: paths.storeDir,
+      storeMetaPath: paths.storeMetaPath,
+      documentsCollectionDir: paths.documentsCollectionDir,
+      chunksCollectionDir: paths.chunksCollectionDir,
+    };
+  }
+  const storeDir = path.resolve(customStoreDir);
+  return {
+    storeDir,
+    storeMetaPath: path.join(storeDir, "meta.json"),
+    documentsCollectionDir: path.join(storeDir, "documents"),
+    chunksCollectionDir: path.join(storeDir, "chunks"),
+  };
 };
 
 export const getZvecPlatformSupport = (platform = process.platform, arch = process.arch): ZvecPlatformSupport => {
@@ -154,6 +180,44 @@ const buildChunkSchema = (dimensions: number): ZVecCollectionSchemaInstance =>
       { name: "sectionTitle", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
       { name: "text", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
       { name: "tokenCount", dataType: ZVecDataType.INT64, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "originType", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "artifactId", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "artifactKind", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "tier", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "status", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "authority", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "confidence", dataType: ZVecDataType.DOUBLE, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "goalId", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "episodeId", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "sourceSessionId", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "bindingStatus", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "searchPolicy", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+    ],
+  });
+
+const buildLegacyChunkSchema = (dimensions: number): ZVecCollectionSchemaInstance =>
+  new ZVecCollectionSchema({
+    name: "chunks",
+    vectors: {
+      name: "embedding",
+      dataType: ZVecDataType.VECTOR_FP32,
+      dimension: dimensions,
+      indexParams: {
+        indexType: ZVecIndexType.FLAT,
+        metricType: ZVecMetricType.COSINE,
+      },
+    },
+    fields: [
+      { name: "id", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "documentId", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "documentVersionId", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "path", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "docType", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "commitSha", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "sectionId", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "sectionTitle", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "text", dataType: ZVecDataType.STRING, indexParams: { indexType: ZVecIndexType.INVERT } },
+      { name: "tokenCount", dataType: ZVecDataType.INT64, indexParams: { indexType: ZVecIndexType.INVERT } },
     ],
   });
 
@@ -183,13 +247,15 @@ const normalizeVectorSchema = (collection: ZVecCollection): string =>
     .map((vector) => `${vector.name}:${vector.dataType}:${vector.dimension}:${vector.indexType ?? "none"}:${vector.metricType ?? "none"}`)
     .join("|");
 
-const assertCollectionSchema = (collection: ZVecCollection, expected: ZVecCollectionSchemaInstance, label: string): void => {
-  const expectedScalars = expected
+const normalizeExpectedScalarSchema = (schema: ZVecCollectionSchemaInstance): string =>
+  schema
     .fields()
     .map((field: ZVecFieldSchema) => `${field.name}:${field.dataType}:${field.indexParams?.indexType ?? "none"}`)
     .sort()
     .join("|");
-  const expectedVectors = expected
+
+const normalizeExpectedVectorSchema = (schema: ZVecCollectionSchemaInstance): string =>
+  schema
     .vectors()
     .map(
       (vector: ZVecVectorSchema) =>
@@ -197,15 +263,25 @@ const assertCollectionSchema = (collection: ZVecCollection, expected: ZVecCollec
     )
     .sort()
     .join("|");
+
+const assertCollectionSchema = (
+  collection: ZVecCollection,
+  expected: ZVecCollectionSchemaInstance | ZVecCollectionSchemaInstance[],
+  label: string,
+): void => {
   const actualScalars = normalizeScalarSchema(collection);
   const actualVectors = normalizeVectorSchema(collection);
-  if (expectedScalars !== actualScalars || expectedVectors !== actualVectors) {
+  const candidates = Array.isArray(expected) ? expected : [expected];
+  const matched = candidates.some(
+    (schema) =>
+      normalizeExpectedScalarSchema(schema) === actualScalars && normalizeExpectedVectorSchema(schema) === actualVectors,
+  );
+  if (!matched) {
     throw new Error(`${label} collection schema가 현재 ragit 기대값과 다릅니다.`);
   }
 };
 
-const readStoreMeta = async (cwd: string): Promise<CanonicalStoreMeta | null> => {
-  const target = resolveRagitPaths(cwd).storeMetaPath;
+const readStoreMeta = async (target: string): Promise<CanonicalStoreMeta | null> => {
   try {
     const content = await readFile(target, "utf8");
     return JSON.parse(content) as CanonicalStoreMeta;
@@ -214,10 +290,12 @@ const readStoreMeta = async (cwd: string): Promise<CanonicalStoreMeta | null> =>
   }
 };
 
-const writeStoreMeta = async (cwd: string, meta: CanonicalStoreMeta): Promise<void> => {
-  const target = resolveRagitPaths(cwd).storeMetaPath;
+const writeStoreMeta = async (target: string, meta: CanonicalStoreMeta): Promise<void> => {
   await writeFile(target, `${JSON.stringify(meta, null, 2)}\n`, "utf8");
 };
+
+export const readCanonicalStoreMeta = async (cwd: string, customStoreDir?: string): Promise<CanonicalStoreMeta | null> =>
+  readStoreMeta(resolveCanonicalStorePaths(cwd, customStoreDir).storeMetaPath);
 
 const buildMeta = (embedding: EmbeddingContract): CanonicalStoreMeta => ({
   layoutVersion: STORE_LAYOUT_VERSION,
@@ -245,25 +323,27 @@ const assertMetaCompatible = (meta: CanonicalStoreMeta, embedding: EmbeddingCont
     meta.embeddingContract.dimensions !== embedding.dimensions ||
     meta.embeddingContract.version !== embedding.version
   ) {
-    throw new Error("embedding contract가 현재 설정과 다릅니다.");
+    throw new Error("embedding contract가 현재 설정과 다릅니다. `ragit migrate embeddings`를 실행해 주세요.");
   }
 };
 
 export const hasLegacyJsonStore = async (cwd: string): Promise<boolean> => fileExists(path.join(resolveRagitPaths(cwd).storeDir, "index.json"));
 
-export const bootstrapCanonicalStore = async (
+const openCanonicalStoreAtPath = async (
   cwd: string,
   embedding: EmbeddingContract,
-  readOnly = false,
+  readOnly: boolean,
+  customStoreDir?: string,
 ): Promise<CanonicalStore> => {
-  const paths = resolveRagitPaths(cwd);
+  const paths = resolveCanonicalStorePaths(cwd, customStoreDir);
   ensureZvecRuntime();
-  const meta = await readStoreMeta(cwd);
+  const meta = await readStoreMeta(paths.storeMetaPath);
   const documentsExists = await fileExists(paths.documentsCollectionDir);
   const chunksExists = await fileExists(paths.chunksCollectionDir);
   const hasCollections = documentsExists || chunksExists;
   const documentsSchema = buildDocumentSchema(embedding.dimensions);
   const chunksSchema = buildChunkSchema(embedding.dimensions);
+  const legacyChunkSchema = buildLegacyChunkSchema(embedding.dimensions);
 
   if (!hasCollections && !meta) {
     if (readOnly) {
@@ -272,7 +352,7 @@ export const bootstrapCanonicalStore = async (
     const documents = ZVecCreateAndOpen(paths.documentsCollectionDir, documentsSchema, { readOnly: false, enableMMAP: true });
     const chunks = ZVecCreateAndOpen(paths.chunksCollectionDir, chunksSchema, { readOnly: false, enableMMAP: true });
     const createdMeta = buildMeta(embedding);
-    await writeStoreMeta(cwd, createdMeta);
+    await writeStoreMeta(paths.storeMetaPath, createdMeta);
     return {
       documents,
       chunks,
@@ -289,17 +369,7 @@ export const bootstrapCanonicalStore = async (
   const documents = ZVecOpen(paths.documentsCollectionDir, { readOnly, enableMMAP: true });
   const chunks = ZVecOpen(paths.chunksCollectionDir, { readOnly, enableMMAP: true });
   assertCollectionSchema(documents, documentsSchema, "documents");
-  assertCollectionSchema(chunks, chunksSchema, "chunks");
-  if (!readOnly && meta.schemaVersion !== STORE_SCHEMA_VERSION) {
-    const upgradedMeta = buildMeta(embedding);
-    await writeStoreMeta(cwd, upgradedMeta);
-    return {
-      documents,
-      chunks,
-      meta: upgradedMeta,
-      status: "loaded",
-    };
-  }
+  assertCollectionSchema(chunks, [chunksSchema, legacyChunkSchema], "chunks");
 
   return {
     documents,
@@ -308,6 +378,27 @@ export const bootstrapCanonicalStore = async (
     status: "loaded",
   };
 };
+
+export const bootstrapCanonicalStore = async (
+  cwd: string,
+  embedding: EmbeddingContract,
+  readOnly = false,
+): Promise<CanonicalStore> => {
+  return openCanonicalStoreAtPath(cwd, embedding, readOnly);
+};
+
+export const openCanonicalStoreWithContract = async (
+  cwd: string,
+  embedding: EmbeddingContract,
+  readOnly = false,
+): Promise<CanonicalStore> => openCanonicalStoreAtPath(cwd, embedding, readOnly);
+
+export const bootstrapCanonicalStoreAtPath = async (
+  cwd: string,
+  embedding: EmbeddingContract,
+  readOnly = false,
+  customStoreDir?: string,
+): Promise<CanonicalStore> => openCanonicalStoreAtPath(cwd, embedding, readOnly, customStoreDir);
 
 export const closeCanonicalStore = (store: CanonicalStore): void => {
   store.documents.closeSync();
@@ -329,24 +420,43 @@ const toDocumentInput = (document: DocumentRecord, dimensions: number) => ({
   },
 });
 
-const toChunkInput = (chunk: ChunkRecord) => ({
-  id: chunk.id,
-  vectors: {
-    embedding: chunk.embedding,
-  },
-  fields: {
+const toChunkInput = (collection: ZVecCollection, chunk: ChunkRecord) => {
+  const availableFields = new Set(collection.schema.fields().map((field) => field.name));
+  const fields: Record<string, string | number> = {};
+  const addField = (name: string, value: string | number): void => {
+    if (!availableFields.has(name)) return;
+    fields[name] = value;
+  };
+  addField("id", chunk.id);
+  addField("documentId", chunk.documentId);
+  addField("documentVersionId", chunk.documentVersionId);
+  addField("path", chunk.path);
+  addField("docType", chunk.docType);
+  addField("commitSha", chunk.commitSha);
+  addField("sectionId", chunk.sectionId);
+  addField("sectionTitle", chunk.sectionTitle);
+  addField("text", chunk.text);
+  addField("tokenCount", chunk.tokenCount);
+  addField("originType", chunk.originType ?? "");
+  addField("artifactId", chunk.artifactId ?? "");
+  addField("artifactKind", chunk.artifactKind ?? "");
+  addField("tier", chunk.tier ?? "");
+  addField("status", chunk.status ?? "");
+  addField("authority", chunk.authority ?? "");
+  addField("confidence", chunk.confidence ?? -1);
+  addField("goalId", chunk.goalId ?? "");
+  addField("episodeId", chunk.episodeId ?? "");
+  addField("sourceSessionId", chunk.sourceSessionId ?? "");
+  addField("bindingStatus", chunk.bindingStatus ?? "");
+  addField("searchPolicy", chunk.searchPolicy ?? "");
+  return {
     id: chunk.id,
-    documentId: chunk.documentId,
-    documentVersionId: chunk.documentVersionId,
-    path: chunk.path,
-    docType: chunk.docType,
-    commitSha: chunk.commitSha,
-    sectionId: chunk.sectionId,
-    sectionTitle: chunk.sectionTitle,
-    text: chunk.text,
-    tokenCount: chunk.tokenCount,
-  },
-});
+    vectors: {
+      embedding: chunk.embedding,
+    },
+    fields,
+  };
+};
 
 export const writeDocumentsToCanonicalStore = (store: CanonicalStore, documents: DocumentRecord[]): void => {
   if (documents.length === 0) return;
@@ -355,7 +465,7 @@ export const writeDocumentsToCanonicalStore = (store: CanonicalStore, documents:
 
 export const writeChunksToCanonicalStore = (store: CanonicalStore, chunks: ChunkRecord[]): void => {
   if (chunks.length === 0) return;
-  store.chunks.upsertSync(chunks.map((chunk) => toChunkInput(chunk)));
+  store.chunks.upsertSync(chunks.map((chunk) => toChunkInput(store.chunks, chunk)));
 };
 
 export const canonicalStoreSummary = async (

@@ -3,10 +3,18 @@ import path from "node:path";
 import { countArtifactState } from "../core/artifacts.js";
 import { loadConfig, setConfigValue, writeConfig } from "../core/config.js";
 import { readDocAuthorityIndex } from "../core/doc-authority.js";
+import { EmbeddingProviderError, resolveEmbeddingConfiguredState, resolveEmbeddingProfile } from "../core/embedding.js";
 import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
-import { bootstrapCanonicalStore, closeCanonicalStore, formatZvecPlatformSupport, getZvecPlatformSupport, hasLegacyJsonStore } from "../core/store.js";
+import {
+  bootstrapCanonicalStore,
+  closeCanonicalStore,
+  formatZvecPlatformSupport,
+  getZvecPlatformSupport,
+  hasLegacyJsonStore,
+  readCanonicalStoreMeta,
+} from "../core/store.js";
 
 export const runConfigSet = async (cwd: string, key: string, value: string): Promise<void> => {
   await ensureRagitStructure(cwd);
@@ -15,6 +23,30 @@ export const runConfigSet = async (cwd: string, key: string, value: string): Pro
   await writeConfig(cwd, updated);
   console.log(`설정이 업데이트되었습니다: ${key}=${value}`);
 };
+
+type StatusEmbeddingState = {
+  configured: ReturnType<typeof resolveEmbeddingProfile>;
+  store: {
+    provider: string;
+    dimensions: number;
+    version: string;
+    schemaVersion: number;
+  } | null;
+  ready: boolean;
+  needsMigration: boolean;
+};
+
+const hasCredentialForProfile = (profile: ReturnType<typeof resolveEmbeddingProfile>): boolean =>
+  profile.provider !== "openai" || Boolean(process.env.OPENAI_API_KEY?.trim());
+
+const embeddingNeedsMigration = (
+  profile: ReturnType<typeof resolveEmbeddingProfile>,
+  storeMeta: Awaited<ReturnType<typeof readCanonicalStoreMeta>>,
+): boolean =>
+  storeMeta !== null &&
+  (storeMeta.embeddingContract.provider !== profile.provider ||
+    storeMeta.embeddingContract.dimensions !== profile.dimensions ||
+    storeMeta.embeddingContract.version !== profile.version);
 
 export interface StatusResult {
   branch: string;
@@ -42,7 +74,7 @@ export interface StatusResult {
     pendingBindings: number;
   };
   manifests: number;
-  embedding: Awaited<ReturnType<typeof loadConfig>>["embedding"];
+  embedding: StatusEmbeddingState;
   format: Awaited<ReturnType<typeof loadConfig>>["output"]["format"];
 }
 
@@ -50,6 +82,9 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   await ensureRagitStructure(cwd);
   const paths = resolveRagitPaths(cwd);
   const config = await loadConfig(cwd);
+  const configuredProfile = resolveEmbeddingProfile(config);
+  const storeMeta = await readCanonicalStoreMeta(cwd);
+  const needsMigration = embeddingNeedsMigration(configuredProfile, storeMeta);
   const manifests = (await readdir(paths.manifestDir)).filter((name) => name.endsWith(".json"));
   const branch = await currentBranch(cwd);
   const sha = await getHeadSha(cwd);
@@ -58,7 +93,10 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   let schemaVersion: number | null = null;
   let stats: Record<string, unknown> | null = null;
   try {
-    const store = await bootstrapCanonicalStore(cwd, config.embedding, true);
+    if (!storeMeta) {
+      throw new Error("store meta missing");
+    }
+    const store = await bootstrapCanonicalStore(cwd, storeMeta.embeddingContract, true);
     try {
       zvecStatus = "loaded";
       collections = [store.meta.collections.documents, store.meta.collections.chunks];
@@ -99,7 +137,19 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
       pendingBindings: 0,
     },
     manifests: manifests.length,
-    embedding: config.embedding,
+    embedding: {
+      configured: configuredProfile,
+      store: storeMeta
+        ? {
+            provider: storeMeta.embeddingContract.provider,
+            dimensions: storeMeta.embeddingContract.dimensions,
+            version: storeMeta.embeddingContract.version,
+            schemaVersion: storeMeta.schemaVersion,
+          }
+        : null,
+      ready: hasCredentialForProfile(configuredProfile) && !needsMigration,
+      needsMigration,
+    },
     format: config.output.format,
   };
   const docAuthorityIndex = await readDocAuthorityIndex(cwd);
@@ -129,7 +179,14 @@ const checkManifestConsistency = async (
       missingChunkIds: 0,
     };
   }
-  const store = await bootstrapCanonicalStore(cwd, config.embedding, true);
+  const storeMeta = await readCanonicalStoreMeta(cwd);
+  if (!storeMeta) {
+    return {
+      manifests: manifestFiles.length,
+      missingChunkIds: 0,
+    };
+  }
+  const store = await bootstrapCanonicalStore(cwd, storeMeta.embeddingContract, true);
   try {
     const manifestChunkIds = new Set<string>();
     for (const fileName of manifestFiles) {
@@ -185,10 +242,11 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
   const config = await (async () => {
     try {
       const loaded = await loadConfig(cwd);
+      const profile = resolveEmbeddingProfile(loaded);
       checks.push({
         name: "ragit.config",
         ok: true,
-        detail: `backend=${loaded.storage.backend}, embedding=${loaded.embedding.provider}/${loaded.embedding.version}/${loaded.embedding.dimensions}`,
+        detail: `backend=${loaded.storage.backend}, embedding=${profile.provider}/${profile.model}/${profile.version}/${profile.dimensions}`,
       });
       return loaded;
     } catch (error) {
@@ -209,8 +267,65 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
     checks.push({ name: "zvec.platform", ok: false, detail: message });
   }
   if (config) {
+    const configuredState = resolveEmbeddingConfiguredState(config);
+    let profile: ReturnType<typeof resolveEmbeddingProfile> | null = null;
     try {
-      const store = await bootstrapCanonicalStore(cwd, config.embedding, true);
+      profile = resolveEmbeddingProfile(config);
+      checks.push({
+        name: "embedding.config",
+        ok: true,
+        detail: `${profile.provider}/${profile.model}/${profile.version}/${profile.dimensions}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      checks.push({ name: "embedding.config", ok: false, detail: message });
+    }
+    checks.push({
+      name: "embedding.credentials",
+      ok: profile ? hasCredentialForProfile(profile) : false,
+      detail:
+        profile?.provider === "openai"
+          ? hasCredentialForProfile(profile)
+            ? "OPENAI_API_KEY present"
+            : "OPENAI_API_KEY missing"
+          : "not required",
+    });
+    checks.push({
+      name: "embedding.deprecated-fields",
+      ok: !(
+        configuredState.provider !== "local-placeholder" &&
+        (configuredState.deprecatedDimensions !== null || configuredState.deprecatedVersion !== null)
+      ),
+      detail:
+        configuredState.provider === "local-placeholder"
+          ? "none"
+          : [
+              configuredState.deprecatedDimensions !== null ? "dimensions ignored" : null,
+              configuredState.deprecatedVersion !== null ? "version ignored" : null,
+            ]
+              .filter(Boolean)
+              .join(", ") || "none",
+    });
+    const storeMeta = await readCanonicalStoreMeta(cwd);
+    const migrationNeeded = profile ? embeddingNeedsMigration(profile, storeMeta) : false;
+    checks.push({
+      name: "embedding.contract",
+      ok: !migrationNeeded,
+      detail:
+        storeMeta === null
+          ? "store meta missing"
+          : `store=${storeMeta.embeddingContract.provider}/${storeMeta.embeddingContract.version}/${storeMeta.embeddingContract.dimensions}`,
+    });
+    checks.push({
+      name: "embedding.migration-needed",
+      ok: !migrationNeeded,
+      detail: migrationNeeded ? "run ragit migrate embeddings" : "none",
+    });
+    try {
+      if (!storeMeta) {
+        throw new Error("zvec store가 아직 초기화되지 않았습니다.");
+      }
+      const store = await bootstrapCanonicalStore(cwd, storeMeta.embeddingContract, true);
       try {
         checks.push({
           name: "zvec.runtime",
@@ -231,7 +346,8 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
         closeCanonicalStore(store);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message =
+        error instanceof EmbeddingProviderError || error instanceof Error ? error.message : String(error);
       checks.push({ name: "zvec.runtime", ok: false, detail: message });
     }
     try {

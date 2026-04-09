@@ -5,7 +5,7 @@ import { getHeadSha } from "./git.js";
 import { latestSnapshotSha, loadSnapshotManifest, resolveSnapshotRef } from "./manifest.js";
 import { bootstrapCanonicalStore, closeCanonicalStore } from "./store.js";
 import { ChunkRecord, RetrievalHit } from "./types.js";
-import { embedWithLocalPlaceholder, zvecCosineDistanceToSimilarity } from "./embedding.js";
+import { embedText, resolveEmbeddingProfile, toEmbeddingContract, zvecCosineDistanceToSimilarity } from "./embedding.js";
 
 const normalizeText = (text: string): string =>
   text
@@ -117,6 +117,7 @@ const recencyWeight = (updatedAt?: string | null): number => {
 
 export const searchKnowledge = async (cwd: string, query: string, options: QueryOptions): Promise<QueryResult> => {
   const config = await loadConfig(cwd);
+  const embeddingProfile = resolveEmbeddingProfile(config);
   const snapshotSha = await resolveSnapshotSha(cwd, options.at);
   const snapshot = await loadSnapshotManifest(cwd, snapshotSha);
   const alpha = config.retrieval.alpha;
@@ -131,8 +132,8 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
       hits: [],
     };
   }
-  const queryEmbedding = embedWithLocalPlaceholder(query, config.embedding.dimensions);
-  const store = await bootstrapCanonicalStore(cwd, config.embedding, true);
+  const queryEmbedding = await embedText(query, embeddingProfile);
+  const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), true);
 
   try {
     const batchSize = 400;

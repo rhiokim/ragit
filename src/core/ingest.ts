@@ -11,10 +11,10 @@ import { getHeadSha, getParentSha, listChangedFilesSince } from "./git.js";
 import { chunkVersionId, documentIdFromPath, documentVersionId, toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, latestSnapshotSha, loadSnapshotManifestIfExists, writeSnapshotManifest } from "./manifest.js";
+import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
 import { ensureRagitStructure } from "./project.js";
 import { bootstrapCanonicalStore, closeCanonicalStore, writeChunksToCanonicalStore, writeDocumentsToCanonicalStore } from "./store.js";
 import { ChunkRecord, DocType, DocumentRecord, isKnownDocType } from "./types.js";
-import { embedWithLocalPlaceholder } from "./embedding.js";
 
 export interface IngestOptions {
   all?: boolean;
@@ -135,6 +135,7 @@ const sortChunkEntries = (chunks: Array<Pick<ChunkRecord, "id" | "documentId" | 
 export const runIngest = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
+  const embeddingProfile = resolveEmbeddingProfile(config);
   const candidates = await resolveCandidates(cwd, options);
   const scope = options.scope ?? "durable";
   const headSha = await getHeadSha(cwd);
@@ -179,7 +180,12 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       hash,
       sections,
     };
-    const chunks = chunkSections(sections).map((chunk, index) => {
+    const chunkCandidates = chunkSections(sections);
+    const embeddings = await embedTexts(
+      chunkCandidates.map((chunk) => chunk.text),
+      embeddingProfile,
+    );
+    const chunks = chunkCandidates.map((chunk, index) => {
       const id = chunkVersionId(versionId, chunk.sectionId, index, chunk.text);
       const record: ChunkRecord = {
         id,
@@ -192,7 +198,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
         commitSha: headSha,
         text: chunk.text,
         tokenCount: chunk.tokenCount,
-        embedding: embedWithLocalPlaceholder(chunk.text, config.embedding.dimensions),
+        embedding: embeddings[index] ?? [],
       };
       return record;
     });
@@ -226,7 +232,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
 
   const parentSha = await getParentSha(cwd);
   const boundArtifactIds = await bindPendingArtifacts(cwd, headSha);
-  const store = await bootstrapCanonicalStore(cwd, config.embedding, false);
+  const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), false);
 
   try {
 
@@ -268,7 +274,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
     }
 
     const newDocuments = Array.from(changedDocuments.values());
-    const artifactIndex = await buildArtifactIndexData(cwd, headSha, scope, config.embedding.dimensions);
+    const artifactIndex = await buildArtifactIndexData(cwd, headSha, scope, embeddingProfile);
     const newChunks = [...Array.from(changedChunks.values()).flat(), ...artifactIndex.chunks];
     writeDocumentsToCanonicalStore(store, newDocuments);
     writeChunksToCanonicalStore(store, newChunks);

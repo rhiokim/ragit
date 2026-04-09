@@ -94,7 +94,7 @@ export const ensureRagitStructure = async (cwd: string, config: RagitConfig = de
   return paths;
 };
 
-const gitIgnoreEntries = [".ragit/store/", ".ragit/cache/"];
+const gitIgnoreEntries = [".ragit/store/", ".ragit/store.next/", ".ragit/store.prev/", ".ragit/cache/"];
 
 export const ensureGitIgnoreEntries = async (cwd: string): Promise<void> => {
   const gitIgnorePath = path.join(cwd, ".gitignore");

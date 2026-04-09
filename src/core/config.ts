@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { KNOWN_DOC_TYPES, RagitConfig } from "./types.js";
+import { EmbeddingProvider, KNOWN_DOC_TYPES, RagitConfig } from "./types.js";
 
 export const RAGIT_DIR = ".ragit";
 export const CONFIG_PATH = path.join(RAGIT_DIR, "config.toml");
@@ -34,6 +34,8 @@ export const defaultConfig = (): RagitConfig => ({
   },
   embedding: {
     provider: "local-placeholder",
+    model: "placeholder-v1",
+    timeout_ms: 30_000,
     dimensions: 64,
     version: "v1",
   },
@@ -68,6 +70,45 @@ export const defaultConfig = (): RagitConfig => ({
     language: "ko",
   },
 });
+
+const normalizeEmbeddingProvider = (value: unknown): EmbeddingProvider => {
+  if (value === undefined || value === null || value === "") return defaultConfig().embedding.provider;
+  if (value === "local-placeholder" || value === "openai" || value === "ollama") return value;
+  throw new Error(`지원하지 않는 embedding provider입니다: ${String(value)}`);
+};
+
+const normalizeEmbeddingModel = (provider: EmbeddingProvider, value: unknown): string => {
+  if (typeof value === "string" && value.trim()) {
+    const normalized = value.trim();
+    if (provider !== "local-placeholder" && normalized === "placeholder-v1") {
+      return provider === "openai" ? "text-embedding-3-small" : "nomic-embed-text";
+    }
+    return normalized;
+  }
+  if (provider === "openai") return "text-embedding-3-small";
+  if (provider === "ollama") return "nomic-embed-text";
+  return "placeholder-v1";
+};
+
+const normalizeEmbeddingBaseUrl = (value: unknown): string | undefined => {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  return value.trim();
+};
+
+const normalizeEmbeddingTimeout = (value: unknown): number => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  return 30_000;
+};
+
+const normalizeEmbeddingDimensions = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  return undefined;
+};
+
+const normalizeEmbeddingVersion = (value: unknown): string | undefined => {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return undefined;
+};
 
 const normalizeOutputFormat = (value: unknown): RagitConfig["output"]["format"] => {
   if (value === "json" || value === "both" || value === "text") return value;
@@ -111,6 +152,14 @@ export const parseToml = (source: string): RagitConfig => {
   }
   const output = result.output ?? {};
   output.format = normalizeOutputFormat(output.format);
+  const embedding = result.embedding ?? {};
+  const provider = normalizeEmbeddingProvider(embedding.provider);
+  embedding.provider = provider;
+  embedding.model = normalizeEmbeddingModel(provider, embedding.model);
+  embedding.base_url = normalizeEmbeddingBaseUrl(embedding.base_url);
+  embedding.timeout_ms = normalizeEmbeddingTimeout(embedding.timeout_ms);
+  embedding.dimensions = normalizeEmbeddingDimensions(embedding.dimensions);
+  embedding.version = normalizeEmbeddingVersion(embedding.version);
   return result as unknown as RagitConfig;
 };
 
@@ -147,7 +196,8 @@ export const setConfigValue = (config: RagitConfig, dottedKey: string, value: st
   }
   const [section, key] = segments;
   const container = (config as unknown as Record<string, Record<string, unknown>>)[section];
-  if (!container || !(key in container)) {
+  const optionalEmbeddingKeys = new Set(["model", "base_url", "timeout_ms", "dimensions", "version"]);
+  if (!container || (!(key in container) && !(section === "embedding" && optionalEmbeddingKeys.has(key)))) {
     throw new Error(`알 수 없는 설정 키입니다: ${dottedKey}`);
   }
   const currentValue = container[key];
@@ -165,7 +215,23 @@ export const setConfigValue = (config: RagitConfig, dottedKey: string, value: st
     }
     container[key] = parsed;
   } else {
-    container[key] = section === "output" && key === "format" ? normalizeOutputFormat(value) : value;
+    if (section === "output" && key === "format") {
+      container[key] = normalizeOutputFormat(value);
+    } else if (section === "embedding" && key === "provider") {
+      container[key] = normalizeEmbeddingProvider(value);
+    } else if (section === "embedding" && key === "timeout_ms") {
+      container[key] = normalizeEmbeddingTimeout(Number(value));
+    } else if (section === "embedding" && key === "dimensions") {
+      const parsed = normalizeEmbeddingDimensions(Number(value));
+      if (parsed === undefined) {
+        throw new Error(`number 값으로 변환할 수 없습니다: ${dottedKey}`);
+      }
+      container[key] = parsed;
+    } else if (section === "embedding" && key === "version") {
+      container[key] = normalizeEmbeddingVersion(value);
+    } else {
+      container[key] = value;
+    }
   }
   return config;
 };

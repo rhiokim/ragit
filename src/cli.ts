@@ -48,6 +48,10 @@ const formatStatusText = (status: Awaited<ReturnType<typeof runStatus>>): string
     `- session_artifacts: ${status.knowledge.sessionArtifactCount}`,
     `- harness_artifacts: ${status.knowledge.harnessArtifactCount}`,
     `- pending_bindings: ${status.knowledge.pendingBindings}`,
+    `- embedding_configured: ${status.embedding.configured.provider}/${status.embedding.configured.model}/${status.embedding.configured.version}/${status.embedding.configured.dimensions}`,
+    `- embedding_store: ${status.embedding.store ? `${status.embedding.store.provider}/${status.embedding.store.version}/${status.embedding.store.dimensions}` : "none"}`,
+    `- embedding_ready: ${status.embedding.ready}`,
+    `- embedding_needs_migration: ${status.embedding.needsMigration}`,
     `- format: ${status.format}`,
   ].join("\n");
 
@@ -622,6 +626,17 @@ harness
   });
 
 const migrate = program.command("migrate").description("레거시 마이그레이션");
+
+migrate
+  .command("embeddings")
+  .description("현재 store를 target embedding provider contract로 재구성")
+  .option("--dry-run", "미리보기 모드")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const { migrateEmbeddings } = await import("./core/migrate.js");
+    const result = await migrateEmbeddings(resolveCwd(options.cwd), Boolean(options.dryRun));
+    console.log(JSON.stringify(result, null, 2));
+  });
 
 migrate
   .command("from-json-store")

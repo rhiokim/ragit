@@ -24,6 +24,7 @@ import { assessMaturity } from "../core/init/maturity.js";
 import { formatInitSummaryTable as formatDiscoverInitSummaryTable } from "../core/init/report.js";
 import { scanRepository } from "../core/init/repo-scan.js";
 import { applyGapFillActions } from "../core/init/templates.js";
+import { resolveEmbeddingProfile, toEmbeddingContract } from "../core/embedding.js";
 import { InitBootstrapSummary, InitModeOption, InitReport, InitStrategy } from "../core/init/types.js";
 import { RagitConfig } from "../core/types.js";
 
@@ -129,7 +130,7 @@ const inspectBootstrapSummary = async (
 
   const storage = await (async () => {
     try {
-      const summary = await canonicalStoreSummary(root, config.embedding, true);
+      const summary = await canonicalStoreSummary(root, toEmbeddingContract(resolveEmbeddingProfile(config)), true);
       return {
         backend: "zvec" as const,
         status: (summary.status === "created" ? "planned" : "loaded") as "planned" | "loaded",
@@ -188,7 +189,7 @@ const applyBootstrap = async (
   const index = buildGuideIndex(agents, parsed);
   const indexPath = await writeGuideIndex(root, index);
   ensureZvecRuntime();
-  const store = await bootstrapCanonicalStore(root, config.embedding, false);
+  const store = await bootstrapCanonicalStore(root, toEmbeddingContract(resolveEmbeddingProfile(config)), false);
   try {
     const docsAuthority = await reconcileDocs(root, { dryRun: false, ensureStructure: false });
     return {

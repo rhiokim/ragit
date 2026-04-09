@@ -3,6 +3,7 @@ export const KNOWN_DOC_TYPES = ["adr", "prd", "srs", "spec", "plan", "ddd", "glo
 export type KnownDocType = (typeof KNOWN_DOC_TYPES)[number];
 export type DocType = KnownDocType | "unknown";
 export type RetrievalScope = "durable" | "session" | "harness" | "evidence" | "all";
+export type EmbeddingProvider = "local-placeholder" | "openai" | "ollama";
 export type ArtifactStatus = "captured" | "reviewed" | "promoted" | "superseded" | "retracted" | "archived";
 export type ArtifactBindingStatus = "pending" | "bound" | "local_only";
 export type ArtifactTier = "candidate" | "durable";
@@ -75,9 +76,12 @@ export interface RagitConfig {
     vector_dir: string;
   };
   embedding: {
-    provider: "local-placeholder";
-    dimensions: number;
-    version: string;
+    provider: EmbeddingProvider;
+    model?: string;
+    base_url?: string;
+    timeout_ms?: number;
+    dimensions?: number;
+    version?: string;
   };
   ingest: {
     supported_types: DocType[];
@@ -109,6 +113,25 @@ export interface RagitConfig {
     format: "text" | "json" | "both";
     language: "ko" | "en";
   };
+}
+
+export interface EmbeddingConfiguredState {
+  provider: EmbeddingProvider;
+  model: string;
+  baseUrl: string | null;
+  timeoutMs: number;
+  deprecatedDimensions: number | null;
+  deprecatedVersion: string | null;
+}
+
+export interface EmbeddingProfile {
+  provider: EmbeddingProvider;
+  model: string;
+  dimensions: number;
+  version: string;
+  baseUrl: string | null;
+  timeoutMs: number;
+  ignoredLegacyFields: Array<"dimensions" | "version">;
 }
 
 export interface DocumentSection {
