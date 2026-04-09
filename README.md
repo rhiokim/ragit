@@ -7,6 +7,61 @@ It collects, analyzes, and retrieves documents produced during AI agent workflow
 
 RAGit is a local-first RAG CLI that turns AI agent project documents and context into commit-bound, reusable knowledge inside the repository.
 
+RAGit is not a giant transcript archive. It is an agent-first collaboration memory system that preserves the smallest reusable state needed to resume work at a given commit: goal, constraints, stable decisions, open loops, and next actions. By separating active working memory from durable searchable memory, it helps the next agent recover momentum without replaying the entire past.
+
+## Runtime Structure
+
+The runtime structure below shows how `ragit` connects the CLI, command layer, core services, git-bound snapshots, and local storage.
+
+```text
+                               ┌────────────┐
+                               │User / Agent│
+                               ├────────────┤
+                               └────────────┘
+                                      |
+                                      |
+                                 ┌─────────┐
+                                 │ragit CLI│
+                                 ├─────────┤
+                                 └─────────┘
+                                      |
+                       ┌────────────────────────────┐
+                       │Command Layer               │
+                       ├────────────────────────────┤
+                       │init                        │
+                       │ingest                      │
+                       │query                       │
+                       │context pack                │
+                       │memory                      │
+                       │session / artifact / harness│
+                       └────────────────────────────┘
+                                      |
+
+                            ┌───────────────────┐
+                            │Core Services      │
+ ┌─────────────────┐        ├───────────────────┤
+ │Git commit / HEAD│        │doc authority      │
+ ├─────────────────┤        │manifest           │
+ │snapshot binding │        │retrieval          │
+ └─────────────────┘        │memory             │
+           |                │artifacts / harness│
+           |                └───────────────────┘
+           |
+┌────────────────────┐                               ┌─────────────┐
+│.ragit control plane│              ┌────────────┐   │Outputs      │
+├────────────────────┤  ┌───────┐   │.ragit/store│   ├─────────────┤
+│config              │  │docs/**│   ├────────────┤   │query hits   │
+│manifest            │  ├───────┤   │documents   │   │context pack │
+│memory              │  └───────┘   │chunks      │   │recall packet│
+│artifacts           │              └────────────┘   └─────────────┘
+└────────────────────┘
+```
+
+- `ragit CLI` is the single entrypoint. Every user or agent workflow starts by dispatching a command through the command layer.
+- `Git commit / HEAD` binds manifest selection, so retrieval and recall stay reproducible at a specific repository state.
+- `.ragit control plane` stores configuration and tracked knowledge state, while `.ragit/store` holds the local vector index for `documents` and `chunks`.
+- User-facing outputs are produced from the same runtime core: `query hits`, `context pack`, and `recall packet`.
+
 ## Git vs RAGit
 
 Git version-controls source code states. RAGit version-controls AI-working knowledge states bound to the same commit history.
@@ -157,6 +212,7 @@ pnpm ragit describe query --format json
 pnpm ragit init
 pnpm ragit init --yes --output json
 pnpm ragit init --yes --git-init
+pnpm ragit log --max-count 5 --view default --format both
 pnpm ragit config set retrieval.top_k 8
 pnpm ragit hooks install --dry-run --format json
 pnpm ragit ingest --all --dry-run --format json
@@ -170,6 +226,77 @@ pnpm ragit migrate from-sqlitevss --dry-run
 pnpm ragit status --format json
 pnpm ragit doctor --format json
 ```
+
+## How Ingest Works
+
+The flow below shows how `ragit ingest` turns repository documents and bound artifacts into a searchable snapshot.
+
+```text
+        ┌─┐                                                                                                                                                       
+        ║"│                                                                                                                                                       
+        └┬┘                                                                                                                                                       
+        ┌┼┐                                                                                            ┌─────────┐                                                
+         │                        ┌─────┐                 ┌──────┐                     ┌────┐          │Session /│          ┌───────┐                             
+        ┌┴┐                       │ragit│                 │run   │                     │Repo│          │Harness  │          │.ragit/│          ┌────────┐         
+      User /                      │CLI  │                 │Ingest│                     │docs│          │artifacts│          │store  │          │Manifest│         
+      Agent                       └──┬──┘                 └──┬───┘                     └─┬──┘          └────┬────┘          └───┬───┘          └───┬────┘         
+        │      ragit ingest ...      │                       │                           │                  │                   │                  │              
+        │ ───────────────────────────>                       │                           │                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │                            │    parse mode         │                           │                  │                   │                  │              
+        │                            │    + source options   │                           │                  │                   │                  │              
+        │                            │ ──────────────────────>                           │                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │                            │                       │────┐                      │                  │                   │                  │              
+        │                            │                       │    │ ensure .ragit        │                  │                   │                  │              
+        │                            │                       │<───┘ load config          │                  │                   │                  │              
+        │                            │                       │      check HEAD           │                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │                            │                       │     resolve candidates    │                  │                   │                  │              
+        │                            │                       │ ──────────────────────────>                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │                            │          ╔═══════╤════╪═══════════════════════════╪════════════╗     │                   │                  │              
+        │                            │          ║ LOOP  │  each supported doc            │            ║     │                   │                  │              
+        │                            │          ╟───────┘    │                           │            ║     │                   │                  │              
+        │                            │          ║            │ hash -> mask -> detect    │            ║     │                   │                  │              
+        │                            │          ║            │ validate -> chunk -> embed│            ║     │                   │                  │              
+        │                            │          ║            │ ──────────────────────────>            ║     │                   │                  │              
+        │                            │          ╚════════════╪═══════════════════════════╪════════════╝     │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │               ╔══════╤═════╪═══════════════════════╪═══════════════════════════╪══════════════════╪═══════════════════╪══════════════════╪═════════════╗
+        │               ║ ALT  │  --dry-run                  │                           │                  │                   │                  │             ║
+        │               ╟──────┘     │                       │                           │                  │                   │                  │             ║
+        │               ║            │ return planned summary│                           │                  │                   │                  │             ║
+        │               ║            │ <─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─                            │                  │                   │                  │             ║
+        │               ╠════════════╪═══════════════════════╪═══════════════════════════╪══════════════════╪═══════════════════╪══════════════════╪═════════════╣
+        │               ║ [apply]    │                       │                           │                  │                   │                  │             ║
+        │               ║            │                       │           bind pending artifacts             │                   │                  │             ║
+        │               ║            │                       │           + build artifact chunks            │                   │                  │             ║
+        │               ║            │                       │ ────────────────────────────────────────────>│                   │                  │             ║
+        │               ║            │                       │                           │                  │                   │                  │             ║
+        │               ║            │                       │                       write docs + chunks    │                   │                  │             ║
+        │               ║            │                       │ ────────────────────────────────────────────────────────────────>│                  │             ║
+        │               ║            │                       │                           │                  │                   │                  │             ║
+        │               ║            │                       │                           │    build + write snapshot            │                  │             ║
+        │               ║            │                       │ ────────────────────────────────────────────────────────────────────────────────────>             ║
+        │               ║            │                       │                           │                  │                   │                  │             ║
+        │               ║            │                       │                        ingest summary        │                   │                  │             ║
+        │               ║            │ <─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─              ║
+        │               ╚════════════╪═══════════════════════╪═══════════════════════════╪══════════════════╪═══════════════════╪══════════════════╪═════════════╝
+        │                            │                       │                           │                  │                   │                  │              
+        │ searchable snapshot summary│                       │                           │                  │                   │                  │              
+        │ <─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─                       │                           │                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+        │                            │                       │                           │                  │                   │                  │              
+```
+
+- Candidate resolution changes by mode: explicit `--path`, glob-style `--files`, incremental `--since`, or the default full-snapshot scan.
+- `--dry-run` stops before writing `.ragit/store` or a new manifest and only returns the planned ingest summary.
+- The apply path is where pending artifact binding, artifact chunk construction, and store/manifest writes actually happen.
+- The final searchable truth comes from the manifest snapshot, not from raw files or chunks alone.
 
 ## Storage Layout
 

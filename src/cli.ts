@@ -15,8 +15,10 @@ import { normalizeContextPackCommandInput, normalizeIngestCommandInput, normaliz
 import { describeCommandPath, listDescribableCommands } from "./core/commandRegistry.js";
 import { formatContextPackText, packContext, projectContextPack } from "./core/context.js";
 import { runIngest } from "./core/ingest.js";
+import { formatRagitLogText, projectRagitLogResult, runRagitLog } from "./core/log.js";
 import { formatQueryResultText, projectRetrievalHits } from "./core/output.js";
 import { searchKnowledge } from "./core/retrieval.js";
+import { normalizeKnownDocType } from "./core/types.js";
 import { RAGIT_VERSION } from "./core/version.js";
 
 const program = new Command();
@@ -159,6 +161,38 @@ program
       envelope,
       format,
       text: formatInitSummaryTable(summary),
+    });
+  });
+
+program
+  .command("log")
+  .description("snapshot 기반 semantic history")
+  .argument("[revRange]")
+  .option("-n, --max-count <n>", "최종 출력 entry 개수")
+  .option("--view <view>", "minimal|default|full", "default")
+  .option("--type <docType>", "adr|prd|srs|spec|plan|ddd|glossary|pbd")
+  .option("--path <glob>", "repo 내부 glob 필터")
+  .option("--show-missing", "snapshot 없는 commit도 함께 표시")
+  .option("--format <format>", "text|json|both", "text")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (revRange, options) => {
+    const cwd = resolveCwd(options.cwd);
+    const docType = options.type ? normalizeKnownDocType(String(options.type)) : null;
+    if (options.type && !docType) {
+      throw new Error(`지원하지 않는 doc type입니다: ${options.type}`);
+    }
+    const result = await runRagitLog(cwd, {
+      revRange: revRange ? String(revRange) : undefined,
+      maxCount: parseOptionalPositiveNumber(options.maxCount as string | undefined, "log.maxCount"),
+      docType,
+      path: options.path ? assertSafeGlobText(String(options.path), "log.path") : undefined,
+      showMissing: Boolean(options.showMissing),
+    });
+    const view = normalizeCliView(options.view, "default");
+    emitCliOutput({
+      envelope: buildCliEnvelope("log", cwd, projectRagitLogResult(result, view)),
+      format: normalizeCliFormat(options.format, "text"),
+      text: formatRagitLogText(result, view),
     });
   });
 

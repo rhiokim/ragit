@@ -39,7 +39,7 @@ describe("CLI machine contract", () => {
   );
 
   it(
-    "emits JSON envelopes for describe, query, context pack, memory recall, and status",
+    "emits JSON envelopes for describe, log, query, context pack, memory recall, and status",
     async () => {
       const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-contract-"));
       git(temp, ["init"]);
@@ -102,6 +102,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeOutput.data.spec.path).toBe("query");
       expect(describeOutput.data.spec.supportsRawJsonInput).toBe(true);
 
+      const describeLogOutput = JSON.parse(runCli(["describe", "log", "--format", "json"]));
+      expect(describeLogOutput.command).toBe("describe");
+      expect(describeLogOutput.ok).toBe(true);
+      expect(describeLogOutput.data.spec.path).toBe("log");
+      expect(describeLogOutput.data.spec.options.some((option: { name: string }) => option.name === "--show-missing")).toBe(true);
+
       const describeDocOutput = JSON.parse(runCli(["describe", "doc", "create", "--format", "json"]));
       expect(describeDocOutput.command).toBe("describe");
       expect(describeDocOutput.ok).toBe(true);
@@ -131,6 +137,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(recallOutput.ok).toBe(true);
       expect(recallOutput.data.openLoops[0].title).toContain("refresh-token");
       expect(recallOutput.data.retrievedHits[0].excerpt).toBeTruthy();
+
+      const logOutput = JSON.parse(runCli(["log", "--cwd", temp, "--format", "json", "--view", "default", "--max-count", "3"]));
+      expect(logOutput.command).toBe("log");
+      expect(logOutput.ok).toBe(true);
+      expect(logOutput.data.entries[0].snapshot.status).toBe("indexed");
+      expect(logOutput.data.entries[0].snapshot.changed).toBeTruthy();
 
       const statusOutput = JSON.parse(runCli(["status", "--cwd", temp, "--format", "json"]));
       expect(statusOutput.command).toBe("status");
