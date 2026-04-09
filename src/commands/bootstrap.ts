@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { countArtifactState } from "../core/artifacts.js";
 import { loadConfig, setConfigValue, writeConfig } from "../core/config.js";
 import { readDocAuthorityIndex } from "../core/doc-authority.js";
 import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
@@ -33,6 +34,12 @@ export interface StatusResult {
     violations: number;
     lastReconciledAt: string | null;
     indexPath: string;
+  };
+  knowledge: {
+    durableReady: boolean;
+    sessionArtifactCount: number;
+    harnessArtifactCount: number;
+    pendingBindings: number;
   };
   manifests: number;
   embedding: Awaited<ReturnType<typeof loadConfig>>["embedding"];
@@ -85,6 +92,12 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
       lastReconciledAt: null,
       indexPath: ".ragit/docs/index.json",
     },
+    knowledge: {
+      durableReady: manifests.length > 0,
+      sessionArtifactCount: 0,
+      harnessArtifactCount: 0,
+      pendingBindings: 0,
+    },
     manifests: manifests.length,
     embedding: config.embedding,
     format: config.output.format,
@@ -98,6 +111,10 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
         indexPath: ".ragit/docs/index.json",
       }
     : status.docsAuthority;
+  status.knowledge = {
+    durableReady: manifests.length > 0,
+    ...(await countArtifactState(cwd)),
+  };
   return status;
 };
 

@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { assertAllowedKeys, assertRepoRelativePathArray } from "./cliInput.js";
 import { CliView } from "./cliContract.js";
+import { loadArtifactRecord, loadRecallArtifacts } from "./artifacts.js";
 import { loadConfig } from "./config.js";
 import { createDoc, reconcileDocs } from "./doc-authority.js";
 import { toRepoPath } from "./identity.js";
@@ -140,6 +141,7 @@ const normalizePromotionCandidate = (value: unknown): PromotionCandidate => {
       "aliases",
       "milestones",
       "workBreakdown",
+      "details",
     ],
     "promotionCandidates[]",
   );
@@ -179,6 +181,13 @@ const normalizePromotionCandidate = (value: unknown): PromotionCandidate => {
       workBreakdown: asStringArray(raw.workBreakdown),
     };
   }
+  if (kind === "constraint" || kind === "feedback" || kind === "failure" || kind === "insight") {
+    return {
+      ...base,
+      kind,
+      details: asStringArray(raw.details),
+    };
+  }
   throw new Error(`지원하지 않는 promotionCandidates[].kind 값입니다: ${kind}`);
 };
 
@@ -189,9 +198,10 @@ export const normalizeSessionWrapInput = (value: unknown): SessionWrapInput => {
   const raw = value as Record<string, unknown>;
   assertAllowedKeys(
     raw,
-    ["goal", "summary", "constraints", "decisions", "openLoops", "nextActions", "promotionCandidates", "sourceHeadSha", "createdAt"],
+    ["goal", "summary", "constraints", "decisions", "openLoops", "nextActions", "promotionCandidates", "episode", "artifactRefs", "sourceHeadSha", "createdAt"],
     "memory wrap",
   );
+  const episodeRaw = raw.episode;
   return {
     goal: asString(raw.goal, "goal"),
     summary: asString(raw.summary, "summary"),
@@ -202,6 +212,14 @@ export const normalizeSessionWrapInput = (value: unknown): SessionWrapInput => {
     promotionCandidates: Array.isArray(raw.promotionCandidates)
       ? raw.promotionCandidates.map(normalizePromotionCandidate)
       : [],
+    episode:
+      episodeRaw && typeof episodeRaw === "object" && !Array.isArray(episodeRaw)
+        ? {
+            id: asString((episodeRaw as Record<string, unknown>).id, "episode.id"),
+            title: asOptionalString((episodeRaw as Record<string, unknown>).title),
+          }
+        : undefined,
+    artifactRefs: asStringArray(raw.artifactRefs),
     sourceHeadSha: raw.sourceHeadSha === null ? null : asOptionalString(raw.sourceHeadSha),
     createdAt: asOptionalString(raw.createdAt),
   };
@@ -217,13 +235,14 @@ export const normalizePromotionBatchInput = (value: unknown): PromotionBatchInpu
     throw new Error("memory promote 입력은 JSON 객체 또는 배열이어야 합니다.");
   }
   const raw = value as Record<string, unknown>;
-  assertAllowedKeys(raw, ["promotionCandidates", "sourceSessionId", "sourceHeadSha", "sessionId"], "memory promote");
+  assertAllowedKeys(raw, ["promotionCandidates", "sourceSessionId", "sourceHeadSha", "sessionId", "artifactRefs"], "memory promote");
   return {
     promotionCandidates: Array.isArray(raw.promotionCandidates)
       ? raw.promotionCandidates.map(normalizePromotionCandidate)
       : [],
     sourceSessionId: raw.sourceSessionId === null ? null : asOptionalString(raw.sourceSessionId),
     sourceHeadSha: raw.sourceHeadSha === null ? null : asOptionalString(raw.sourceHeadSha),
+    artifactRefs: Array.isArray(raw.artifactRefs) ? raw.artifactRefs.map((entry) => asString(entry, "memory promote.artifactRefs[]")) : [],
   };
 };
 
@@ -418,6 +437,8 @@ const toWorkingState = (record: SessionWrapRecord): WorkingMemoryState => ({
   })),
   nextActions: record.nextActions,
   latestSessionId: record.sessionId,
+  episode: record.episode,
+  artifactRefs: record.artifactRefs,
   sourceHeadSha: record.sourceHeadSha,
   updatedAt: record.createdAt,
 });
@@ -472,6 +493,8 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
     openLoops: payload.openLoops,
     nextActions: payload.nextActions,
     promotionCandidates: payload.promotionCandidates,
+    episode: payload.episode,
+    artifactRefs: payload.artifactRefs ?? [],
     sourceHeadSha,
     createdAt,
   };
@@ -538,10 +561,31 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
   const decisionHits = retrievedHits
     .filter((hit) => hit.path.startsWith(canonicalDecisionPrefix) || hit.path.startsWith(legacyDecisionPrefix))
     .map(hitToDecision);
+  const recallArtifacts = await loadRecallArtifacts(cwd, goal);
+  const recallArtifactHits: RetrievalHit[] = recallArtifacts.map((artifact, index) => ({
+    chunkId: artifact.artifactId,
+    path: `.ragit/artifacts/${artifact.artifactScope}/${artifact.artifactId}.json`,
+    sectionTitle: artifact.title,
+    scoreVector: 0.7,
+    scoreKeyword: 0.7,
+    scoreFinal: 0.7 - index * 0.001,
+    text: artifact.text,
+    scope: artifact.searchPolicy === "evidence" ? "evidence" : "session",
+    originType: "artifact" as const,
+    artifactId: artifact.artifactId,
+    artifactKind: artifact.kind,
+    authority: artifact.authority,
+    confidence: artifact.confidence,
+  }));
+  const recallArtifactDecisions = recallArtifacts.map((artifact) => ({
+    id: artifact.artifactId,
+    title: artifact.title,
+    summary: artifact.summary,
+  }));
 
   const openLoops = working?.openLoops ?? activeOpenLoops(latestSession?.openLoops ?? []);
   const relatedDecisions = uniqueBy(
-    [...(working?.decisions ?? []), ...(latestSession?.decisions ?? []), ...decisionHits],
+    [...(working?.decisions ?? []), ...(latestSession?.decisions ?? []), ...decisionHits, ...recallArtifactDecisions],
     (item) => item.id,
   );
   const packet: RecallPacket = {
@@ -549,7 +593,7 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
     constraints: uniqueBy([...(working?.constraints ?? []), ...(latestSession?.constraints ?? [])], (item) => item),
     openLoops,
     relatedDecisions,
-    retrievedHits,
+    retrievedHits: uniqueBy([...recallArtifactHits, ...retrievedHits], (item) => item.chunkId),
     nextActions: uniqueBy([...(working?.nextActions ?? []), ...(latestSession?.nextActions ?? [])], (item) => item),
     latestSessionId: working?.latestSessionId ?? latestSession?.sessionId ?? null,
     sourceHeadSha: working?.sourceHeadSha ?? latestSession?.sourceHeadSha ?? null,
@@ -625,10 +669,57 @@ ${tasks.map((item) => `- ${item}`).join("\n")}
 `;
 };
 
+const renderPbdDoc = (candidate: Extract<PromotionCandidate, { kind: "constraint" | "feedback" | "failure" | "insight" }>, promotedAt: string, sourceSessionId?: string | null): string => {
+  const notes = candidate.details && candidate.details.length > 0 ? candidate.details.map((item) => `- ${item}`).join("\n") : `- ${candidate.summary}`;
+  return `---
+type: pbd
+source_session: "${quoteFrontmatter(sourceSessionId ?? "")}"
+promoted_at: "${promotedAt}"
+---
+# PBD: ${candidate.title}
+
+## Implementation Scope
+${candidate.summary}
+
+## Phase Topology
+## [B1] ${candidate.kind}
+- ${candidate.title}
+
+## Binding Map
+${notes}
+
+## Interaction Paths
+- Promoted from session artifact
+
+## Failure and Drift Points
+- Review source session before changing this guidance.
+
+## Observability Notes
+- source_session: ${sourceSessionId ?? "none"}
+`;
+};
+
 const renderPromotionDocument = (candidate: PromotionCandidate, promotedAt: string, sourceSessionId?: string | null): string => {
   if (candidate.kind === "decision") return renderDecisionDoc(candidate, promotedAt, sourceSessionId);
   if (candidate.kind === "glossary") return renderGlossaryDoc(candidate, promotedAt, sourceSessionId);
-  return renderPlanDoc(candidate, promotedAt, sourceSessionId);
+  if (candidate.kind === "plan") return renderPlanDoc(candidate, promotedAt, sourceSessionId);
+  if (candidate.kind === "constraint" || candidate.kind === "feedback" || candidate.kind === "failure" || candidate.kind === "insight") {
+    return renderPbdDoc(candidate, promotedAt, sourceSessionId);
+  }
+  throw new Error(`지원하지 않는 promotion candidate kind 입니다: ${String((candidate as { kind?: unknown }).kind)}`);
+};
+
+const promotionCandidateFromArtifact = (artifact: Awaited<ReturnType<typeof loadArtifactRecord>>): PromotionCandidate | null => {
+  if (!artifact || artifact.artifactScope !== "session" || artifact.status !== "reviewed") return null;
+  if (artifact.kind === "feedback" || artifact.kind === "constraint" || artifact.kind === "failure" || artifact.kind === "insight") {
+    return {
+      kind: artifact.kind,
+      title: artifact.title,
+      summary: artifact.summary,
+      details: artifact.evidenceRefs.map((entry) => entry.excerpt),
+    };
+  }
+  return null;
 };
 
 export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dryRun = false): Promise<MemoryPromoteResult> => {
@@ -640,9 +731,24 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
   const promotedAt = new Date().toISOString();
   const plannedFiles: string[] = [];
   const createdFiles: string[] = [];
-  for (const candidate of input.promotionCandidates) {
+  const candidates: PromotionCandidate[] = [...input.promotionCandidates];
+  for (const artifactRef of input.artifactRefs ?? []) {
+    const artifact = await loadArtifactRecord(cwd, artifactRef);
+    const candidate = promotionCandidateFromArtifact(artifact);
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  }
+  for (const candidate of candidates) {
     const content = renderPromotionDocument(candidate, promotedAt, input.sourceSessionId);
-    const docType = candidate.kind === "decision" ? "adr" : candidate.kind === "glossary" ? "glossary" : "plan";
+    const docType =
+      candidate.kind === "decision"
+        ? "adr"
+        : candidate.kind === "glossary"
+          ? "glossary"
+          : candidate.kind === "plan"
+            ? "plan"
+            : "pbd";
     const created = await createDoc(
       cwd,
       {
@@ -672,7 +778,7 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
   let ingested = false;
   if (!dryRun && createdFiles.length > 0 && config.memory.auto_ingest_promotions) {
     if (currentHeadSha) {
-      await runIngest(cwd, { files: createdFiles.join(",") });
+      await runIngest(cwd, { paths: createdFiles, scope: "durable" });
       ingested = true;
     } else {
       warnings.push("HEAD commit이 없어 promotion 문서 인덱싱을 건너뛰었습니다.");

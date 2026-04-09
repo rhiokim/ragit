@@ -6,6 +6,7 @@ import { searchKnowledge } from "./retrieval.js";
 export interface ContextPackOptions {
   budget?: number;
   at?: string;
+  scope?: "durable" | "session" | "harness" | "evidence" | "all";
 }
 
 export interface ContextPackResult {
@@ -25,7 +26,7 @@ export const packContext = async (
   options: ContextPackOptions,
 ): Promise<ContextPackResult> => {
   const budget = options.budget ?? 1200;
-  const result = await searchKnowledge(cwd, goal, { at: options.at, topK: 30 });
+  const result = await searchKnowledge(cwd, goal, { at: options.at, topK: 30, scope: options.scope });
   const selected = [];
   let usedTokens = 0;
   for (const hit of result.hits) {
@@ -70,4 +71,3 @@ export const projectContextPack = (packet: ContextPackResult, view: CliView): Om
   selectedHits: packet.selectedHits,
   hits: projectRetrievalHits(packet.hits, view),
 });
-

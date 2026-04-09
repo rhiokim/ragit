@@ -2,6 +2,27 @@ export const KNOWN_DOC_TYPES = ["adr", "prd", "srs", "spec", "plan", "ddd", "glo
 
 export type KnownDocType = (typeof KNOWN_DOC_TYPES)[number];
 export type DocType = KnownDocType | "unknown";
+export type RetrievalScope = "durable" | "session" | "harness" | "evidence" | "all";
+export type ArtifactStatus = "captured" | "reviewed" | "promoted" | "superseded" | "retracted" | "archived";
+export type ArtifactBindingStatus = "pending" | "bound" | "local_only";
+export type ArtifactTier = "candidate" | "durable";
+export type ArtifactAuthority = "user_asserted" | "assistant_inferred" | "reviewed_harness" | "promoted_durable";
+export type ArtifactScope = "session" | "harness";
+export type SearchPolicy = "none" | "session" | "harness" | "evidence";
+export type SessionArtifactKind = "feedback" | "constraint" | "failure" | "insight" | "openLoop";
+export type HarnessArtifactKind =
+  | "case"
+  | "oracle"
+  | "failure"
+  | "fixture"
+  | "golden"
+  | "checker"
+  | "rubric"
+  | "promptTemplate"
+  | "trace"
+  | "envAssumption"
+  | "suite";
+export type ArtifactKind = SessionArtifactKind | HarnessArtifactKind;
 
 export const isKnownDocType = (value: string): value is KnownDocType =>
   KNOWN_DOC_TYPES.includes(value as KnownDocType);
@@ -105,6 +126,10 @@ export interface DocumentRecord {
   commitSha: string;
   hash: string;
   sections: DocumentSection[];
+  originType?: "document" | "artifact";
+  artifactId?: string | null;
+  artifactKind?: ArtifactKind | null;
+  sourceSessionId?: string | null;
 }
 
 export interface ChunkRecord {
@@ -119,6 +144,90 @@ export interface ChunkRecord {
   text: string;
   tokenCount: number;
   embedding: number[];
+  originType?: "document" | "artifact";
+  artifactId?: string | null;
+  artifactKind?: ArtifactKind | null;
+  tier?: ArtifactTier | null;
+  status?: ArtifactStatus | null;
+  authority?: ArtifactAuthority | null;
+  confidence?: number | null;
+  goalId?: string | null;
+  episodeId?: string | null;
+  sourceSessionId?: string | null;
+  bindingStatus?: ArtifactBindingStatus | null;
+  searchPolicy?: SearchPolicy | null;
+}
+
+export interface ArtifactEvidenceRef {
+  evidenceId: string;
+  turnIds?: string[];
+  toolTraceIds?: string[];
+  excerpt: string;
+}
+
+export interface ArtifactEventProvenance {
+  actor: "user" | "assistant" | "system";
+  producer: string;
+  producerVersion: string;
+  operation: string;
+  inputRefs: string[];
+  outputRefs: string[];
+  evidenceRefs: string[];
+  contentHash: string;
+}
+
+export interface BaseArtifactRecord {
+  artifactId: string;
+  artifactScope: ArtifactScope;
+  kind: ArtifactKind;
+  tier: ArtifactTier;
+  status: ArtifactStatus;
+  title: string;
+  summary: string;
+  text: string;
+  goalId: string | null;
+  episodeId: string | null;
+  sourceSessionId: string | null;
+  sourceHeadSha: string | null;
+  captureHeadSha: string | null;
+  boundHeadSha: string | null;
+  bindingStatus: ArtifactBindingStatus;
+  authority: ArtifactAuthority;
+  confidence: number;
+  searchPolicy: SearchPolicy;
+  relatedPaths: string[];
+  tags: string[];
+  supersedes: string[];
+  evidenceRefs: ArtifactEvidenceRef[];
+  provenance: ArtifactEventProvenance;
+  createdAt: string;
+  updatedAt: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface ArtifactRecord extends BaseArtifactRecord {}
+
+export interface ArtifactManifestEntry {
+  artifactId: string;
+  artifactScope: ArtifactScope;
+  kind: ArtifactKind;
+  tier: ArtifactTier;
+  status: ArtifactStatus;
+  path: string;
+  chunkIds: string[];
+  searchPolicy: SearchPolicy;
+  sourceSessionId: string | null;
+  sourceHeadSha: string | null;
+  goalId: string | null;
+  episodeId: string | null;
+  bindingStatus: ArtifactBindingStatus;
+}
+
+export interface SnapshotChunkScopes {
+  durable: string[];
+  session: string[];
+  harness: string[];
+  evidence: string[];
 }
 
 export interface SnapshotManifest {
@@ -132,6 +241,8 @@ export interface SnapshotManifest {
     documentId: string;
     documentVersionId: string;
   }>;
+  artifactEntries?: ArtifactManifestEntry[];
+  chunkScopes?: SnapshotChunkScopes;
 }
 
 export interface RetrievalHit {
@@ -142,4 +253,10 @@ export interface RetrievalHit {
   scoreKeyword: number;
   scoreFinal: number;
   text: string;
+  scope?: RetrievalScope;
+  originType?: "document" | "artifact";
+  artifactId?: string | null;
+  artifactKind?: ArtifactKind | null;
+  authority?: ArtifactAuthority | null;
+  confidence?: number | null;
 }

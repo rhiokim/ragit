@@ -1,4 +1,6 @@
 import { loadConfig } from "./config.js";
+import { loadArtifactRecord } from "./artifacts.js";
+import { ArtifactAuthority, RetrievalScope, SnapshotManifest } from "./types.js";
 import { getHeadSha } from "./git.js";
 import { latestSnapshotSha, loadSnapshotManifest, resolveSnapshotRef } from "./manifest.js";
 import { bootstrapCanonicalStore, closeCanonicalStore } from "./store.js";
@@ -45,6 +47,7 @@ const resolveSnapshotSha = async (cwd: string, at?: string): Promise<string> => 
 export interface QueryOptions {
   topK?: number;
   at?: string;
+  scope?: RetrievalScope;
 }
 
 export interface QueryResult {
@@ -70,13 +73,58 @@ const hydrateChunk = (raw: { id: string; fields: Record<string, unknown> }): Chu
   embedding: [],
 });
 
+const resolveChunkIdsForScope = (snapshot: SnapshotManifest, scope: RetrievalScope): { ids: string[]; scopeById: Map<string, RetrievalScope> } => {
+  const scopes = snapshot.chunkScopes ?? {
+    durable: snapshot.chunks.map((entry) => entry.id),
+    session: [],
+    harness: [],
+    evidence: [],
+  };
+  const scopeById = new Map<string, RetrievalScope>();
+  const collect = (items: string[], label: RetrievalScope): void => {
+    for (const item of items) {
+      if (!scopeById.has(item)) scopeById.set(item, label);
+    }
+  };
+  if (scope === "all") {
+    collect(scopes.durable, "durable");
+    collect(scopes.session, "session");
+    collect(scopes.harness, "harness");
+    collect(scopes.evidence, "evidence");
+  } else {
+    const target = scope === "durable" ? scopes.durable : scope === "session" ? scopes.session : scope === "harness" ? scopes.harness : scopes.evidence;
+    collect(target, scope);
+  }
+  return {
+    ids: Array.from(scopeById.keys()),
+    scopeById,
+  };
+};
+
+const authorityWeightForScope = (scope: RetrievalScope, authority?: ArtifactAuthority | null): number => {
+  if (authority === "promoted_durable" || scope === "durable") return 1;
+  if (authority === "reviewed_harness" || scope === "harness") return 0.9;
+  if (scope === "session") return 0.8;
+  if (scope === "evidence") return 0.4;
+  return 0.6;
+};
+
+const recencyWeight = (updatedAt?: string | null): number => {
+  if (!updatedAt) return 1;
+  const ageDays = Math.max(0, (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24));
+  return Math.max(0.2, 1 - Math.min(ageDays / 30, 0.8));
+};
+
 export const searchKnowledge = async (cwd: string, query: string, options: QueryOptions): Promise<QueryResult> => {
   const config = await loadConfig(cwd);
   const snapshotSha = await resolveSnapshotSha(cwd, options.at);
   const snapshot = await loadSnapshotManifest(cwd, snapshotSha);
   const alpha = config.retrieval.alpha;
   const topK = options.topK ?? config.retrieval.top_k;
-  const manifestChunkIds = snapshot.chunks.map((entry) => entry.id);
+  const { ids: manifestChunkIds, scopeById } = resolveChunkIdsForScope(snapshot, options.scope ?? "durable");
+  const artifactEntryByChunkId = new Map(
+    (snapshot.artifactEntries ?? []).flatMap((entry) => entry.chunkIds.map((chunkId) => [chunkId, entry] as const)),
+  );
   if (manifestChunkIds.length === 0) {
     return {
       snapshotSha,
@@ -106,7 +154,12 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
         const chunk = hydrateChunk(raw);
         const scoreVector = zvecCosineDistanceToSimilarity(raw.score);
         const scoreKeyword = config.retrieval.keyword_enabled ? keywordScore(query, chunk.text) : 0;
-        const scoreFinal = calculateHybridScore(scoreVector, scoreKeyword, alpha);
+        const semanticHybrid = calculateHybridScore(scoreVector, scoreKeyword, alpha);
+        const scope = scopeById.get(chunk.id) ?? "durable";
+        const artifactEntry = artifactEntryByChunkId.get(chunk.id);
+        const artifact = artifactEntry ? await loadArtifactRecord(cwd, artifactEntry.artifactId) : null;
+        const authorityWeight = authorityWeightForScope(scope, artifact?.authority);
+        const scoreFinal = 0.8 * semanticHybrid + 0.15 * authorityWeight + 0.05 * recencyWeight(artifact?.updatedAt);
         const existing = candidates.get(chunk.id);
         if (existing && existing.scoreFinal >= scoreFinal) {
           continue;
@@ -119,6 +172,12 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
           scoreKeyword,
           scoreFinal,
           text: chunk.text,
+          scope,
+          originType: artifactEntry ? "artifact" : "document",
+          artifactId: artifactEntry?.artifactId ?? null,
+          artifactKind: artifactEntry?.kind ?? null,
+          authority: artifact?.authority ?? (scope === "durable" ? "promoted_durable" : null),
+          confidence: artifact?.confidence ?? null,
         });
       }
     }

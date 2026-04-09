@@ -1,8 +1,16 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { SnapshotManifest, ChunkRecord, DocumentRecord } from "./types.js";
+import { SnapshotManifest, ChunkRecord, DocumentRecord, SnapshotChunkScopes } from "./types.js";
 
 type SnapshotChunkInput = Pick<ChunkRecord, "id" | "documentId" | "documentVersionId">;
+type SnapshotArtifactInput = NonNullable<SnapshotManifest["artifactEntries"]>[number];
+
+const emptyScopes = (): SnapshotChunkScopes => ({
+  durable: [],
+  session: [],
+  harness: [],
+  evidence: [],
+});
 
 const manifestDir = (cwd: string): string => path.join(cwd, ".ragit", "manifest");
 
@@ -13,17 +21,29 @@ export const buildSnapshotManifest = (
   parentSha: string | null,
   docs: DocumentRecord[],
   chunks: SnapshotChunkInput[],
+  options: {
+    artifactEntries?: SnapshotArtifactInput[];
+    chunkScopes?: Partial<SnapshotChunkScopes>;
+  } = {},
 ): SnapshotManifest => ({
   commitSha,
   parentSha,
   createdAt: new Date().toISOString(),
-  indexVersion: 2,
+  indexVersion: 3,
   docs,
   chunks: chunks.map((chunk) => ({
     id: chunk.id,
     documentId: chunk.documentId,
     documentVersionId: chunk.documentVersionId,
   })),
+  artifactEntries: options.artifactEntries ?? [],
+  chunkScopes: {
+    ...emptyScopes(),
+    durable: options.chunkScopes?.durable ?? chunks.map((chunk) => chunk.id),
+    session: options.chunkScopes?.session ?? [],
+    harness: options.chunkScopes?.harness ?? [],
+    evidence: options.chunkScopes?.evidence ?? [],
+  },
 });
 
 export const writeSnapshotManifest = async (cwd: string, manifest: SnapshotManifest): Promise<void> => {
@@ -34,7 +54,26 @@ export const writeSnapshotManifest = async (cwd: string, manifest: SnapshotManif
 export const loadSnapshotManifest = async (cwd: string, sha: string): Promise<SnapshotManifest> => {
   const target = manifestPath(cwd, sha);
   const content = await readFile(target, "utf8");
-  return JSON.parse(content) as SnapshotManifest;
+  const parsed = JSON.parse(content) as SnapshotManifest;
+  if (parsed.indexVersion >= 3) {
+    return {
+      ...parsed,
+      artifactEntries: parsed.artifactEntries ?? [],
+      chunkScopes: {
+        ...emptyScopes(),
+        ...(parsed.chunkScopes ?? {}),
+      },
+    };
+  }
+  return {
+    ...parsed,
+    indexVersion: 3,
+    artifactEntries: [],
+    chunkScopes: {
+      ...emptyScopes(),
+      durable: parsed.chunks.map((chunk) => chunk.id),
+    },
+  };
 };
 
 export const loadSnapshotManifestIfExists = async (cwd: string, sha: string | null | undefined): Promise<SnapshotManifest | null> => {

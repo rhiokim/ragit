@@ -1,6 +1,7 @@
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
+import { buildArtifactIndexData, bindPendingArtifacts } from "./artifacts.js";
 import { chunkSections, parseSections } from "./chunk.js";
 import { loadConfig } from "./config.js";
 import { validateKnownDoc } from "./doc-authority.js";
@@ -19,6 +20,8 @@ export interface IngestOptions {
   all?: boolean;
   since?: string;
   files?: string;
+  paths?: string[];
+  scope?: "durable" | "all";
   dryRun?: boolean;
 }
 
@@ -47,6 +50,14 @@ const isDocumentLikePath = (target: string): boolean => {
 };
 
 const resolveCandidates = async (cwd: string, options: IngestOptions): Promise<ResolvedIngestTargets> => {
+  if (options.paths && options.paths.length > 0) {
+    const files = options.paths.map((entry) => path.resolve(cwd, entry));
+    return {
+      files,
+      deletedDocumentIds: [],
+      fullSnapshot: false,
+    };
+  }
   if (options.files) {
     return {
       files: await listDocumentFilesByGlob(cwd, options.files),
@@ -104,6 +115,8 @@ export interface IngestSummary {
   plannedFiles: string[];
   deletedDocumentIds: string[];
   fullSnapshot: boolean;
+  scope: "durable" | "all";
+  boundArtifactIds: string[];
   docAuthority: {
     validated: boolean;
     violations: number;
@@ -123,6 +136,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const candidates = await resolveCandidates(cwd, options);
+  const scope = options.scope ?? "durable";
   const headSha = await getHeadSha(cwd);
   let processed = 0;
   let skipped = 0;
@@ -199,6 +213,8 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       plannedFiles,
       deletedDocumentIds: candidates.deletedDocumentIds,
       fullSnapshot: candidates.fullSnapshot,
+      scope,
+      boundArtifactIds: [],
       docAuthority: {
         validated: config.docs_authority.validate_on_ingest,
         violations: contractViolations,
@@ -209,6 +225,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
   }
 
   const parentSha = await getParentSha(cwd);
+  const boundArtifactIds = await bindPendingArtifacts(cwd, headSha);
   const store = await bootstrapCanonicalStore(cwd, config.embedding, false);
 
   try {
@@ -251,7 +268,8 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
     }
 
     const newDocuments = Array.from(changedDocuments.values());
-    const newChunks = Array.from(changedChunks.values()).flat();
+    const artifactIndex = await buildArtifactIndexData(cwd, headSha, scope, config.embedding.dimensions);
+    const newChunks = [...Array.from(changedChunks.values()).flat(), ...artifactIndex.chunks];
     writeDocumentsToCanonicalStore(store, newDocuments);
     writeChunksToCanonicalStore(store, newChunks);
 
@@ -266,7 +284,31 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       });
     }
 
-    const manifest = buildSnapshotManifest(headSha, parentSha, sortDocuments(Array.from(documentMap.values())), sortChunkEntries(Array.from(chunkEntries.values())));
+    const manifest = buildSnapshotManifest(
+      headSha,
+      parentSha,
+      sortDocuments(Array.from(documentMap.values())),
+      sortChunkEntries(Array.from(chunkEntries.values())),
+      {
+        artifactEntries: artifactIndex.artifactEntries,
+        chunkScopes: {
+          durable: Array.from(changedChunks.values())
+            .flat()
+            .map((chunk) => chunk.id)
+            .concat(
+              candidates.fullSnapshot
+                ? []
+                : Array.from(chunkEntries.values())
+                    .map((chunk) => chunk.id)
+                    .filter((id) => !artifactIndex.chunks.some((chunk) => chunk.id === id)),
+            )
+            .filter((value, index, items) => items.indexOf(value) === index),
+          session: artifactIndex.chunkScopes.session,
+          harness: artifactIndex.chunkScopes.harness,
+          evidence: artifactIndex.chunkScopes.evidence,
+        },
+      },
+    );
     await writeSnapshotManifest(cwd, manifest);
     const manifestPath = `.ragit/manifest/${headSha}.json`;
     return {
@@ -280,6 +322,8 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       plannedFiles,
       deletedDocumentIds: candidates.deletedDocumentIds,
       fullSnapshot: candidates.fullSnapshot,
+      scope,
+      boundArtifactIds,
       docAuthority: {
         validated: config.docs_authority.validate_on_ingest,
         violations: contractViolations,

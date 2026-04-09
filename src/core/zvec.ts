@@ -24,7 +24,7 @@ const {
 type ZVecCollectionSchemaInstance = InstanceType<typeof zvecBinding.ZVecCollectionSchema>;
 
 const STORE_LAYOUT_VERSION = 1;
-const STORE_SCHEMA_VERSION = 1;
+const STORE_SCHEMA_VERSION = 2;
 const SUPPORTED_ZVEC_TARGETS = ["darwin/arm64", "linux/arm64", "linux/x64"] as const;
 
 export interface EmbeddingContract {
@@ -237,7 +237,7 @@ const assertMetaCompatible = (meta: CanonicalStoreMeta, embedding: EmbeddingCont
   if (meta.layoutVersion !== STORE_LAYOUT_VERSION) {
     throw new Error(`store layout version mismatch: ${meta.layoutVersion}`);
   }
-  if (meta.schemaVersion !== STORE_SCHEMA_VERSION) {
+  if (meta.schemaVersion !== 1 && meta.schemaVersion !== STORE_SCHEMA_VERSION) {
     throw new Error(`store schema version mismatch: ${meta.schemaVersion}`);
   }
   if (
@@ -290,6 +290,16 @@ export const bootstrapCanonicalStore = async (
   const chunks = ZVecOpen(paths.chunksCollectionDir, { readOnly, enableMMAP: true });
   assertCollectionSchema(documents, documentsSchema, "documents");
   assertCollectionSchema(chunks, chunksSchema, "chunks");
+  if (!readOnly && meta.schemaVersion !== STORE_SCHEMA_VERSION) {
+    const upgradedMeta = buildMeta(embedding);
+    await writeStoreMeta(cwd, upgradedMeta);
+    return {
+      documents,
+      chunks,
+      meta: upgradedMeta,
+      status: "loaded",
+    };
+  }
 
   return {
     documents,

@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { runArtifactReviewCommand } from "./commands/artifact.js";
 import { resolveCwd, runConfigSet, runDoctor, runStatus } from "./commands/bootstrap.js";
 import { runDocCreateCommand, runDocReconcileCommand, runDocRefreshCommand, runDocValidateCommand } from "./commands/doc.js";
+import { runHarnessCaptureCommand, runHarnessPackCommand, runHarnessPromoteCommand, runHarnessVerifyCommand } from "./commands/harness.js";
 import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
 import { formatInitSummaryTable, resolveInitRoot, runInit } from "./commands/init.js";
 import { runMemoryPromoteCommand, runMemoryRecallCommand, runMemoryWrapCommand } from "./commands/memory.js";
+import { runSessionMaterializeCommand } from "./commands/session.js";
 import { buildCliEnvelope, CliFormat, CliView, emitCliOutput, normalizeCliFormat, normalizeCliView } from "./core/cliContract.js";
 import { assertSafeGlobText, readJsonInput } from "./core/cliInput.js";
 import { normalizeContextPackCommandInput, normalizeIngestCommandInput, normalizeQueryCommandInput } from "./core/commandInputs.js";
@@ -39,6 +42,10 @@ const formatStatusText = (status: Awaited<ReturnType<typeof runStatus>>): string
     `- docs_tracked: ${status.docsAuthority.tracked}`,
     `- docs_violations: ${status.docsAuthority.violations}`,
     `- docs_last_reconciled_at: ${status.docsAuthority.lastReconciledAt ?? "none"}`,
+    `- durable_ready: ${status.knowledge.durableReady}`,
+    `- session_artifacts: ${status.knowledge.sessionArtifactCount}`,
+    `- harness_artifacts: ${status.knowledge.harnessArtifactCount}`,
+    `- pending_bindings: ${status.knowledge.pendingBindings}`,
     `- format: ${status.format}`,
   ].join("\n");
 
@@ -60,6 +67,8 @@ const formatIngestText = (summary: Awaited<ReturnType<typeof runIngest>>): strin
     `- skipped: ${summary.skipped}`,
     `- masked: ${summary.masked}`,
     `- full_snapshot: ${summary.fullSnapshot}`,
+    `- scope: ${summary.scope}`,
+    `- bound_artifacts: ${summary.boundArtifactIds.length}`,
     `- planned_files: ${summary.plannedFiles.length}`,
     `- deleted_document_ids: ${summary.deletedDocumentIds.length}`,
     `- docs_validated: ${summary.docAuthority.validated}`,
@@ -113,6 +122,8 @@ const parseOptionalPositiveNumber = (value: string | undefined, label: string): 
   }
   return parsed;
 };
+
+const collectRepeatedOption = (value: string, previous: string[] = []): string[] => [...previous, value];
 
 program
   .name("ragit")
@@ -313,24 +324,34 @@ program
   .option("--all", "전체 문서 인덱싱")
   .option("--since <sha>", "지정 SHA 이후 변경분 인덱싱")
   .option("--files <glob>", "특정 glob 인덱싱")
+  .option("--path <repoPath>", "특정 repo 상대 경로 인덱싱", collectRepeatedOption, [])
+  .option("--scope <scope>", "durable|all", "durable")
   .option("--input <path|->", "JSON 입력 파일 경로 또는 -")
   .option("--dry-run", "미리보기 모드")
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     const cwd = resolveCwd(options.cwd);
-    ensureNoMixedInput(options.input, [options.all, options.since, options.files], "ingest");
+    ensureNoMixedInput(
+      options.input,
+      [options.all, options.since, options.files, ...(options.path as string[]), options.scope === "durable" ? undefined : options.scope],
+      "ingest",
+    );
     const input = options.input
       ? normalizeIngestCommandInput(await readJsonInput(cwd, options.input, "ingest"))
       : {
           all: Boolean(options.all),
           since: options.since as string | undefined,
           files: options.files ? assertSafeGlobText(String(options.files), "ingest.files") : undefined,
+          paths: Array.isArray(options.path) && options.path.length > 0 ? (options.path as string[]) : undefined,
+          scope: (options.scope as "durable" | "all" | undefined) ?? "durable",
         };
     const summary = await runIngest(cwd, {
       all: input.all,
       since: input.since,
       files: input.files,
+      paths: input.paths,
+      scope: input.scope,
       dryRun: Boolean(options.dryRun),
     });
     const warnings = summary.warnings;
@@ -347,19 +368,25 @@ program
   .argument("[question]")
   .option("--input <path|->", "JSON 입력 파일 경로 또는 -")
   .option("--top-k <n>", "결과 개수")
+  .option("--scope <scope>", "durable|session|harness|evidence|all", "durable")
   .option("--format <format>", "text|json|both", "both")
   .option("--view <view>", "minimal|default|full", "default")
   .option("--at <sha>", "특정 커밋 시점 조회")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (question, options) => {
     const cwd = resolveCwd(options.cwd);
-    ensureNoMixedInput(options.input, [question, options.topK, options.at], "query");
+    ensureNoMixedInput(
+      options.input,
+      [question, options.topK, options.at, options.scope === "durable" ? undefined : options.scope],
+      "query",
+    );
     const input = options.input
       ? normalizeQueryCommandInput(await readJsonInput(cwd, options.input, "query"))
       : {
           question: String(question ?? "").trim(),
           topK: parseOptionalPositiveNumber(options.topK as string | undefined, "query.topK"),
           at: options.at as string | undefined,
+          scope: options.scope as "durable" | "session" | "harness" | "evidence" | "all" | undefined,
         };
     if (!input.question) {
       throw new Error("query 질문이 필요합니다.");
@@ -368,10 +395,12 @@ program
     const result = await searchKnowledge(cwd, input.question, {
       topK: input.topK,
       at: input.at,
+      scope: input.scope,
     });
     const envelope = buildCliEnvelope("query", cwd, {
       query: input.question,
       snapshotSha: result.snapshotSha,
+      scope: input.scope ?? "durable",
       hits: projectRetrievalHits(result.hits, view),
     });
     emitCliOutput({
@@ -389,19 +418,25 @@ program
   .argument("[goal]")
   .option("--input <path|->", "JSON 입력 파일 경로 또는 -")
   .option("--budget <tokens>", "토큰 예산")
+  .option("--scope <scope>", "durable|session|harness|evidence|all", "durable")
   .option("--format <format>", "text|json|both", "both")
   .option("--view <view>", "minimal|default|full", "default")
   .option("--at <sha>", "특정 커밋 시점 조회")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (goal, options) => {
     const cwd = resolveCwd(options.cwd);
-    ensureNoMixedInput(options.input, [goal, options.budget, options.at], "context pack");
+    ensureNoMixedInput(
+      options.input,
+      [goal, options.budget, options.at, options.scope === "durable" ? undefined : options.scope],
+      "context pack",
+    );
     const input = options.input
       ? normalizeContextPackCommandInput(await readJsonInput(cwd, options.input, "context pack"))
       : {
           goal: String(goal ?? "").trim(),
           budget: parseOptionalPositiveNumber(options.budget as string | undefined, "context.budget"),
           at: options.at as string | undefined,
+          scope: options.scope as "durable" | "session" | "harness" | "evidence" | "all" | undefined,
         };
     if (!input.goal) {
       throw new Error("context pack goal이 필요합니다.");
@@ -410,6 +445,7 @@ program
     const packed = await packContext(cwd, input.goal, {
       budget: input.budget,
       at: input.at,
+      scope: input.scope,
     });
     const envelope = buildCliEnvelope("context pack", cwd, projectContextPack(packed, view));
     emitCliOutput({
@@ -467,6 +503,88 @@ memory
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
     );
+  });
+
+program
+  .command("session")
+  .description("세션 대화 물질화")
+  .command("materialize")
+  .requiredOption("--input <path|->", "JSON 입력 파일 경로 또는 -")
+  .option("--dry-run", "미리보기 모드")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runSessionMaterializeCommand(
+      resolveCwd(options.cwd),
+      options.input,
+      normalizeCliFormat(options.format, "json"),
+      Boolean(options.dryRun),
+    );
+  });
+
+const artifact = program.command("artifact").description("artifact lifecycle 관리");
+artifact
+  .command("review")
+  .requiredOption("--input <path|->", "JSON 입력 파일 경로 또는 -")
+  .option("--dry-run", "미리보기 모드")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runArtifactReviewCommand(
+      resolveCwd(options.cwd),
+      options.input,
+      normalizeCliFormat(options.format, "json"),
+      Boolean(options.dryRun),
+    );
+  });
+
+const harness = program.command("harness").description("하네스 자원 관리");
+harness
+  .command("capture")
+  .requiredOption("--input <path|->", "JSON 입력 파일 경로 또는 -")
+  .option("--dry-run", "미리보기 모드")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runHarnessCaptureCommand(
+      resolveCwd(options.cwd),
+      options.input,
+      normalizeCliFormat(options.format, "json"),
+      Boolean(options.dryRun),
+    );
+  });
+
+harness
+  .command("promote")
+  .requiredOption("--input <path|->", "JSON 입력 파일 경로 또는 -")
+  .option("--dry-run", "미리보기 모드")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runHarnessPromoteCommand(
+      resolveCwd(options.cwd),
+      options.input,
+      normalizeCliFormat(options.format, "json"),
+      Boolean(options.dryRun),
+    );
+  });
+
+harness
+  .command("pack")
+  .argument("<suiteRef>")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (suiteRef, options) => {
+    await runHarnessPackCommand(resolveCwd(options.cwd), String(suiteRef), normalizeCliFormat(options.format, "json"));
+  });
+
+harness
+  .command("verify")
+  .requiredOption("--suite <idOrPath>", "suite artifact id 또는 JSON 경로")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runHarnessVerifyCommand(resolveCwd(options.cwd), String(options.suite), normalizeCliFormat(options.format, "json"));
   });
 
 const migrate = program.command("migrate").description("레거시 마이그레이션");
