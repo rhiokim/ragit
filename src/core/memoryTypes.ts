@@ -50,10 +50,21 @@ export interface PlanPromotionCandidate extends PromotionCandidateBase {
   workBreakdown?: string[];
 }
 
+export interface PbdPromotionCandidate extends PromotionCandidateBase {
+  kind: "constraint" | "feedback" | "failure" | "insight";
+  details?: string[];
+}
+
 export type PromotionCandidate =
   | DecisionPromotionCandidate
   | GlossaryPromotionCandidate
-  | PlanPromotionCandidate;
+  | PlanPromotionCandidate
+  | PbdPromotionCandidate;
+
+export interface MemoryEpisodeRef {
+  id: string;
+  title?: string;
+}
 
 export interface SessionWrapInput {
   goal: string;
@@ -63,6 +74,8 @@ export interface SessionWrapInput {
   openLoops: MemoryOpenLoop[];
   nextActions: string[];
   promotionCandidates: PromotionCandidate[];
+  episode?: MemoryEpisodeRef;
+  artifactRefs?: string[];
   sourceHeadSha?: string | null;
   createdAt?: string;
 }
@@ -76,6 +89,8 @@ export interface SessionWrapRecord {
   openLoops: MemoryOpenLoop[];
   nextActions: string[];
   promotionCandidates: PromotionCandidate[];
+  episode?: MemoryEpisodeRef;
+  artifactRefs: string[];
   sourceHeadSha: string | null;
   createdAt: string;
 }
@@ -88,6 +103,8 @@ export interface WorkingMemoryState {
   openLoops: MemoryOpenLoop[];
   nextActions: string[];
   latestSessionId: string | null;
+  episode?: MemoryEpisodeRef;
+  artifactRefs: string[];
   sourceHeadSha: string | null;
   updatedAt: string;
 }
@@ -126,6 +143,7 @@ export interface PromotionBatchInput {
   promotionCandidates: PromotionCandidate[];
   sourceSessionId?: string | null;
   sourceHeadSha?: string | null;
+  artifactRefs?: string[];
 }
 
 export interface MemoryPromoteResult {

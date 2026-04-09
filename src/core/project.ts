@@ -11,6 +11,12 @@ export interface RagitPaths {
   docsDir: string;
   docsIndexPath: string;
   manifestDir: string;
+  logDir: string;
+  transcriptDir: string;
+  eventDir: string;
+  artifactsDir: string;
+  sessionArtifactsDir: string;
+  harnessArtifactsDir: string;
   memoryDir: string;
   memorySessionsDir: string;
   memoryWorkingDir: string;
@@ -29,6 +35,12 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
   docsDir: path.join(cwd, ".ragit", "docs"),
   docsIndexPath: path.join(cwd, ".ragit", "docs", "index.json"),
   manifestDir: path.join(cwd, ".ragit", "manifest"),
+  logDir: path.join(cwd, ".ragit", "log"),
+  transcriptDir: path.join(cwd, ".ragit", "log", "transcripts"),
+  eventDir: path.join(cwd, ".ragit", "log", "events"),
+  artifactsDir: path.join(cwd, ".ragit", "artifacts"),
+  sessionArtifactsDir: path.join(cwd, ".ragit", "artifacts", "session"),
+  harnessArtifactsDir: path.join(cwd, ".ragit", "artifacts", "harness"),
   memoryDir: path.join(cwd, ".ragit", "memory"),
   memorySessionsDir: path.join(cwd, ".ragit", "memory", "sessions"),
   memoryWorkingDir: path.join(cwd, ".ragit", "memory", "working"),
@@ -45,6 +57,12 @@ export const ensureRagitDirectories = async (cwd: string): Promise<RagitPaths> =
   await mkdir(paths.ragitDir, { recursive: true });
   await mkdir(paths.docsDir, { recursive: true });
   await mkdir(paths.manifestDir, { recursive: true });
+  await mkdir(paths.logDir, { recursive: true });
+  await mkdir(paths.transcriptDir, { recursive: true });
+  await mkdir(paths.eventDir, { recursive: true });
+  await mkdir(paths.artifactsDir, { recursive: true });
+  await mkdir(paths.sessionArtifactsDir, { recursive: true });
+  await mkdir(paths.harnessArtifactsDir, { recursive: true });
   await mkdir(paths.memoryDir, { recursive: true });
   await mkdir(paths.memorySessionsDir, { recursive: true });
   await mkdir(paths.memoryWorkingDir, { recursive: true });

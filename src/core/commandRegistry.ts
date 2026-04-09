@@ -17,7 +17,7 @@ export interface CommandOptionSpec {
 export interface CommandDescribeSpec {
   path: string;
   description: string;
-  group: "root" | "config" | "context" | "hooks" | "memory" | "migrate" | "doc";
+  group: "root" | "config" | "context" | "hooks" | "memory" | "migrate" | "doc" | "session" | "artifact" | "harness";
   docSlug: string;
   relatedCommands: string[];
   stability: "read-only" | "mutating";
@@ -282,6 +282,8 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
       { name: "--all", type: "boolean", description: "전체 문서 인덱싱" },
       { name: "--since", type: "string", description: "지정 SHA 이후 변경분 인덱싱" },
       { name: "--files", type: "string", description: "특정 glob 인덱싱" },
+      { name: "--path", type: "path", description: "반복 가능한 repo 상대 경로 타깃" },
+      { name: "--scope", type: "enum", description: "인덱싱 범위", enum: ["durable", "all"], defaultValue: "durable" },
       { name: "--dry-run", type: "boolean", description: "쓰기 없이 계획만 검증" },
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
     ],
@@ -305,6 +307,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
       { name: "--top-k", type: "number", description: "검색 결과 개수", defaultValue: 5 },
+      { name: "--scope", type: "enum", description: "검색 범위", enum: ["durable", "session", "harness", "evidence", "all"], defaultValue: "durable" },
       { name: "--at", type: "string", description: "조회할 snapshot SHA 또는 prefix" },
       { name: "--view", type: "enum", description: "출력 축소 수준", enum: ["minimal", "default", "full"], defaultValue: "default" },
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "both" },
@@ -324,7 +327,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["branch", "head", "backend", "zvec", "supported_types", "docsAuthority", "manifests", "embedding", "format"],
+    outputSchemaSummary: ["branch", "head", "backend", "zvec", "supported_types", "docsAuthority", "knowledge", "manifests", "embedding", "format"],
     arguments: [],
     options: [
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
@@ -371,6 +374,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
       { name: "--budget", type: "number", description: "토큰 예산", defaultValue: 1200 },
+      { name: "--scope", type: "enum", description: "검색 범위", enum: ["durable", "session", "harness", "evidence", "all"], defaultValue: "durable" },
       { name: "--at", type: "string", description: "조회할 snapshot SHA 또는 prefix" },
       { name: "--view", type: "enum", description: "출력 축소 수준", enum: ["minimal", "default", "full"], defaultValue: "default" },
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "both" },
@@ -378,6 +382,135 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     examples: [
       'ragit context pack "implementation plan for auth" --budget 1200',
       "ragit context pack --input context-pack.json --view minimal --format json",
+    ],
+  },
+  {
+    path: "session materialize",
+    description: "세션 대화와 도구 흔적에서 session artifact를 추출합니다.",
+    group: "session",
+    docSlug: "commands/session/materialize",
+    relatedCommands: ["artifact review", "memory wrap", "harness capture"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: true,
+    outputSchemaSummary: ["sessionId", "transcriptPath", "eventPath", "artifactIds", "dryRun", "warnings"],
+    arguments: [],
+    options: [
+      { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
+      { name: "--dry-run", type: "boolean", description: "쓰기 없이 추출 결과만 검증" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit session materialize --input session.json --dry-run --format json",
+      "ragit session materialize --input transcript.json",
+    ],
+  },
+  {
+    path: "artifact review",
+    description: "artifact 상태를 reviewed/retracted/superseded/archived로 전이합니다.",
+    group: "artifact",
+    docSlug: "commands/artifact/review",
+    relatedCommands: ["session materialize", "memory promote", "harness promote"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: true,
+    outputSchemaSummary: ["updated", "dryRun", "warnings"],
+    arguments: [],
+    options: [
+      { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
+      { name: "--dry-run", type: "boolean", description: "쓰기 없이 상태 전이만 검증" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit artifact review --input review.json --dry-run --format json",
+      "ragit artifact review --input review.json",
+    ],
+  },
+  {
+    path: "harness capture",
+    description: "하네스 자원을 local artifact로 캡처합니다.",
+    group: "harness",
+    docSlug: "commands/harness/capture",
+    relatedCommands: ["harness verify", "harness promote", "session materialize"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: true,
+    outputSchemaSummary: ["artifactIds", "suiteId", "dryRun", "warnings"],
+    arguments: [],
+    options: [
+      { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
+      { name: "--dry-run", type: "boolean", description: "쓰기 없이 생성 결과만 검증" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit harness capture --input harness.json --dry-run --format json",
+      "ragit harness capture --input harness.json",
+    ],
+  },
+  {
+    path: "harness promote",
+    description: "reviewed harness artifact를 docs/harness 아래 durable 문서로 승격합니다.",
+    group: "harness",
+    docSlug: "commands/harness/promote",
+    relatedCommands: ["artifact review", "harness verify", "ingest"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: true,
+    outputSchemaSummary: ["createdFiles", "plannedFiles", "ingested", "dryRun", "warnings"],
+    arguments: [],
+    options: [
+      { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
+      { name: "--dry-run", type: "boolean", description: "쓰기 없이 승격 결과만 검증" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit harness promote --input promote.json --dry-run --format json",
+      "ragit harness promote --input promote.json",
+    ],
+  },
+  {
+    path: "harness pack",
+    description: "suite 기준 에이전트용 하네스 패킷을 만듭니다.",
+    group: "harness",
+    docSlug: "commands/harness/pack",
+    relatedCommands: ["harness verify", "query", "context pack"],
+    stability: "read-only",
+    mutating: false,
+    supportsDryRun: false,
+    supportsRawJsonInput: false,
+    outputSchemaSummary: ["suiteId", "goal", "resources[]"],
+    arguments: [{ name: "suiteRef", type: "string", required: true, description: "suite artifact id 또는 경로" }],
+    options: [
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit harness pack art_harness_suite_xxx --format json",
+      "ragit harness pack .ragit/artifacts/harness/suite/example.json",
+    ],
+  },
+  {
+    path: "harness verify",
+    description: "suite 구조와 oracle/evidence binding을 검증합니다.",
+    group: "harness",
+    docSlug: "commands/harness/verify",
+    relatedCommands: ["harness capture", "harness pack", "artifact review"],
+    stability: "read-only",
+    mutating: false,
+    supportsDryRun: false,
+    supportsRawJsonInput: false,
+    outputSchemaSummary: ["suiteId", "checks[]", "hasFailure"],
+    arguments: [],
+    options: [
+      { name: "--suite", type: "path", required: true, description: "suite artifact id 또는 JSON 경로" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit harness verify --suite art_harness_suite_xxx --format json",
+      "ragit harness verify --suite .ragit/artifacts/harness/suite/example.json",
     ],
   },
   {
