@@ -1,7 +1,7 @@
 import { CliView } from "./cliContract.js";
 import { formatQueryResultText, projectRetrievalHits } from "./output.js";
 import { RetrievalHit } from "./types.js";
-import { searchKnowledge } from "./retrieval.js";
+import { runUnifiedRetrieval, selectHitsWithinBudget } from "./retrieval.js";
 
 export interface ContextPackOptions {
   budget?: number;
@@ -18,31 +18,30 @@ export interface ContextPackResult {
   hits: RetrievalHit[];
 }
 
-const countTokens = (text: string): number => text.split(/\s+/).filter(Boolean).length;
-
 export const packContext = async (
   cwd: string,
   goal: string,
   options: ContextPackOptions,
 ): Promise<ContextPackResult> => {
   const budget = options.budget ?? 1200;
-  const result = await searchKnowledge(cwd, goal, { at: options.at, topK: 30, scope: options.scope });
-  const selected = [];
-  let usedTokens = 0;
-  for (const hit of result.hits) {
-    const tokens = countTokens(hit.text);
-    if (selected.length > 0 && usedTokens + tokens > budget) continue;
-    selected.push(hit);
-    usedTokens += tokens;
-    if (usedTokens >= budget) break;
+  const result = await runUnifiedRetrieval(cwd, {
+    query: goal,
+    at: options.at,
+    topK: 30,
+    scope: options.scope,
+    includeSnapshot: true,
+  });
+  if (!result.snapshotSha) {
+    throw new Error("사용 가능한 snapshot이 없습니다.");
   }
+  const selected = selectHitsWithinBudget(result.hits, budget);
   return {
     goal,
     snapshotSha: result.snapshotSha,
     budget,
-    usedTokens,
-    selectedHits: selected.length,
-    hits: selected,
+    usedTokens: selected.usedTokens,
+    selectedHits: selected.hits.length,
+    hits: selected.hits,
   };
 };
 

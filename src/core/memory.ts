@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { assertAllowedKeys, assertRepoRelativePathArray } from "./cliInput.js";
 import { CliView } from "./cliContract.js";
-import { loadArtifactRecord, loadRecallArtifacts } from "./artifacts.js";
+import { loadArtifactRecord } from "./artifacts.js";
 import { loadConfig } from "./config.js";
 import { createDoc, reconcileDocs } from "./doc-authority.js";
 import { appendLedgerEvent } from "./event-ledger.js";
@@ -25,7 +25,7 @@ import {
   WorkingMemoryState,
 } from "./memoryTypes.js";
 import { ensureRagitStructure } from "./project.js";
-import { QueryResult, searchKnowledge } from "./retrieval.js";
+import { runUnifiedRetrieval } from "./retrieval.js";
 import { projectRetrievalHits } from "./output.js";
 import { RagitConfig, RetrievalHit } from "./types.js";
 import { RAGIT_VERSION } from "./version.js";
@@ -338,15 +338,6 @@ const hitToDecision = (hit: RetrievalHit): MemoryDecision => ({
   summary: compactText(hit.text),
 });
 
-const isRecoverableRecallError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    message.includes("사용 가능한 snapshot이 없습니다.") ||
-    message.includes("snapshot을 찾을 수 없습니다") ||
-    message.includes("zvec store가 아직 초기화되지 않았습니다.")
-  );
-};
-
 const renderStringList = (title: string, items: string[]): string[] => {
   if (items.length === 0) return [`## ${title}`, "- 없음", ""];
   return [`## ${title}`, ...items.map((item) => `- ${item}`), ""];
@@ -549,26 +540,6 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
   };
 };
 
-const runRecallSearch = async (
-  cwd: string,
-  query: string,
-  topK: number,
-): Promise<{ result: QueryResult | null; warnings: string[] }> => {
-  try {
-    return {
-      result: await searchKnowledge(cwd, query, { topK }),
-      warnings: [],
-    };
-  } catch (error) {
-    if (!isRecoverableRecallError(error)) throw error;
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      result: null,
-      warnings: [`검색 snapshot이 없어 working memory만으로 복원했습니다: ${message}`],
-    };
-  }
-};
-
 export const recallMemory = async (cwd: string, goal: string): Promise<{ packet: RecallPacket; markdown: string; json: string }> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
@@ -578,35 +549,30 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
   const working = await readJsonIfExists<WorkingMemoryState>(paths.currentPath);
   const latestSession = await loadLatestSessionWrap(cwd);
   const searchGoal = working?.goal && working.goal !== goal ? `${goal}\n${working.goal}` : goal;
-  const search = await runRecallSearch(cwd, searchGoal, config.memory.recall_top_k);
-  const retrievedHits = search.result?.hits ?? [];
+  const search = await runUnifiedRetrieval(cwd, {
+    query: searchGoal,
+    topK: config.memory.recall_top_k,
+    includeSnapshot: true,
+    scope: "durable",
+    artifactOptions: {
+      mode: "recall",
+      goal,
+    },
+  });
+  const retrievedHits = search.hits;
   const canonicalRoot = (config.docs_authority.canonical_root || "docs").replaceAll("\\", "/").replace(/\/+$/, "");
   const canonicalDecisionPrefix = `${canonicalRoot}/adr/`;
   const legacyDecisionPrefix = `${config.memory.corpus_dir.replace(/\\/g, "/")}/decisions/`;
   const decisionHits = retrievedHits
     .filter((hit) => hit.path.startsWith(canonicalDecisionPrefix) || hit.path.startsWith(legacyDecisionPrefix))
     .map(hitToDecision);
-  const recallArtifacts = await loadRecallArtifacts(cwd, goal);
-  const recallArtifactHits: RetrievalHit[] = recallArtifacts.map((artifact, index) => ({
-    chunkId: artifact.artifactId,
-    path: `.ragit/artifacts/${artifact.artifactScope}/${artifact.artifactId}.json`,
-    sectionTitle: artifact.title,
-    scoreVector: 0.7,
-    scoreKeyword: 0.7,
-    scoreFinal: 0.7 - index * 0.001,
-    text: artifact.text,
-    scope: artifact.searchPolicy === "evidence" ? "evidence" : "session",
-    originType: "artifact" as const,
-    artifactId: artifact.artifactId,
-    artifactKind: artifact.kind,
-    authority: artifact.authority,
-    confidence: artifact.confidence,
-  }));
-  const recallArtifactDecisions = recallArtifacts.map((artifact) => ({
-    id: artifact.artifactId,
-    title: artifact.title,
-    summary: artifact.summary,
-  }));
+  const recallArtifactDecisions = retrievedHits
+    .filter((hit) => hit.originType === "artifact" && hit.artifactId)
+    .map((hit) => ({
+      id: hit.artifactId ?? hit.chunkId,
+      title: hit.sectionTitle,
+      summary: compactText(hit.text),
+    }));
 
   const openLoops = working?.openLoops ?? activeOpenLoops(latestSession?.openLoops ?? []);
   const relatedDecisions = uniqueBy(
@@ -618,11 +584,11 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
     constraints: uniqueBy([...(working?.constraints ?? []), ...(latestSession?.constraints ?? [])], (item) => item),
     openLoops,
     relatedDecisions,
-    retrievedHits: uniqueBy([...recallArtifactHits, ...retrievedHits], (item) => item.chunkId),
+    retrievedHits,
     nextActions: uniqueBy([...(working?.nextActions ?? []), ...(latestSession?.nextActions ?? [])], (item) => item),
     latestSessionId: working?.latestSessionId ?? latestSession?.sessionId ?? null,
     sourceHeadSha: working?.sourceHeadSha ?? latestSession?.sourceHeadSha ?? null,
-    snapshotSha: search.result?.snapshotSha ?? null,
+    snapshotSha: search.snapshotSha,
     createdAt: new Date().toISOString(),
     warnings: search.warnings,
   };

@@ -236,7 +236,7 @@ const harnessArtifactPath = (cwd: string, kind: HarnessArtifactKind, artifactId:
   path.join(resolveRagitPaths(cwd).harnessArtifactsDir, kind, `${artifactId}.json`);
 const transcriptPath = (cwd: string, sessionId: string): string => path.join(resolveRagitPaths(cwd).transcriptDir, `${sessionId}.jsonl`);
 
-const pathForArtifact = (cwd: string, artifact: ArtifactRecord): string =>
+export const pathForArtifact = (cwd: string, artifact: ArtifactRecord): string =>
   artifact.artifactScope === "session" ? sessionArtifactPath(cwd, artifact.artifactId) : harnessArtifactPath(cwd, artifact.kind as HarnessArtifactKind, artifact.artifactId);
 
 const fileExists = async (target: string): Promise<boolean> => {

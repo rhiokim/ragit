@@ -8,6 +8,12 @@ export interface RenderedRetrievalHit {
   path: string;
   sectionTitle: string;
   scoreFinal: number;
+  scope?: RetrievalHit["scope"];
+  originType?: RetrievalHit["originType"];
+  artifactId?: RetrievalHit["artifactId"];
+  artifactKind?: RetrievalHit["artifactKind"];
+  authority?: RetrievalHit["authority"];
+  confidence?: RetrievalHit["confidence"];
   scoreVector?: number;
   scoreKeyword?: number;
   excerpt?: string;
@@ -31,6 +37,12 @@ export const projectRetrievalHit = (hit: RetrievalHit, view: CliView): RenderedR
     path: hit.path,
     sectionTitle: hit.sectionTitle,
     scoreFinal: Number(hit.scoreFinal.toFixed(6)),
+    scope: hit.scope,
+    originType: hit.originType,
+    artifactId: hit.artifactId,
+    artifactKind: hit.artifactKind,
+    authority: hit.authority,
+    confidence: hit.confidence === undefined || hit.confidence === null ? hit.confidence : Number(hit.confidence.toFixed(6)),
   };
   if (view === "minimal") {
     return {
@@ -81,4 +93,3 @@ export const formatQueryResultText = (query: string, result: QueryResult, view: 
     "",
     ...renderRetrievalHitLines(result.hits, view),
   ].join("\n");
-
