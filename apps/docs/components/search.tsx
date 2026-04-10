@@ -23,8 +23,9 @@ function initOrama(language: 'en' | 'ko') {
 
   return create({
     schema: { _: 'string' },
-    language: 'english',
-    ...(tokenizer ? { components: { tokenizer } } : {}),
+    ...(tokenizer
+      ? { components: { tokenizer } }
+      : { language: 'english' }),
   });
 }
 
@@ -37,7 +38,8 @@ export default function DefaultSearchDialog(props: SharedProps) {
       type: 'static' as const,
       from: getSearchIndexPath(searchLanguage),
       initOrama: () => initOrama(searchLanguage),
-      locale: searchLanguage,
+      // The exported static index is already language-scoped by endpoint.
+      // Passing locale here makes Fumadocs look for an i18n bucket that does not exist.
     }),
     [searchLanguage],
   );
