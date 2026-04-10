@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -6,12 +7,14 @@ import { describe, expect, it } from "vitest";
 import { runStatus } from "../src/commands/bootstrap.js";
 import { loadArtifactRecord, reviewArtifacts, sessionMaterialize } from "../src/core/artifacts.js";
 import { queryTimeline } from "../src/core/event-ledger.js";
-import { captureHarness, promoteHarness } from "../src/core/harness.js";
+import { captureHarness, promoteHarness, runHarness } from "../src/core/harness.js";
 import { runIngest } from "../src/core/ingest.js";
 import { promoteMemory, runMemoryWrap } from "../src/core/memory.js";
 import { runInit } from "../src/commands/init.js";
 
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+const sha1 = (...parts: string[]): string => createHash("sha1").update(parts.join(":")).digest("hex");
+const harnessArtifactId = (kind: string, goal: string, title: string): string => `art_harness_${kind}_${sha1(kind, goal, title).slice(0, 16)}`;
 
 describe("timeline integration", () => {
   it(
@@ -28,6 +31,16 @@ type: spec
 ---
 # Auth Flow
 Keep recall packets small and structured.
+`,
+        "utf8",
+      );
+      await writeFile(
+        path.join(temp, "run-harness-case.mjs"),
+        `const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+process.stdout.write(JSON.stringify({ status: "ok", summary: payload.case.title + ": open loops and next actions" }));
+process.exit(0);
 `,
         "utf8",
       );
@@ -101,21 +114,37 @@ Keep recall packets small and structured.
         ],
       });
 
+      const harnessGoal = "resume auth migration";
+      const oracleId = harnessArtifactId("oracle", harnessGoal, "resume packet oracle");
       const captured = await captureHarness(temp, {
         goal: "resume auth migration",
         episodeId: "ep-auth-refresh",
         sourceSessionId: materialized.sessionId,
         resources: [
           {
+            kind: "oracle",
+            title: "resume packet oracle",
+            expected: { jsonSubset: { status: "ok" } },
+          },
+          {
             kind: "case",
             title: "resume after token expiry",
             input: { prompt: "resume auth flow after token expired" },
             expected: { mustInclude: ["open loops", "next actions"] },
-            oracleRefs: ["oracle-1"],
+            oracleRefs: [oracleId],
             evidenceRefs: ["evid-1"],
           },
         ],
       });
+
+      const harnessRun = await runHarness(temp, {
+        suiteRef: captured.suiteId,
+        executor: {
+          kind: "command",
+          argv: [process.execPath, "run-harness-case.mjs"],
+        },
+      });
+      expect(harnessRun.summary.passed).toBe(1);
 
       await reviewArtifacts(temp, {
         updates: captured.artifactIds.map((artifactId) => ({
@@ -136,6 +165,7 @@ Keep recall packets small and structured.
       expect(timeline.events.some((event) => event.eventType === "memory.wrap")).toBe(true);
       expect(timeline.events.some((event) => event.eventType === "memory.promote")).toBe(true);
       expect(timeline.events.some((event) => event.eventType === "harness.capture")).toBe(true);
+      expect(timeline.events.some((event) => event.eventType === "harness.run")).toBe(true);
       expect(timeline.events.some((event) => event.eventType === "harness.promote")).toBe(true);
       expect(timeline.events.some((event) => event.eventType === "ingest.completed")).toBe(true);
 

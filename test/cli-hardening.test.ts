@@ -129,6 +129,22 @@ Dry-run should not mutate tracked state.`,
       await writeFile(path.join(temp, "bad-query.json"), JSON.stringify({ question: "hello\u0007" }, null, 2), "utf8");
       await writeFile(path.join(temp, "bad-ingest.json"), JSON.stringify({ files: "../**/*.md" }, null, 2), "utf8");
       await writeFile(
+        path.join(temp, "bad-harness-run.json"),
+        JSON.stringify(
+          {
+            suiteRef: "art_harness_suite_xxx",
+            executor: {
+              kind: "command",
+              argv: ["node", "script.mjs"],
+            },
+            concurrency: 2,
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      await writeFile(
         path.join(temp, "bad-wrap.json"),
         JSON.stringify(
           {
@@ -150,6 +166,7 @@ Dry-run should not mutate tracked state.`,
       expect(runCliExpectError(["query", "--input", outside, "--cwd", temp, "--format", "json"])).toContain("repo 밖 input 경로");
       expect(runCliExpectError(["query", "--input", "bad-query.json", "--cwd", temp, "--format", "json"])).toContain("control character");
       expect(runCliExpectError(["ingest", "--input", "bad-ingest.json", "--cwd", temp, "--format", "json"])).toContain("repo 내부 glob");
+      expect(runCliExpectError(["harness", "run", "--input", "bad-harness-run.json", "--cwd", temp, "--format", "json"])).toContain("concurrency=1");
       expect(runCliExpectError(["memory", "wrap", "--input", "bad-wrap.json", "--cwd", temp, "--format", "json"])).toContain("예상하지 못한 필드");
     },
     15_000,

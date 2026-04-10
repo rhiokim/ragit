@@ -114,6 +114,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeTimelineOutput.data.spec.path).toBe("timeline");
       expect(describeTimelineOutput.data.spec.options.some((option: { name: string }) => option.name === "--kind")).toBe(true);
 
+      const describeHarnessRunOutput = JSON.parse(runCli(["describe", "harness", "run", "--format", "json"]));
+      expect(describeHarnessRunOutput.command).toBe("describe");
+      expect(describeHarnessRunOutput.ok).toBe(true);
+      expect(describeHarnessRunOutput.data.spec.path).toBe("harness run");
+      expect(describeHarnessRunOutput.data.spec.supportsDryRun).toBe(true);
+
       const describeDocOutput = JSON.parse(runCli(["describe", "doc", "create", "--format", "json"]));
       expect(describeDocOutput.command).toBe("describe");
       expect(describeDocOutput.ok).toBe(true);
