@@ -6,7 +6,7 @@ command_path: timeline
 
 ## What It Does
 
-`timeline`은 `.ragit/log/events/*.jsonl` 아래의 append-only event ledger를 읽어 session materialize, artifact review, memory workflow, harness workflow, ingest 완료의 시간축을 투영합니다.
+`timeline`은 `.ragit/log/events/*.jsonl` 아래의 append-only event ledger를 읽어 session materialize, artifact review, memory workflow, harness workflow, ingest 완료의 시간축을 투영합니다. snapshot semantic state를 요약하려고 하지 않는다는 점이 중요하며, 그 역할은 `log`가 맡습니다.
 
 ## When To Use / When Not To Use
 
@@ -66,6 +66,7 @@ pnpm ragit timeline --session 20260410T090000Z-a1b2c3d4 --format json
 - `timeline`은 event ledger reader이지 repair 명령이 아닙니다.
 - dry-run 명령은 ledger event를 기록하지 않습니다.
 - 이 ledger는 append-only operational surface입니다. <a href="/ko/docs/commands/log">`log`</a>를 대체하지 않고 보완합니다.
+- 특정 commit에 결속된 beliefs, open loops, evidence가 필요하면 `timeline`이 아니라 <a href="/ko/docs/commands/log">`log`</a>를 사용하십시오.
 
 ## Related Commands
 

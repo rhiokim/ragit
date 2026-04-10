@@ -1,12 +1,12 @@
 ---
 title: log
-description: Read snapshot-centered semantic history instead of raw commit history alone
+description: Read snapshot-centered semantic history with artifact-backed collaboration state
 command_path: log
 ---
 
 ## What It Does
 
-`log` reads commit-ordered snapshot history and summarizes how indexed knowledge changed semantically across commits. Unlike `git log`, the default unit is not "what files changed?" but "what searchable knowledge changed for the next agent?"
+`log` reads commit-ordered snapshot history and summarizes how indexed knowledge changed semantically across commits. Unlike `git log`, the default unit is not "what files changed?" but "what searchable knowledge changed for the next agent, what should still be believed, and what is still open?"
 
 ## When To Use / When Not To Use
 
@@ -14,6 +14,7 @@ command_path: log
 
 - You want to understand why retrieval changed between commits.
 - You want a semantic summary of added, modified, and deleted indexed documents.
+- You want the artifact-backed beliefs, open loops, and evidence that belong to a snapshot.
 - You want to inspect snapshot history without opening manifest files manually.
 
 ### When not to use it
@@ -44,6 +45,7 @@ pnpm ragit log [revRange] [--max-count <n>] [--view minimal|default|full] [--typ
 - There is no JSON payload input for `log`.
 - Default output is semantic history text, not raw commit history text.
 - JSON output includes `revRange`, `maxCount`, `showMissing`, `filters`, and `entries`.
+- Each indexed entry also carries a sibling `semantic` block alongside `snapshot`.
 
 ```json
 {
@@ -71,6 +73,16 @@ pnpm ragit log [revRange] [--max-count <n>] [--view minimal|default|full] [--typ
             "docType": "spec"
           }
         ]
+      },
+      "semantic": {
+        "available": true,
+        "headline": "beliefs=2 open_loops=1 evidence=2 artifacts=4",
+        "counts": {
+          "beliefs": 2,
+          "openLoops": 1,
+          "evidence": 2,
+          "artifacts": 4
+        }
       }
     }
   ]
@@ -97,9 +109,9 @@ pnpm ragit log --view minimal --max-count 5
 - type_filter: none
 - path_filter: none
 
-b5537bb indexed docs=10 chunks=26 +0 ~0 -1 | adr=1 ddd=1 glossary=1 pbd=1 plan=2 prd=1 spec=2 srs=1 | remove old adr
-61449a7 indexed docs=11 chunks=27 +9 ~1 -0 | adr=2 ddd=1 glossary=1 pbd=1 plan=2 prd=1 spec=2 srs=1 | update spec and add plan
-e783de5 indexed docs=2 chunks=2 +2 ~0 -0 | adr=1 spec=1 | seed docs
+b5537bb indexed docs=10 chunks=26 +0 ~0 -1 | adr=1 ddd=1 glossary=1 pbd=1 plan=2 prd=1 spec=2 srs=1 | semantic beliefs=0 open=0 evidence=0 artifacts=0 | remove old adr
+61449a7 indexed docs=11 chunks=27 +9 ~1 -0 | adr=2 ddd=1 glossary=1 pbd=1 plan=2 prd=1 spec=2 srs=1 | semantic beliefs=2 open=1 evidence=2 artifacts=4 | update spec and add plan
+e783de5 indexed docs=2 chunks=2 +2 ~0 -0 | adr=1 spec=1 | semantic beliefs=0 open=0 evidence=0 artifacts=0 | seed docs
 ```
 
 ### `default` view
@@ -127,6 +139,16 @@ Snapshot: indexed (2026-04-09T14:30:33.368Z)
 Based on: e783de501e1271eebac967830affa1893676e6fc
 Knowledge: docs=11 chunks=27
 Semantic delta: +9 modified=1 deleted=0
+Semantic: beliefs=2 open_loops=1 evidence=2 artifacts=4
+Semantic counts: beliefs=2 open=1 evidence=2 artifacts=4
+Beliefs:
+  - Keep answers concise [feedback reviewed] User preference confirmed for future agent responses.
+Open loops:
+  - Finalize refresh-token boundary [openLoop captured] Patch auth spec before resuming implementation.
+Evidence:
+  - art_failure_1/evid_1 [failure captured] Error: token refresh regression
+Artifacts:
+  - art_feedback_1 [feedback reviewed session] Keep answers concise
 Changed:
   A .ragit/guide/templates/adr.template.md [adr]
   A .ragit/guide/templates/ddd.template.md [ddd]
@@ -193,6 +215,7 @@ AuthoredAt: 2026-04-09T23:30:31+09:00
 
 Snapshot: missing
 Knowledge: no indexed snapshot for this commit
+Semantic: No semantic overlay available because this commit has no indexed snapshot.
 ```
 
 ### JSON for agents
@@ -268,9 +291,11 @@ pnpm ragit log HEAD~10..HEAD --max-count 2 --format json
 - `log` is snapshot-centered, so commits without manifests are hidden unless you ask for `--show-missing`.
 - `--type` and `--path` filter snapshot content, not raw git diffs.
 - Missing commits cannot produce semantic document deltas because no snapshot exists for them.
+- The semantic overlay is derived from snapshot-bound artifact entries only. It does not replay the event ledger and it does not read raw transcripts back into history.
 
 ## Related Commands
 
+- <a href="/en/docs/commands/timeline">`timeline`</a>
 - <a href="/en/docs/commands/status">`status`</a>
 - <a href="/en/docs/commands/ingest">`ingest`</a>
 - <a href="/en/docs/commands/query">`query`</a>
