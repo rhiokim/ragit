@@ -6,7 +6,7 @@ command_path: query
 
 ## What It Does
 
-`query` searches indexed repository knowledge and returns matching hits for a question. The result is always snapshot-scoped, so the answer is tied to the chosen commit state.
+`query` searches indexed repository knowledge and returns matching hits for a question. It uses the shared retrieval planner/executor, but stays snapshot-scoped, so the answer is still tied to the chosen commit state.
 
 ## When To Use / When Not To Use
 
@@ -51,6 +51,7 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--vie
 ```
 
 - JSON output returns `query`, `snapshotSha`, and `hits`.
+- Each hit can carry artifact-aware metadata such as `scope`, `originType`, `artifactId`, `artifactKind`, `authority`, and `confidence` when the indexed chunk originated from reviewed artifact material inside the snapshot.
 - `--view minimal` returns the smallest useful hit shape.
 - `--view default` returns the standard readable hit projection.
 - `--view full` keeps the richest text projection and is the most expensive for context windows.
@@ -73,7 +74,7 @@ pnpm ragit query --input query.json --view minimal --format json
 
 - Do not mix `--input` with positional `question`, `--top-k`, or `--at`.
 - If `question` is empty, the command fails.
-- `query` only sees indexed content that belongs to the snapshot.
+- `query` only sees indexed content that belongs to the snapshot. It does not read working memory or recall-only artifact overlays.
 
 ## Related Commands
 

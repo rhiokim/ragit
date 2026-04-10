@@ -6,7 +6,7 @@ command_path: query
 
 ## 무엇을 하는 명령인가
 
-`query`는 인덱싱된 저장소 지식을 검색하고 질문에 맞는 hit를 반환합니다. 결과는 항상 snapshot 범위에 묶이므로, 선택한 커밋 시점 기준으로 재현됩니다.
+`query`는 인덱싱된 저장소 지식을 검색하고 질문에 맞는 hit를 반환합니다. 내부적으로는 shared retrieval planner/executor를 사용하지만, 결과는 여전히 snapshot 범위에 묶이므로 선택한 커밋 시점 기준으로 재현됩니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -51,6 +51,7 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--vie
 ```
 
 - JSON 출력은 `query`, `snapshotSha`, `hits`를 반환합니다.
+- hit에는 필요할 경우 `scope`, `originType`, `artifactId`, `artifactKind`, `authority`, `confidence` 같은 artifact-aware metadata가 함께 들어올 수 있습니다.
 - `--view minimal`은 가장 작은 hit 형태를 반환합니다.
 - `--view default`는 사람이 읽기 좋은 기본 투영입니다.
 - `--view full`은 richer text를 유지하므로 context window 비용이 가장 큽니다.
@@ -73,7 +74,7 @@ pnpm ragit query --input query.json --view minimal --format json
 
 - `--input`과 positional `question`, `--top-k`, `--at`를 함께 쓰면 안 됩니다.
 - `question`이 비어 있으면 실패합니다.
-- `query`는 snapshot에 인덱싱된 콘텐츠만 검색합니다.
+- `query`는 snapshot에 인덱싱된 콘텐츠만 검색합니다. working memory나 recall 전용 artifact overlay는 읽지 않습니다.
 
 ## 관련 명령
 

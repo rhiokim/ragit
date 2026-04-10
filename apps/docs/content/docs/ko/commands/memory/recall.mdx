@@ -6,7 +6,7 @@ command_path: memory recall
 
 ## 무엇을 하는 명령인가
 
-`memory recall`은 작업을 다시 이어가기 위해 필요한 패킷을 복원합니다. 현재 working memory에서 시작한 뒤, 관련 snapshot-scoped retrieval hit를 덧붙입니다.
+`memory recall`은 작업을 다시 이어가기 위해 필요한 패킷을 복원합니다. 현재 working memory에서 시작한 뒤, `query`와 `context pack`이 쓰는 동일한 retrieval planner/executor 결과와 goal에 맞는 recall 전용 artifact overlay를 덧붙입니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -37,6 +37,7 @@ pnpm ragit memory recall <goal> [--view minimal|default|full] [--format text|jso
 
 - 입력은 positional 인자만 사용합니다.
 - JSON 출력에는 `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, `nextActions`가 포함됩니다.
+- `retrievedHits`에는 snapshot hit와 artifact-origin hit가 함께 들어올 수 있지만, 여전히 전체 이력을 재생하지 않고 선택된 packet만 반환합니다.
 - `--view minimal`은 에이전트 재개 흐름의 기본값으로 가장 적합합니다.
 - `--view default`는 읽기성과 상세의 균형을 맞춥니다.
 - `--view full`은 retrieval hit의 richer text가 꼭 필요할 때만 사용하십시오.
@@ -59,6 +60,7 @@ pnpm ragit memory recall "resume auth flow" --view minimal --format json
 
 - `memory recall` 품질은 working memory 품질에 크게 의존합니다. wrap이 빈약하면 recall도 약해집니다.
 - 이 명령은 전체 세션 로그를 재생하지 않습니다. 의도적으로 선택된 패킷만 복원합니다.
+- snapshot retrieval이 당장 불가능해도, 관련 artifact를 기반으로 warning과 함께 최소 packet을 반환할 수 있습니다.
 
 ## 관련 명령
 

@@ -6,7 +6,7 @@ command_path: context pack
 
 ## What It Does
 
-`context pack` turns retrieved knowledge into a bounded packet for a specific goal. It is the command to use when the next consumer is an agent prompt rather than a person reading search results.
+`context pack` turns retrieved knowledge into a bounded packet for a specific goal. It uses the same retrieval planner/executor as `query`, then applies budget-based trimming for the next agent prompt.
 
 ## When To Use / When Not To Use
 
@@ -48,6 +48,7 @@ pnpm ragit context pack [goal] [--input <path|->] [--budget <tokens>] [--at <sha
 ```
 
 - JSON output includes `goal`, `snapshotSha`, `budget`, `usedTokens`, `selectedHits`, and `hits`.
+- Hit selection is not a separate search path. It is the same retrieval result, trimmed down to fit the requested budget.
 - `--view minimal` is the safest default for agent context windows.
 - `--view default` preserves a balanced amount of detail.
 - `--view full` is useful only when downstream reasoning truly needs richer text.
@@ -70,7 +71,7 @@ pnpm ragit context pack --input context-pack.json --view minimal --format json
 
 - Do not mix `--input` with positional `goal`, `--budget`, or `--at`.
 - An empty `goal` is rejected.
-- This command remains snapshot-bound; it does not include working-memory state unless you explicitly use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
+- This command remains snapshot-bound; it does not include working-memory state or recall-only artifact overlays unless you explicitly use <a href="/en/docs/commands/memory/recall">`memory recall`</a>.
 
 ## Related Commands
 
