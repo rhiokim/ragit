@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runInit } from "../src/commands/init.js";
+import { reviewArtifacts, sessionMaterialize } from "../src/core/artifacts.js";
 import { formatRagitLogText, runRagitLog } from "../src/core/log.js";
 import { runIngest } from "../src/core/ingest.js";
 
@@ -122,6 +123,113 @@ Ship recall-friendly auth changes in two phases.
       expect(text).toContain("Semantic delta:");
       expect(text).toContain("modified=1");
       expect(text).toContain("A docs/rollout.plan.md [plan]");
+    },
+    25_000,
+  );
+
+  it(
+    "adds artifact-aware semantic overlays without turning log into timeline",
+    async () => {
+      const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-log-semantic-"));
+      git(temp, ["init"]);
+      git(temp, ["config", "user.email", "ragit@example.com"]);
+      git(temp, ["config", "user.name", "ragit-test"]);
+
+      await mkdir(path.join(temp, "docs"), { recursive: true });
+      await writeFile(
+        path.join(temp, "docs", "auth.spec.md"),
+        `---
+type: spec
+---
+# Auth Flow
+Keep auth recovery small and structured.
+`,
+        "utf8",
+      );
+      git(temp, ["add", "."]);
+      git(temp, ["commit", "-m", "seed semantic log repo"]);
+      const seedSha = git(temp, ["rev-parse", "HEAD"]);
+
+      await runInit(temp, { nonInteractive: true });
+      const materialized = await sessionMaterialize(temp, {
+        goal: "resume auth migration",
+        episode: { id: "ep-auth-refresh", title: "Auth refresh stabilization" },
+        relatedPaths: ["docs/auth.spec.md"],
+        createdAt: "2026-04-10T09:00:00.000Z",
+        turns: [
+          {
+            turnId: "turn-1",
+            role: "user",
+            content: "Please keep answers concise.",
+            createdAt: "2026-04-10T09:00:00.000Z",
+          },
+          {
+            turnId: "turn-2",
+            role: "user",
+            content: "Do not mutate snapshot contracts while fixing auth.",
+            createdAt: "2026-04-10T09:01:00.000Z",
+          },
+          {
+            turnId: "turn-3",
+            role: "assistant",
+            content: "The key insight is recall packets should restore active work.",
+            createdAt: "2026-04-10T09:02:00.000Z",
+          },
+          {
+            turnId: "turn-4",
+            role: "user",
+            content: "Next action is patch the auth spec?",
+            createdAt: "2026-04-10T09:03:00.000Z",
+          },
+        ],
+        toolTraces: [
+          {
+            traceId: "trace-1",
+            title: "auth test run",
+            command: "pnpm test auth",
+            error: "Error: token refresh regression",
+            createdAt: "2026-04-10T09:03:30.000Z",
+          },
+        ],
+      });
+
+      const reviewTargets = materialized.artifactIds.filter(
+        (artifactId) =>
+          artifactId.includes("_feedback_") || artifactId.includes("_constraint_") || artifactId.includes("_insight_"),
+      );
+      await reviewArtifacts(
+        temp,
+        {
+          updates: reviewTargets.map((artifactId) => ({
+            artifactId,
+            nextStatus: "reviewed" as const,
+            reason: "confirmed semantic support",
+          })),
+        },
+      );
+
+      await runIngest(temp, { all: true, scope: "all" });
+
+      const result = await runRagitLog(temp);
+      expect(result.entries[0].commitSha).toBe(seedSha);
+      expect(result.entries[0].semantic.available).toBe(true);
+      expect(result.entries[0].semantic.counts.beliefs).toBeGreaterThanOrEqual(3);
+      expect(result.entries[0].semantic.counts.openLoops).toBeGreaterThanOrEqual(2);
+      expect(result.entries[0].semantic.counts.evidence).toBeGreaterThanOrEqual(1);
+      expect(result.entries[0].semantic.beliefs.some((item) => item.kind === "feedback")).toBe(true);
+      expect(result.entries[0].semantic.beliefs.some((item) => item.kind === "constraint")).toBe(true);
+      expect(result.entries[0].semantic.beliefs.some((item) => item.kind === "insight")).toBe(true);
+      expect(result.entries[0].semantic.openLoops.some((item) => item.kind === "openLoop")).toBe(true);
+      expect(result.entries[0].semantic.openLoops.some((item) => item.kind === "failure")).toBe(true);
+      expect(result.entries[0].semantic.artifacts.some((item) => item.status === "captured")).toBe(true);
+      expect(result.entries[0].semantic.artifacts.some((item) => item.status === "reviewed")).toBe(true);
+
+      const text = formatRagitLogText(result, "default");
+      expect(text).toContain("Semantic:");
+      expect(text).toContain("Beliefs:");
+      expect(text).toContain("Open loops:");
+      expect(text).toContain("Evidence:");
+      expect(text).toContain("Artifacts:");
     },
     25_000,
   );

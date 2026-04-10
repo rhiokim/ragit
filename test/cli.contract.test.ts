@@ -150,12 +150,15 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(logOutput.ok).toBe(true);
       expect(logOutput.data.entries[0].snapshot.status).toBe("indexed");
       expect(logOutput.data.entries[0].snapshot.changed).toBeTruthy();
+      expect(logOutput.data.entries[0].semantic).toBeTruthy();
+      expect(logOutput.data.entries[0].semantic.counts).toBeTruthy();
 
       const timelineOutput = JSON.parse(runCli(["timeline", "--cwd", temp, "--format", "json", "--kind", "memory", "--max-count", "5"]));
       expect(timelineOutput.command).toBe("timeline");
       expect(timelineOutput.ok).toBe(true);
       expect(timelineOutput.data.summary.eventCount).toBeGreaterThan(0);
       expect(timelineOutput.data.events.every((event: { eventType: string }) => event.eventType.startsWith("memory."))).toBe(true);
+      expect(timelineOutput.data.events.every((event: { semantic?: unknown }) => event.semantic === undefined)).toBe(true);
 
       const statusOutput = JSON.parse(runCli(["status", "--cwd", temp, "--format", "json"]));
       expect(statusOutput.command).toBe("status");

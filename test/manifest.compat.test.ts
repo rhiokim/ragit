@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runInit } from "../src/commands/init.js";
+import { deriveLogSemanticOverlay } from "../src/core/logSemantic.js";
 import { loadSnapshotManifest } from "../src/core/manifest.js";
 
 describe("manifest compatibility", () => {
@@ -46,5 +47,10 @@ describe("manifest compatibility", () => {
     expect(manifest.chunkScopes!.session).toEqual([]);
     expect(manifest.chunkScopes!.harness).toEqual([]);
     expect(manifest.chunkScopes!.evidence).toEqual([]);
+
+    const semantic = await deriveLogSemanticOverlay(temp, manifest);
+    expect(semantic.available).toBe(true);
+    expect(semantic.counts.artifacts).toBe(0);
+    expect(semantic.headline).toContain("No artifact-backed semantic overlays");
   });
 });
