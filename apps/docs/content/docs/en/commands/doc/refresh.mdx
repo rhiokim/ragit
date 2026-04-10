@@ -1,0 +1,22 @@
+---
+title: doc refresh
+description: Realign tracked docs to the standard document contract
+command_path: doc refresh
+---
+
+## What It Does
+
+`doc refresh` non-destructively rewrites tracked docs so their type-specific structure stays aligned with the standard document contract.
+
+## Syntax
+
+```bash
+pnpm ragit doc refresh [--type <type> | --files <glob>] [--dry-run] [--format text|json|both]
+```
+
+## Key Points
+
+- Use it when you want existing docs cleaned up without manually editing each file.
+- `--type` narrows the refresh by doc type.
+- `--files` lets you target a glob inside the repository.
+- `--dry-run` reports `plannedFiles`, `violationsBefore`, and `violationsAfter` without writing.

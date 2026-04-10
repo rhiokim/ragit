@@ -1,0 +1,37 @@
+---
+title: session materialize
+description: transcript와 tool trace에서 session artifact를 추출합니다
+command_path: session materialize
+---
+
+## 무엇을 하는 명령인가
+
+`session materialize`는 구조화된 session 입력을 받아 redacted transcript ledger를 쓰고, operational event를 append하며, feedback, constraint, failure, insight, open loop 같은 candidate session artifact를 추출합니다.
+
+## 기본 구문
+
+```bash
+pnpm ragit session materialize --input <path|-> [--dry-run] [--format text|json|both]
+```
+
+## 입력 계약
+
+```json
+{
+  "goal": "resume auth migration",
+  "episode": { "id": "ep-auth-refresh", "title": "Auth refresh stabilization" },
+  "turns": [
+    { "turnId": "t1", "role": "user", "content": "...", "createdAt": "2026-04-10T09:00:00.000Z" }
+  ],
+  "toolTraces": [],
+  "relatedPaths": ["docs/auth/spec.md"],
+  "sourceHeadSha": "abc123",
+  "createdAt": "2026-04-10T09:00:00.000Z"
+}
+```
+
+## 핵심 포인트
+
+- raw chat history에 남겨 두지 않고 session knowledge를 review 가능한 형태로 물질화하고 싶을 때 사용합니다.
+- `--dry-run`은 transcript ledger와 artifact를 실제로 쓰지 않고 추출 계약만 검증합니다.
+- 보통 다음 단계는 <a href="/ko/docs/commands/artifact/review">`artifact review`</a>입니다.

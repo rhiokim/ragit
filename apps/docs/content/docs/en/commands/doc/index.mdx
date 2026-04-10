@@ -1,0 +1,19 @@
+---
+title: Doc
+description: Create, refresh, validate, and reconcile canonical project docs
+---
+
+The `doc` family keeps standard document contracts aligned with canonical paths and indexes.
+
+## Choose A Subcommand
+
+- <a href="/en/docs/commands/doc/create">`doc create`</a>: create a standard document with the correct type contract.
+- <a href="/en/docs/commands/doc/refresh">`doc refresh`</a>: non-destructively realign tracked docs to the standard contract.
+- <a href="/en/docs/commands/doc/validate">`doc validate`</a>: inspect contract violations without mutating files.
+- <a href="/en/docs/commands/doc/reconcile">`doc reconcile`</a>: update canonical path mappings and write the doc index.
+
+## Family Boundary
+
+- `create`, `refresh`, and `reconcile` are mutating.
+- `validate` is read-only.
+- This family manages `docs/**` authority, not retrieval itself. Use <a href="/en/docs/commands/ingest">`ingest`</a> after durable doc changes need new retrieval state.

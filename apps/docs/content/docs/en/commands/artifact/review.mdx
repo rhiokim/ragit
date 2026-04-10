@@ -1,0 +1,36 @@
+---
+title: artifact review
+description: Transition artifact lifecycle state after review
+command_path: artifact review
+---
+
+## What It Does
+
+`artifact review` transitions captured artifacts into reviewed lifecycle states. It is the explicit gate before durable promotion for both session and harness artifacts.
+
+## Syntax
+
+```bash
+pnpm ragit artifact review --input <path|-> [--dry-run] [--format text|json|both]
+```
+
+## Input Contract
+
+```json
+{
+  "updates": [
+    {
+      "artifactId": "art_session_feedback_xxx",
+      "nextStatus": "reviewed",
+      "reason": "confirmed by user feedback",
+      "supersedes": []
+    }
+  ]
+}
+```
+
+## Key Points
+
+- Allowed target states are `reviewed`, `retracted`, `superseded`, and `archived`.
+- `--dry-run` validates the transition plan without rewriting artifact records.
+- Use <a href="/en/docs/commands/memory/promote">`memory promote`</a> or <a href="/en/docs/commands/harness/promote">`harness promote`</a> after artifacts are reviewed.

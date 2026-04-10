@@ -1,0 +1,21 @@
+---
+title: doc reconcile
+description: Rebuild canonical doc mappings and write the document index
+command_path: doc reconcile
+---
+
+## What It Does
+
+`doc reconcile` maps existing docs into canonical paths, writes the doc index, and reports the tracked/violating state of the durable doc corpus.
+
+## Syntax
+
+```bash
+pnpm ragit doc reconcile [--dry-run] [--format text|json|both]
+```
+
+## Key Points
+
+- Use it when canonical path mappings or the doc index may be stale.
+- `--dry-run` computes the result without rewriting the index.
+- This command manages doc authority metadata, not embeddings.

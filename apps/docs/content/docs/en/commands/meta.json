@@ -10,9 +10,12 @@
     "query",
     "status",
     "doctor",
+    "doc",
     "config",
     "context",
     "hooks",
+    "session",
+    "artifact",
     "harness",
     "memory",
     "migrate"

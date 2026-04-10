@@ -1,0 +1,15 @@
+---
+title: Session
+description: Extract reviewable session artifacts from transcripts and traces
+---
+
+The `session` family turns conversation history and tool traces into reviewable local artifacts.
+
+## Choose A Subcommand
+
+- <a href="/en/docs/commands/session/materialize">`session materialize`</a>: extract redacted transcript-ledger data and candidate session artifacts.
+
+## Family Boundary
+
+- `materialize` writes session-side control-plane artifacts under `.ragit/log/**` and `.ragit/artifacts/session/**`.
+- It does not promote durable memory by itself. Review and promote through <a href="/en/docs/commands/artifact/review">`artifact review`</a> and <a href="/en/docs/commands/memory/promote">`memory promote`</a>.

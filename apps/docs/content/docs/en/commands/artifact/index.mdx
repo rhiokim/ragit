@@ -1,0 +1,15 @@
+---
+title: Artifact
+description: Review captured artifacts before durable promotion
+---
+
+The `artifact` family controls lifecycle transitions for captured session and harness artifacts.
+
+## Choose A Subcommand
+
+- <a href="/en/docs/commands/artifact/review">`artifact review`</a>: move captured artifacts into `reviewed`, `retracted`, `superseded`, or `archived`.
+
+## Family Boundary
+
+- `artifact review` is the quality gate between capture/materialize and promotion.
+- It does not create durable docs by itself.

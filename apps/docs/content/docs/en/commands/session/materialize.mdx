@@ -1,0 +1,37 @@
+---
+title: session materialize
+description: Extract session artifacts from transcripts and tool traces
+command_path: session materialize
+---
+
+## What It Does
+
+`session materialize` takes structured session input, writes a redacted transcript ledger, appends an operational event, and extracts candidate session artifacts such as feedback, constraints, failures, insights, and open loops.
+
+## Syntax
+
+```bash
+pnpm ragit session materialize --input <path|-> [--dry-run] [--format text|json|both]
+```
+
+## Input Contract
+
+```json
+{
+  "goal": "resume auth migration",
+  "episode": { "id": "ep-auth-refresh", "title": "Auth refresh stabilization" },
+  "turns": [
+    { "turnId": "t1", "role": "user", "content": "...", "createdAt": "2026-04-10T09:00:00.000Z" }
+  ],
+  "toolTraces": [],
+  "relatedPaths": ["docs/auth/spec.md"],
+  "sourceHeadSha": "abc123",
+  "createdAt": "2026-04-10T09:00:00.000Z"
+}
+```
+
+## Key Points
+
+- Use it when you want session knowledge made reviewable instead of leaving it inside raw chat history.
+- `--dry-run` validates the extraction contract and planned artifacts without writing the transcript ledger or artifacts.
+- The next step is usually <a href="/en/docs/commands/artifact/review">`artifact review`</a>.

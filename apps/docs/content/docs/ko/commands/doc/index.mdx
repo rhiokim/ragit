@@ -1,0 +1,19 @@
+---
+title: Doc
+description: canonical project 문서를 생성, 정합화, 검증, reconcile 하는 명령군
+---
+
+`doc` 명령군은 표준 문서 계약과 canonical path, index를 맞추는 역할을 합니다.
+
+## 하위 명령 선택
+
+- <a href="/ko/docs/commands/doc/create">`doc create`</a>: 표준 타입 문서를 생성합니다.
+- <a href="/ko/docs/commands/doc/refresh">`doc refresh`</a>: 기존 문서를 표준 계약에 맞게 비파괴 정합화합니다.
+- <a href="/ko/docs/commands/doc/validate">`doc validate`</a>: 위반 사항을 읽기 전용으로 점검합니다.
+- <a href="/ko/docs/commands/doc/reconcile">`doc reconcile`</a>: canonical path 매핑과 문서 인덱스를 다시 기록합니다.
+
+## 명령군 경계
+
+- `create`, `refresh`, `reconcile`는 쓰기 명령입니다.
+- `validate`는 읽기 전용입니다.
+- 이 명령군은 `docs/**` authority를 관리하며, retrieval 자체는 <a href="/ko/docs/commands/ingest">`ingest`</a>가 담당합니다.
