@@ -73,7 +73,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
   },
   {
     path: "log",
-    description: "snapshot 기반 semantic collaboration history를 요약합니다.",
+    description: "snapshot 기반 semantic history와 artifact-backed collaboration state를 함께 요약합니다.",
     group: "root",
     docSlug: "commands/log",
     relatedCommands: ["status", "ingest", "memory recall"],
@@ -81,7 +81,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["revRange", "maxCount", "showMissing", "filters", "entries[]"],
+    outputSchemaSummary: ["revRange", "maxCount", "showMissing", "filters", "entries[].snapshot", "entries[].semantic"],
     arguments: [{ name: "revRange", type: "string", required: false, description: "선택적인 git revision range" }],
     options: [
       { name: "--max-count", type: "number", description: "최종 출력 entry 개수 제한" },
@@ -99,7 +99,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
   },
   {
     path: "timeline",
-    description: "append-only 협업 이벤트 ledger를 읽어 session/memory/harness/ingest 시간축을 요약합니다.",
+    description: "append-only 협업 이벤트 ledger를 읽어 session/memory/harness/ingest 시간축을 요약합니다. semantic snapshot state는 `log`가 담당합니다.",
     group: "root",
     docSlug: "commands/timeline",
     relatedCommands: ["log", "status", "memory recall"],

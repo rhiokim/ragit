@@ -180,7 +180,7 @@ program
 
 program
   .command("log")
-  .description("snapshot 기반 semantic history")
+  .description("snapshot 기반 semantic history와 artifact-backed collaboration state")
   .argument("[revRange]")
   .option("-n, --max-count <n>", "최종 출력 entry 개수")
   .option("--view <view>", "minimal|default|full", "default")
@@ -212,7 +212,7 @@ program
 
 program
   .command("timeline")
-  .description("append-only collaboration event timeline")
+  .description("append-only collaboration event timeline (`log`와 달리 semantic snapshot state는 요약하지 않음)")
   .option("--goal <goalId>", "goalId 필터")
   .option("--episode <episodeId>", "episodeId 필터")
   .option("--session <sessionId>", "sessionId 필터")

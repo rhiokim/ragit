@@ -1,7 +1,8 @@
 import { CliView } from "./cliContract.js";
 import { listGitCommits } from "./git.js";
+import { deriveLogSemanticOverlay } from "./logSemantic.js";
 import { loadSnapshotManifestIfExists } from "./manifest.js";
-import { DocType, DocumentRecord, KnownDocType, SnapshotManifest } from "./types.js";
+import { DocType, DocumentRecord, KnownDocType, RagitLogSemanticOverlay, SnapshotManifest } from "./types.js";
 
 export interface RagitLogOptions {
   revRange?: string;
@@ -41,6 +42,7 @@ export interface RagitLogEntry {
     types: Record<string, number>;
     changed: RagitLogChangedDoc[];
   };
+  semantic: RagitLogSemanticOverlay;
 }
 
 export interface RagitLogResult {
@@ -89,6 +91,74 @@ export interface ProjectedRagitLogResult {
         chunkCountBefore?: number;
         chunkCountAfter?: number;
         memoryPath?: boolean;
+      }>;
+    };
+    semantic: {
+      available: boolean;
+      headline: string;
+      counts: {
+        beliefs: number;
+        openLoops: number;
+        evidence: number;
+        artifacts: number;
+      };
+      beliefs?: Array<{
+        artifactId: string;
+        kind: string;
+        scope: string;
+        status: string;
+        title: string;
+        summary: string;
+        authority?: string | null;
+        confidence?: number | null;
+        sourceSessionId?: string | null;
+        goalId?: string | null;
+        episodeId?: string | null;
+      }>;
+      openLoops?: Array<{
+        artifactId: string;
+        kind: string;
+        scope: string;
+        status: string;
+        title: string;
+        summary: string;
+        authority?: string | null;
+        confidence?: number | null;
+        sourceSessionId?: string | null;
+        goalId?: string | null;
+        episodeId?: string | null;
+      }>;
+      evidence?: Array<{
+        artifactId: string;
+        artifactKind: string;
+        artifactScope: string;
+        artifactStatus: string;
+        evidenceId: string;
+        excerpt: string;
+        authority?: string | null;
+        confidence?: number | null;
+        sourceSessionId?: string | null;
+        goalId?: string | null;
+        episodeId?: string | null;
+      }>;
+      artifacts?: Array<{
+        artifactId: string;
+        kind: string;
+        scope: string;
+        status: string;
+        tier?: string;
+        bindingStatus?: string;
+        searchPolicy?: string;
+        sourceSessionId?: string | null;
+        goalId?: string | null;
+        episodeId?: string | null;
+        sourceHeadSha?: string | null;
+        path?: string;
+        loaded?: boolean;
+        title?: string | null;
+        summary?: string | null;
+        authority?: string | null;
+        confidence?: number | null;
       }>;
     };
   }>;
@@ -251,11 +321,20 @@ const hasMeaningfulSnapshotContent = (entry: RagitLogEntry): boolean =>
   entry.snapshot.docs > 0 ||
   entry.snapshot.chunks > 0 ||
   entry.snapshot.changed.length > 0 ||
-  Object.keys(entry.snapshot.types).length > 0;
+  Object.keys(entry.snapshot.types).length > 0 ||
+  entry.semantic.counts.artifacts > 0;
+
+const compactText = (value: string | null | undefined, max = 96): string => {
+  if (!value) return "";
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+};
 
 export const runRagitLog = async (cwd: string, options: RagitLogOptions = {}): Promise<RagitLogResult> => {
   const commits = await listGitCommits(cwd, { revRange: options.revRange });
   const manifests = new Map<string, SnapshotManifest | null>();
+  const artifactCache = new Map();
   const loadManifest = async (sha: string): Promise<SnapshotManifest | null> => {
     if (!manifests.has(sha)) {
       manifests.set(sha, await loadSnapshotManifestIfExists(cwd, sha));
@@ -290,6 +369,12 @@ export const runRagitLog = async (cwd: string, options: RagitLogOptions = {}): P
           types: {},
           changed: [],
         },
+        semantic: await deriveLogSemanticOverlay(cwd, null, {
+          docType: options.docType,
+          pathMatcher,
+          hasPathFilter: Boolean(options.path),
+          artifactCache,
+        }),
       });
       continue;
     }
@@ -339,6 +424,12 @@ export const runRagitLog = async (cwd: string, options: RagitLogOptions = {}): P
         types: summarizeTypes(currentDocs),
         changed,
       },
+      semantic: await deriveLogSemanticOverlay(cwd, manifest, {
+        docType: options.docType,
+        pathMatcher,
+        hasPathFilter: Boolean(options.path),
+        artifactCache,
+      }),
     };
     if (!options.docType && !options.path) {
       entries.push(entry);
@@ -368,18 +459,52 @@ const formatTypesLine = (types: Record<string, number>): string => {
   return entries.map(([type, count]) => `${type}=${count}`).join(" ");
 };
 
+const formatSemanticCounts = (semantic: RagitLogSemanticOverlay): string =>
+  semantic.available
+    ? `beliefs=${semantic.counts.beliefs} open=${semantic.counts.openLoops} evidence=${semantic.counts.evidence} artifacts=${semantic.counts.artifacts}`
+    : "unavailable";
+
 const renderChangedLine = (changed: RagitLogChangedDoc, view: CliView): string => {
   const head = `  ${changed.status} ${changed.path} [${changed.docType}]`;
   if (view !== "full") return head;
   return `${head} sections=${changed.sectionCountBefore}->${changed.sectionCountAfter} chunks=${changed.chunkCountBefore}->${changed.chunkCountAfter} memory=${changed.memoryPath}`;
 };
 
+const renderSemanticStatementLine = (
+  item: RagitLogSemanticOverlay["beliefs"][number],
+  view: CliView,
+): string => {
+  const head = `  - ${item.title} [${item.kind} ${item.status}]`;
+  if (view !== "full") {
+    return item.summary ? `${head} ${compactText(item.summary)}` : head;
+  }
+  return `${head} authority=${item.authority ?? "none"} confidence=${item.confidence ?? "none"} session=${item.sourceSessionId ?? "none"} goal=${item.goalId ?? "none"} summary=${compactText(item.summary, 140)}`;
+};
+
+const renderSemanticEvidenceLine = (
+  item: RagitLogSemanticOverlay["evidence"][number],
+  view: CliView,
+): string => {
+  const head = `  - ${item.artifactId}/${item.evidenceId} [${item.artifactKind} ${item.artifactStatus}] ${compactText(item.excerpt)}`;
+  if (view !== "full") return head;
+  return `${head} authority=${item.authority ?? "none"} confidence=${item.confidence ?? "none"} session=${item.sourceSessionId ?? "none"}`;
+};
+
+const renderSemanticArtifactLine = (
+  item: RagitLogSemanticOverlay["artifacts"][number],
+  view: CliView,
+): string => {
+  const head = `  - ${item.artifactId} [${item.kind} ${item.status} ${item.scope}]${item.title ? ` ${item.title}` : ""}`;
+  if (view !== "full") return head;
+  return `${head} loaded=${item.loaded} binding=${item.bindingStatus} authority=${item.authority ?? "none"} confidence=${item.confidence ?? "none"} path=${item.path}`;
+};
+
 const renderEntryText = (entry: RagitLogEntry, view: CliView): string => {
   if (view === "minimal") {
     if (entry.snapshot.status === "missing") {
-      return `${shortSha(entry.commitSha)} missing | ${entry.subject}`;
+      return `${shortSha(entry.commitSha)} missing | semantic ${formatSemanticCounts(entry.semantic)} | ${entry.subject}`;
     }
-    return `${shortSha(entry.commitSha)} indexed docs=${entry.snapshot.docs} chunks=${entry.snapshot.chunks} +${entry.snapshot.delta.added} ~${entry.snapshot.delta.modified} -${entry.snapshot.delta.deleted} | ${formatTypesLine(entry.snapshot.types)} | ${entry.subject}`;
+    return `${shortSha(entry.commitSha)} indexed docs=${entry.snapshot.docs} chunks=${entry.snapshot.chunks} +${entry.snapshot.delta.added} ~${entry.snapshot.delta.modified} -${entry.snapshot.delta.deleted} | ${formatTypesLine(entry.snapshot.types)} | semantic ${formatSemanticCounts(entry.semantic)} | ${entry.subject}`;
   }
 
   const lines = [
@@ -392,6 +517,7 @@ const renderEntryText = (entry: RagitLogEntry, view: CliView): string => {
     lines.push("");
     lines.push("Snapshot: missing");
     lines.push("Knowledge: no indexed snapshot for this commit");
+    lines.push(`Semantic: ${entry.semantic.headline}`);
     return lines.join("\n");
   }
 
@@ -400,6 +526,32 @@ const renderEntryText = (entry: RagitLogEntry, view: CliView): string => {
   lines.push(`Based on: ${entry.snapshot.previousSnapshotSha ?? "none"}`);
   lines.push(`Knowledge: docs=${entry.snapshot.docs} chunks=${entry.snapshot.chunks}`);
   lines.push(`Semantic delta: +${entry.snapshot.delta.added} modified=${entry.snapshot.delta.modified} deleted=${entry.snapshot.delta.deleted}`);
+  lines.push(`Semantic: ${entry.semantic.headline}`);
+  lines.push(`Semantic counts: ${formatSemanticCounts(entry.semantic)}`);
+  lines.push("Beliefs:");
+  if (entry.semantic.beliefs.length === 0) {
+    lines.push("  none");
+  } else {
+    lines.push(...entry.semantic.beliefs.map((item) => renderSemanticStatementLine(item, view)));
+  }
+  lines.push("Open loops:");
+  if (entry.semantic.openLoops.length === 0) {
+    lines.push("  none");
+  } else {
+    lines.push(...entry.semantic.openLoops.map((item) => renderSemanticStatementLine(item, view)));
+  }
+  lines.push("Evidence:");
+  if (entry.semantic.evidence.length === 0) {
+    lines.push("  none");
+  } else {
+    lines.push(...entry.semantic.evidence.map((item) => renderSemanticEvidenceLine(item, view)));
+  }
+  lines.push("Artifacts:");
+  if (entry.semantic.artifacts.length === 0) {
+    lines.push("  none");
+  } else {
+    lines.push(...entry.semantic.artifacts.map((item) => renderSemanticArtifactLine(item, view)));
+  }
   lines.push("Changed:");
   if (entry.snapshot.changed.length === 0) {
     lines.push("  none");
@@ -432,6 +584,97 @@ export const formatRagitLogText = (result: RagitLogResult, view: CliView): strin
     return [...header, "", "- no matching entries"].join("\n");
   }
   return [...header, "", ...result.entries.map((entry) => renderEntryText(entry, view))].join("\n\n");
+};
+
+const projectSemanticOverlay = (semantic: RagitLogSemanticOverlay, view: CliView) => {
+  const base = {
+    available: semantic.available,
+    headline: semantic.headline,
+    counts: semantic.counts,
+  };
+  if (view === "minimal") {
+    return base;
+  }
+  return {
+    ...base,
+    beliefs: semantic.beliefs.map((item) => ({
+      artifactId: item.artifactId,
+      kind: item.kind,
+      scope: item.scope,
+      status: item.status,
+      title: item.title,
+      summary: item.summary,
+      ...(view === "full"
+        ? {
+            authority: item.authority,
+            confidence: item.confidence,
+            sourceSessionId: item.sourceSessionId,
+            goalId: item.goalId,
+            episodeId: item.episodeId,
+          }
+        : {}),
+    })),
+    openLoops: semantic.openLoops.map((item) => ({
+      artifactId: item.artifactId,
+      kind: item.kind,
+      scope: item.scope,
+      status: item.status,
+      title: item.title,
+      summary: item.summary,
+      ...(view === "full"
+        ? {
+            authority: item.authority,
+            confidence: item.confidence,
+            sourceSessionId: item.sourceSessionId,
+            goalId: item.goalId,
+            episodeId: item.episodeId,
+          }
+        : {}),
+    })),
+    evidence: semantic.evidence.map((item) => ({
+      artifactId: item.artifactId,
+      artifactKind: item.artifactKind,
+      artifactScope: item.artifactScope,
+      artifactStatus: item.artifactStatus,
+      evidenceId: item.evidenceId,
+      excerpt: item.excerpt,
+      ...(view === "full"
+        ? {
+            authority: item.authority,
+            confidence: item.confidence,
+            sourceSessionId: item.sourceSessionId,
+            goalId: item.goalId,
+            episodeId: item.episodeId,
+          }
+        : {}),
+    })),
+    artifacts: semantic.artifacts.map((item) => ({
+      artifactId: item.artifactId,
+      kind: item.kind,
+      scope: item.scope,
+      status: item.status,
+      ...(view === "full"
+        ? {
+            tier: item.tier,
+            bindingStatus: item.bindingStatus,
+            searchPolicy: item.searchPolicy,
+            sourceSessionId: item.sourceSessionId,
+            goalId: item.goalId,
+            episodeId: item.episodeId,
+            sourceHeadSha: item.sourceHeadSha,
+            path: item.path,
+            loaded: item.loaded,
+            title: item.title,
+            summary: item.summary,
+            authority: item.authority,
+            confidence: item.confidence,
+          }
+        : {
+            loaded: item.loaded,
+            title: item.title,
+          }),
+    })),
+  };
 };
 
 export const projectRagitLogResult = (result: RagitLogResult, view: CliView): ProjectedRagitLogResult => ({
@@ -468,8 +711,9 @@ export const projectRagitLogResult = (result: RagitLogResult, view: CliView): Pr
                     chunkCountAfter: changed.chunkCountAfter,
                     memoryPath: changed.memoryPath,
                   }
-                : {}),
+              : {}),
             })),
     },
+    semantic: projectSemanticOverlay(entry.semantic, view),
   })),
 });
