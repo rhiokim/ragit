@@ -14,6 +14,7 @@ export interface RagitPaths {
   logDir: string;
   transcriptDir: string;
   eventDir: string;
+  harnessRunsDir: string;
   artifactsDir: string;
   sessionArtifactsDir: string;
   harnessArtifactsDir: string;
@@ -38,6 +39,7 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
   logDir: path.join(cwd, ".ragit", "log"),
   transcriptDir: path.join(cwd, ".ragit", "log", "transcripts"),
   eventDir: path.join(cwd, ".ragit", "log", "events"),
+  harnessRunsDir: path.join(cwd, ".ragit", "log", "harness-runs"),
   artifactsDir: path.join(cwd, ".ragit", "artifacts"),
   sessionArtifactsDir: path.join(cwd, ".ragit", "artifacts", "session"),
   harnessArtifactsDir: path.join(cwd, ".ragit", "artifacts", "harness"),
@@ -60,6 +62,7 @@ export const ensureRagitDirectories = async (cwd: string): Promise<RagitPaths> =
   await mkdir(paths.logDir, { recursive: true });
   await mkdir(paths.transcriptDir, { recursive: true });
   await mkdir(paths.eventDir, { recursive: true });
+  await mkdir(paths.harnessRunsDir, { recursive: true });
   await mkdir(paths.artifactsDir, { recursive: true });
   await mkdir(paths.sessionArtifactsDir, { recursive: true });
   await mkdir(paths.harnessArtifactsDir, { recursive: true });

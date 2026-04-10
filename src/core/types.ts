@@ -31,8 +31,114 @@ export type RagitEventType =
   | "memory.wrap"
   | "memory.promote"
   | "harness.capture"
+  | "harness.run"
   | "harness.promote"
   | "ingest.completed";
+
+export interface HarnessExpectedRules {
+  exitCode?: number;
+  mustInclude?: string[];
+  mustNotInclude?: string[];
+  stderrMustInclude?: string[];
+  stderrMustNotInclude?: string[];
+  jsonSubset?: Record<string, unknown>;
+}
+
+export interface HarnessRunExecutorInput {
+  kind: "command";
+  argv: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutMs?: number;
+}
+
+export interface HarnessCommandExecutor {
+  kind: "command";
+  argv: string[];
+  cwd: string;
+  env: Record<string, string>;
+  timeoutMs: number;
+}
+
+export interface HarnessRunInput {
+  suiteRef: string;
+  executor: HarnessRunExecutorInput;
+  cases?: string[];
+  concurrency?: number;
+}
+
+export interface HarnessCheckResult {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface HarnessCaseCheckResult extends HarnessCheckResult {
+  sourceArtifactId: string | null;
+  sourceKind: HarnessArtifactKind | "case";
+}
+
+export type HarnessCaseStatus = "passed" | "failed" | "errored" | "skipped";
+
+export interface HarnessCaseResult {
+  caseId: string;
+  title: string;
+  status: HarnessCaseStatus;
+  exitCode: number | null;
+  durationMs: number;
+  timedOut: boolean;
+  stdoutExcerpt: string | null;
+  stderrExcerpt: string | null;
+  stdoutHash: string | null;
+  stderrHash: string | null;
+  structuredOutput?: unknown;
+  checkResults: HarnessCaseCheckResult[];
+  failureArtifactIds: string[];
+}
+
+export interface HarnessRunSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  errored: number;
+  skipped: number;
+}
+
+export interface HarnessRunPreflight {
+  hasFailure: boolean;
+  checks: HarnessCheckResult[];
+}
+
+export interface HarnessRunResult {
+  runId: string;
+  suiteId: string;
+  runPath: string | null;
+  preflight: HarnessRunPreflight;
+  dryRun: boolean;
+  hasFailure: boolean;
+  summary: HarnessRunSummary;
+  caseResults: HarnessCaseResult[];
+  warnings: string[];
+}
+
+export interface HarnessRunRecord {
+  version: 1;
+  runId: string;
+  suiteId: string;
+  goalId: string | null;
+  episodeId: string | null;
+  sourceSessionId: string | null;
+  sourceHeadSha: string | null;
+  executor: HarnessCommandExecutor;
+  selectedCaseIds: string[];
+  summary: HarnessRunSummary;
+  caseResults: HarnessCaseResult[];
+  startedAt: string;
+  finishedAt: string;
+  dryRun: boolean;
+  warnings: string[];
+  provenance: ArtifactEventProvenance;
+}
 
 export const isKnownDocType = (value: string): value is KnownDocType =>
   KNOWN_DOC_TYPES.includes(value as KnownDocType);
@@ -214,6 +320,8 @@ export interface ArtifactEventProvenance {
   contentHash: string;
 }
 
+export type RagitEventMetadata = Record<string, unknown>;
+
 export interface BaseArtifactRecord {
   artifactId: string;
   artifactScope: ArtifactScope;
@@ -259,6 +367,7 @@ export interface RagitEventRecord {
   relatedPaths: string[];
   openLoops: string[];
   nextActions: string[];
+  metadata?: RagitEventMetadata;
   provenance: ArtifactEventProvenance;
 }
 

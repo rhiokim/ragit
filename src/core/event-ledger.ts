@@ -4,7 +4,7 @@ import path from "node:path";
 import { CliView } from "./cliContract.js";
 import { toRepoPath } from "./identity.js";
 import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
-import { ArtifactEventProvenance, RagitEventRecord, RagitEventType, TimelineKind } from "./types.js";
+import { ArtifactEventProvenance, RagitEventMetadata, RagitEventRecord, RagitEventType, TimelineKind } from "./types.js";
 
 export interface AppendLedgerEventInput {
   eventType: RagitEventType;
@@ -18,6 +18,7 @@ export interface AppendLedgerEventInput {
   relatedPaths?: string[];
   openLoops?: string[];
   nextActions?: string[];
+  metadata?: RagitEventMetadata;
   provenance: ArtifactEventProvenance;
 }
 
@@ -75,8 +76,14 @@ const isEventType = (value: string): value is RagitEventType =>
   value === "memory.wrap" ||
   value === "memory.promote" ||
   value === "harness.capture" ||
+  value === "harness.run" ||
   value === "harness.promote" ||
   value === "ingest.completed";
+
+const normalizeMetadata = (value: unknown): RagitEventMetadata | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>));
+};
 
 export const timelineKindFromEventType = (eventType: RagitEventType): TimelineKind => {
   const [root] = eventType.split(".");
@@ -173,6 +180,7 @@ const normalizeEventRecord = (value: unknown): RagitEventRecord | null => {
     relatedPaths: uniqueStrings(Array.isArray(raw.relatedPaths) ? raw.relatedPaths.filter((item): item is string => typeof item === "string") : []),
     openLoops: uniqueStrings(Array.isArray(raw.openLoops) ? raw.openLoops.filter((item): item is string => typeof item === "string") : []),
     nextActions: uniqueStrings(Array.isArray(raw.nextActions) ? raw.nextActions.filter((item): item is string => typeof item === "string") : []),
+    metadata: normalizeMetadata(raw.metadata),
     provenance,
   };
 };
@@ -189,6 +197,7 @@ const createEventId = (payload: Omit<RagitEventRecord, "eventId" | "version">): 
     payload.relatedPaths.join(","),
     payload.openLoops.join(","),
     payload.nextActions.join(","),
+    JSON.stringify(payload.metadata ?? null),
     payload.provenance.contentHash,
   ).slice(0, 16)}`;
 
@@ -220,6 +229,7 @@ export const appendLedgerEvent = async (
     relatedPaths: uniqueStrings(input.relatedPaths),
     openLoops: uniqueStrings(input.openLoops),
     nextActions: uniqueStrings(input.nextActions),
+    metadata: normalizeMetadata(input.metadata),
     provenance: {
       ...input.provenance,
       inputRefs: uniqueStrings(input.provenance.inputRefs),
@@ -361,6 +371,21 @@ export const formatTimelineText = (result: TimelineResult, view: CliView = "defa
     if (view === "full") {
       lines.push(`    head: ${event.sourceHeadSha ?? "none"}`);
       lines.push(`    provenance: ${event.provenance.operation} by ${event.provenance.producer}@${event.provenance.producerVersion}`);
+    }
+    if (event.eventType === "harness.run" && event.metadata) {
+      const runId = typeof event.metadata.runId === "string" ? event.metadata.runId : null;
+      const suiteId = typeof event.metadata.suiteId === "string" ? event.metadata.suiteId : null;
+      const executor = typeof event.metadata.executorKind === "string" ? event.metadata.executorKind : null;
+      const counts = event.metadata.counts;
+      if (runId) lines.push(`    run_id: ${runId}`);
+      if (suiteId) lines.push(`    suite_id: ${suiteId}`);
+      if (executor) lines.push(`    executor: ${executor}`);
+      if (counts && typeof counts === "object" && !Array.isArray(counts)) {
+        const record = counts as Record<string, unknown>;
+        lines.push(
+          `    counts: total=${record.total ?? 0}, passed=${record.passed ?? 0}, failed=${record.failed ?? 0}, errored=${record.errored ?? 0}, skipped=${record.skipped ?? 0}`,
+        );
+      }
     }
     lines.push(...renderStringList("    artifacts:", event.artifactIds));
     lines.push(...renderStringList("    related_paths:", event.relatedPaths));
