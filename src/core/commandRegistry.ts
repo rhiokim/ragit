@@ -17,7 +17,7 @@ export interface CommandOptionSpec {
 export interface CommandDescribeSpec {
   path: string;
   description: string;
-  group: "root" | "config" | "context" | "hooks" | "memory" | "migrate" | "doc" | "session" | "artifact" | "harness";
+  group: "root" | "config" | "context" | "hooks" | "memory" | "migrate" | "doc" | "session" | "artifact" | "harness" | "security";
   docSlug: string;
   relatedCommands: string[];
   stability: "read-only" | "mutating";
@@ -81,7 +81,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["revRange", "maxCount", "showMissing", "filters", "entries[].snapshot", "entries[].semantic"],
+    outputSchemaSummary: ["revRange", "maxCount", "showMissing", "filters", "entries[].snapshot", "entries[].semantic", "redactionSummary"],
     arguments: [{ name: "revRange", type: "string", required: false, description: "선택적인 git revision range" }],
     options: [
       { name: "--max-count", type: "number", description: "최종 출력 entry 개수 제한" },
@@ -107,7 +107,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["filters", "summary", "events[]"],
+    outputSchemaSummary: ["filters", "summary", "events[]", "redactionSummary"],
     arguments: [],
     options: [
       { name: "--goal", type: "string", description: "goalId 필터" },
@@ -185,6 +185,50 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     examples: [
       "ragit repair --scope all --format json",
       "ragit repair --apply --action ingest --action harness-verify --format both",
+    ],
+  },
+  {
+    path: "security audit",
+    description: "control-plane, store, durable docs, provider egress 관점에서 지식 상태 보안 posture를 점검합니다.",
+    group: "security",
+    docSlug: "commands/security/audit",
+    relatedCommands: ["security purge", "doctor", "status", "ingest"],
+    stability: "read-only",
+    mutating: false,
+    supportsDryRun: false,
+    supportsRawJsonInput: false,
+    outputSchemaSummary: ["summary", "providerEgress", "findings[]"],
+    arguments: [],
+    options: [
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+      { name: "--cwd", type: "path", description: "대상 저장소 경로" },
+    ],
+    examples: [
+      "ragit security audit --format json",
+      "ragit security audit --cwd /path/to/repo --format both",
+    ],
+  },
+  {
+    path: "security purge",
+    description: "control-plane/store/cache/quarantine에서 보안 사고 대응용 sanitize rewrite 또는 삭제를 수행합니다.",
+    group: "security",
+    docSlug: "commands/security/purge",
+    relatedCommands: ["security audit", "ingest", "doctor", "status"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: false,
+    outputSchemaSummary: ["mode", "target", "planned[]", "rewritten[]", "deleted[]", "warnings[]"],
+    arguments: [],
+    options: [
+      { name: "--target", type: "enum", description: "정리 범위", enum: ["control-plane", "store", "cache", "quarantine", "all"], defaultValue: "all" },
+      { name: "--dry-run", type: "boolean", description: "쓰기 없이 계획만 계산" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+      { name: "--cwd", type: "path", description: "대상 저장소 경로" },
+    ],
+    examples: [
+      "ragit security purge --target control-plane --dry-run --format json",
+      "ragit security purge --target store --format both",
     ],
   },
   {
@@ -418,7 +462,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["query", "snapshotSha", "hits[]"],
+    outputSchemaSummary: ["query", "snapshotSha", "hits[]", "redactionSummary"],
     arguments: [{ name: "question", type: "string", required: false, description: "검색 질문" }],
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
@@ -457,6 +501,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
       "embedding.store",
       "embedding.ready",
       "embedding.needsMigration",
+      "security",
       "format",
     ],
     arguments: [],
@@ -500,7 +545,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["goal", "snapshotSha", "budget", "usedTokens", "selectedHits", "hits[]"],
+    outputSchemaSummary: ["goal", "snapshotSha", "budget", "usedTokens", "selectedHits", "hits[]", "redactionSummary"],
     arguments: [{ name: "goal", type: "string", required: false, description: "컨텍스트를 만들 목표" }],
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
@@ -613,7 +658,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["suiteId", "goal", "resources[]"],
+    outputSchemaSummary: ["suiteId", "goal", "resources[]", "redactionSummary"],
     arguments: [{ name: "suiteRef", type: "string", required: true, description: "suite artifact id 또는 경로" }],
     options: [
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
@@ -698,7 +743,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["goal", "constraints", "openLoops", "relatedDecisions", "retrievedHits", "nextActions"],
+    outputSchemaSummary: ["goal", "constraints", "openLoops", "relatedDecisions", "retrievedHits", "nextActions", "redactionSummary"],
     arguments: [{ name: "goal", type: "string", required: true, description: "복원할 목표" }],
     options: [
       { name: "--view", type: "enum", description: "출력 축소 수준", enum: ["minimal", "default", "full"], defaultValue: "default" },

@@ -39,7 +39,7 @@ describe("CLI machine contract", () => {
   );
 
   it(
-    "emits JSON envelopes for describe, log, timeline, drift, repair, query, context pack, memory recall, and status",
+    "emits JSON envelopes for describe, log, timeline, drift, repair, security, query, context pack, memory recall, and status",
     async () => {
       const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-contract-"));
       git(temp, ["init"]);
@@ -126,6 +126,17 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeRepairOutput.data.spec.path).toBe("repair");
       expect(describeRepairOutput.data.spec.options.some((option: { name: string }) => option.name === "--apply")).toBe(true);
 
+      const describeSecurityAuditOutput = JSON.parse(runCli(["describe", "security", "audit", "--format", "json"]));
+      expect(describeSecurityAuditOutput.command).toBe("describe");
+      expect(describeSecurityAuditOutput.ok).toBe(true);
+      expect(describeSecurityAuditOutput.data.spec.path).toBe("security audit");
+
+      const describeSecurityPurgeOutput = JSON.parse(runCli(["describe", "security", "purge", "--format", "json"]));
+      expect(describeSecurityPurgeOutput.command).toBe("describe");
+      expect(describeSecurityPurgeOutput.ok).toBe(true);
+      expect(describeSecurityPurgeOutput.data.spec.path).toBe("security purge");
+      expect(describeSecurityPurgeOutput.data.spec.supportsDryRun).toBe(true);
+
       const describeHarnessRunOutput = JSON.parse(runCli(["describe", "harness", "run", "--format", "json"]));
       expect(describeHarnessRunOutput.command).toBe("describe");
       expect(describeHarnessRunOutput.ok).toBe(true);
@@ -193,6 +204,22 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(Array.isArray(repairOutput.data.plannedActions)).toBe(true);
       expect(repairOutput.data.drift).toBeTruthy();
 
+      const securityAuditOutput = JSON.parse(runCli(["security", "audit", "--cwd", temp, "--format", "json"]));
+      expect(securityAuditOutput.command).toBe("security audit");
+      expect(securityAuditOutput.ok).toBe(true);
+      expect(securityAuditOutput.data.summary).toBeTruthy();
+      expect(securityAuditOutput.data.providerEgress).toBeTruthy();
+      expect(Array.isArray(securityAuditOutput.data.findings)).toBe(true);
+
+      const securityPurgeOutput = JSON.parse(
+        runCli(["security", "purge", "--cwd", temp, "--target", "control-plane", "--dry-run", "--format", "json"]),
+      );
+      expect(securityPurgeOutput.command).toBe("security purge");
+      expect(securityPurgeOutput.ok).toBe(true);
+      expect(securityPurgeOutput.data.mode).toBe("dry-run");
+      expect(securityPurgeOutput.data.target).toBe("control-plane");
+      expect(Array.isArray(securityPurgeOutput.data.planned)).toBe(true);
+
       const statusOutput = JSON.parse(runCli(["status", "--cwd", temp, "--format", "json"]));
       expect(statusOutput.command).toBe("status");
       expect(statusOutput.ok).toBe(true);
@@ -200,6 +227,7 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(statusOutput.data.events.eventCount).toBeGreaterThan(0);
       expect(statusOutput.data.embedding.cache).toBeTruthy();
       expect(typeof statusOutput.data.embedding.cache.entryCount).toBe("number");
+      expect(statusOutput.data.security).toBeTruthy();
     },
     90_000,
   );

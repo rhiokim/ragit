@@ -65,6 +65,8 @@ export const runHarnessPackCommand = async (
       "# ragit harness pack",
       `- suite_id: ${result.suiteId}`,
       `- resources: ${result.resources.length}`,
+      `- redaction_applied: ${result.redactionSummary?.applied ?? false}`,
+      `- masked_count: ${result.redactionSummary?.maskedCount ?? 0}`,
     ].join("\n"),
   });
 };

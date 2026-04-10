@@ -11,6 +11,7 @@ import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } 
 import { formatInitSummaryTable, resolveInitRoot, runInit } from "./commands/init.js";
 import { runMemoryPromoteCommand, runMemoryRecallCommand, runMemoryWrapCommand } from "./commands/memory.js";
 import { runSessionMaterializeCommand } from "./commands/session.js";
+import { runSecurityAuditCommand, runSecurityPurgeCommand } from "./commands/security.js";
 import { runTimelineCommand } from "./commands/timeline.js";
 import { buildCliEnvelope, CliFormat, CliView, emitCliOutput, normalizeCliFormat, normalizeCliView } from "./core/cliContract.js";
 import { assertSafeGlobText, readJsonInput } from "./core/cliInput.js";
@@ -22,6 +23,7 @@ import { formatRagitLogText, projectRagitLogResult, runRagitLog } from "./core/l
 import { formatQueryResultText, projectRetrievalHits } from "./core/output.js";
 import { normalizeRepairActionKind } from "./core/repair.js";
 import { searchKnowledge } from "./core/retrieval.js";
+import { mergeRedactionSummaries, sanitizeKnowledgeText } from "./core/security.js";
 import { normalizeKnownDocType } from "./core/types.js";
 import { RAGIT_VERSION } from "./core/version.js";
 
@@ -65,6 +67,13 @@ const formatStatusText = (status: Awaited<ReturnType<typeof runStatus>>): string
     `- embedding_cache_entries: ${status.embedding.cache.entryCount}`,
     `- embedding_ready: ${status.embedding.ready}`,
     `- embedding_needs_migration: ${status.embedding.needsMigration}`,
+    `- security_masking_configured: ${status.security.maskingConfigured}`,
+    `- security_remote_embedding_policy: ${status.security.remoteEmbeddingPolicy}`,
+    `- security_provider_egress_class: ${status.security.providerEgressClass}`,
+    `- security_output_remasking: ${status.security.outputRemasking}`,
+    `- security_quarantine_entries: ${status.security.quarantineEntries}`,
+    `- security_last_audit_at: ${status.security.lastAuditAt ?? "none"}`,
+    `- security_legacy_unsafe_state: ${status.security.legacyUnsafeState}`,
     `- format: ${status.format}`,
   ].join("\n");
 
@@ -322,6 +331,39 @@ program
     );
   });
 
+const security = program.command("security").description("지식 상태 보안 점검/정리");
+security
+  .command("audit")
+  .description("control-plane, store, docs, provider egress 기준 보안 posture 점검")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runSecurityAuditCommand(
+      resolveCwd(options.cwd),
+      normalizeCliFormat(options.format, "json"),
+    );
+  });
+
+security
+  .command("purge")
+  .description("control-plane/store/cache/quarantine 정리")
+  .option("--target <target>", "control-plane|store|cache|quarantine|all", "all")
+  .option("--dry-run", "쓰기 없이 계획만 계산")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const target = String(options.target ?? "all").trim().toLowerCase();
+    if (!["control-plane", "store", "cache", "quarantine", "all"].includes(target)) {
+      throw new Error(`지원하지 않는 security purge target입니다: ${options.target}`);
+    }
+    await runSecurityPurgeCommand(
+      resolveCwd(options.cwd),
+      target as "control-plane" | "store" | "cache" | "quarantine" | "all",
+      normalizeCliFormat(options.format, "json"),
+      Boolean(options.dryRun),
+    );
+  });
+
 program
   .command("describe")
   .description("command contract 설명")
@@ -551,22 +593,25 @@ program
     if (!input.question) {
       throw new Error("query 질문이 필요합니다.");
     }
+    const sanitizedQuestion = sanitizeKnowledgeText(input.question, "query.output", "query");
     const view = normalizeCliView(options.view, "default");
-    const result = await searchKnowledge(cwd, input.question, {
+    const result = await searchKnowledge(cwd, sanitizedQuestion.text, {
       topK: input.topK,
       at: input.at,
       scope: input.scope,
     });
+    const redactionSummary = mergeRedactionSummaries(sanitizedQuestion.summary, result.redactionSummary);
     const envelope = buildCliEnvelope("query", cwd, {
-      query: input.question,
+      query: sanitizedQuestion.text,
       snapshotSha: result.snapshotSha,
       scope: input.scope ?? "durable",
       hits: projectRetrievalHits(result.hits, view),
+      redactionSummary,
     });
     emitCliOutput({
       envelope,
       format: normalizeCliFormat(options.format, "both"),
-      text: formatQueryResultText(input.question, result, view),
+      text: formatQueryResultText(sanitizedQuestion.text, { ...result, redactionSummary }, view),
     });
   });
 
@@ -601,17 +646,22 @@ program
     if (!input.goal) {
       throw new Error("context pack goal이 필요합니다.");
     }
+    const sanitizedGoal = sanitizeKnowledgeText(input.goal, "context.pack", "goal");
     const view = normalizeCliView(options.view, "default");
-    const packed = await packContext(cwd, input.goal, {
+    const packed = await packContext(cwd, sanitizedGoal.text, {
       budget: input.budget,
       at: input.at,
       scope: input.scope,
     });
-    const envelope = buildCliEnvelope("context pack", cwd, projectContextPack(packed, view));
+    const redactionSummary = mergeRedactionSummaries(sanitizedGoal.summary, packed.redactionSummary);
+    const envelope = buildCliEnvelope("context pack", cwd, {
+      ...projectContextPack(packed, view),
+      redactionSummary,
+    });
     emitCliOutput({
       envelope,
       format: normalizeCliFormat(options.format, "both"),
-      text: formatContextPackText(packed, view),
+      text: formatContextPackText({ ...packed, redactionSummary }, view),
     });
   });
 

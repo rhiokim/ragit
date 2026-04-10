@@ -15,6 +15,12 @@ import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
 import {
+  classifyEmbeddingEgress,
+  countQuarantineEntries,
+  readSecurityState,
+  runSecurityAudit,
+} from "../core/security.js";
+import {
   bootstrapCanonicalStore,
   closeCanonicalStore,
   formatZvecPlatformSupport,
@@ -90,6 +96,15 @@ export interface StatusResult {
   };
   manifests: number;
   embedding: StatusEmbeddingState;
+  security: {
+    maskingConfigured: boolean;
+    remoteEmbeddingPolicy: Awaited<ReturnType<typeof loadConfig>>["security"]["remote_embedding_policy"];
+    providerEgressClass: "local" | "remote";
+    outputRemasking: boolean;
+    quarantineEntries: number;
+    lastAuditAt: string | null;
+    legacyUnsafeState: boolean;
+  };
   format: Awaited<ReturnType<typeof loadConfig>>["output"]["format"];
 }
 
@@ -101,6 +116,8 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   const storeMeta = await readCanonicalStoreMeta(cwd);
   const cache = await readEmbeddingCacheSummary(cwd, configuredProfile);
   const needsMigration = embeddingNeedsMigration(configuredProfile, storeMeta);
+  const securityState = await readSecurityState(cwd);
+  const quarantineEntries = await countQuarantineEntries(cwd);
   const manifests = (await readdir(paths.manifestDir)).filter((name) => name.endsWith(".json"));
   const branch = await currentBranch(cwd);
   const sha = await getHeadSha(cwd);
@@ -173,6 +190,15 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
       cache,
       ready: hasCredentialForProfile(configuredProfile) && !needsMigration,
       needsMigration,
+    },
+    security: {
+      maskingConfigured: config.security.secret_masking,
+      remoteEmbeddingPolicy: config.security.remote_embedding_policy,
+      providerEgressClass: classifyEmbeddingEgress(configuredProfile),
+      outputRemasking: true,
+      quarantineEntries,
+      lastAuditAt: securityState?.lastAuditAt ?? null,
+      legacyUnsafeState: securityState?.legacyUnsafeState ?? false,
     },
     format: config.output.format,
   };
@@ -347,6 +373,28 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
       detail: migrationNeeded ? "run ragit migrate embeddings" : "none",
     });
     if (profile) {
+      const egressClass = classifyEmbeddingEgress(profile);
+      checks.push({
+        name: "security.masking-config",
+        ok: config.security.secret_masking,
+        detail: `secret_masking=${config.security.secret_masking}`,
+      });
+      checks.push({
+        name: "security.output-remasking",
+        ok: true,
+        detail: "enabled",
+      });
+      checks.push({
+        name: "security.remote-egress",
+        ok: !(config.security.remote_embedding_policy === "local-only" && egressClass === "remote"),
+        detail: `policy=${config.security.remote_embedding_policy}, class=${egressClass}`,
+      });
+      const quarantineEntries = await countQuarantineEntries(cwd);
+      checks.push({
+        name: "security.quarantine-dir",
+        ok: true,
+        detail: `entries=${quarantineEntries}`,
+      });
       const cacheHealth = await checkEmbeddingCacheHealth(cwd, profile);
       checks.push({
         name: "embedding.cache-dir",
@@ -425,6 +473,22 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       checks.push({ name: "ragit.legacy-json-store", ok: false, detail: message });
+    }
+    try {
+      const securityAudit = await runSecurityAudit(cwd);
+      checks.push({
+        name: "security.legacy-control-plane",
+        ok: securityAudit.summary.legacyControlPlaneFiles === 0,
+        detail: `flagged=${securityAudit.summary.legacyControlPlaneFiles}`,
+      });
+      checks.push({
+        name: "security.legacy-store",
+        ok: securityAudit.summary.legacyStoreFindings === 0,
+        detail: `flagged=${securityAudit.summary.legacyStoreFindings}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      checks.push({ name: "security.audit", ok: false, detail: message });
     }
   }
   const hasFailure = checks.some((check) => !check.ok);
