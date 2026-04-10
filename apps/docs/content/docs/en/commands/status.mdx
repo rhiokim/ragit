@@ -6,7 +6,7 @@ command_path: status
 
 ## What It Does
 
-`status` prints the current repository state that matters to RAGit: branch, HEAD, backend, manifest count, knowledge readiness, event-ledger activity, the split between the configured embedding profile and the persisted store contract, and the active embedding-cache namespace summary.
+`status` prints the current repository state that matters to RAGit: branch, HEAD, backend, manifest count, knowledge readiness, event-ledger activity, the split between the configured embedding profile and the persisted store contract, the active embedding-cache namespace summary, and the current security posture summary.
 
 ## When To Use / When Not To Use
 
@@ -35,8 +35,9 @@ pnpm ragit status [--format text|json|both] [--cwd <path>]
 ## Input And Output Contract
 
 - There is no positional input and no JSON payload input.
-- JSON output includes `branch`, `head`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `events`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.cache`, `embedding.ready`, `embedding.needsMigration`, and `format`.
+- JSON output includes `branch`, `head`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `events`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.cache`, `embedding.ready`, `embedding.needsMigration`, `security`, and `format`.
 - `embedding.cache` reports `enabled`, `dir`, `namespaceId`, `entryCount`, `batchPolicy`, `retryPolicy`, `writable`, and `namespaceReadable`.
+- `security` reports `maskingConfigured`, `remoteEmbeddingPolicy`, `providerEgressClass`, `outputRemasking`, `quarantineEntries`, `lastAuditAt`, and `legacyUnsafeState`.
 - Agents should usually call `--format json`.
 
 ## Examples

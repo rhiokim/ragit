@@ -24,7 +24,7 @@ command_path: context pack
 ## 기본 구문
 
 ```bash
-pnpm ragit context pack [goal] [--input <path|->] [--budget <tokens>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+pnpm ragit context pack [goal] [--input <path|->] [--budget <tokens>] [--scope durable|session|harness|evidence|all] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
 ```
 
 ## 인자와 옵션
@@ -32,6 +32,7 @@ pnpm ragit context pack [goal] [--input <path|->] [--budget <tokens>] [--at <sha
 - `goal`: 컨텍스트 선택을 이끌 목표입니다.
 - `--input <path|->`: `goal`, 선택적 `budget`, 선택적 `at`를 담은 JSON payload를 전달합니다.
 - `--budget <tokens>`: 선택된 패킷의 토큰 예산입니다.
+- `--scope durable|session|harness|evidence|all`: durable snapshot만 사용할지, explicit artifact scope까지 합칠지 고릅니다.
 - `--at <sha>`: 현재 HEAD 대신 특정 snapshot을 사용합니다.
 - `--view minimal|default|full`: 패킷 투영의 상세 수준을 조절합니다.
 - `--format text|json|both`: 출력 형식을 선택합니다.
@@ -47,8 +48,9 @@ pnpm ragit context pack [goal] [--input <path|->] [--budget <tokens>] [--at <sha
 }
 ```
 
-- JSON 출력에는 `goal`, `snapshotSha`, `budget`, `usedTokens`, `selectedHits`, `hits`가 포함됩니다.
+- JSON 출력에는 `goal`, `snapshotSha`, `budget`, `usedTokens`, `selectedHits`, `hits`, `redactionSummary`가 포함됩니다.
 - hit selection은 별도의 검색 경로가 아니라, 동일한 retrieval 결과를 budget에 맞게 잘라낸 것입니다.
+- 출력은 downstream agent prompt에 들어가기 전에 다시 마스킹됩니다.
 - `--view minimal`은 에이전트 context window에 가장 안전한 기본값입니다.
 - `--view default`는 읽기성과 상세의 균형을 맞춥니다.
 - `--view full`은 downstream reasoning에 richer text가 꼭 필요할 때만 쓰는 편이 좋습니다.
@@ -71,7 +73,9 @@ pnpm ragit context pack --input context-pack.json --view minimal --format json
 
 - `--input`과 positional `goal`, `--budget`, `--at`를 함께 쓰면 안 됩니다.
 - `goal`이 비어 있으면 거부됩니다.
-- 이 명령은 여전히 snapshot-bound입니다. working memory나 recall 전용 artifact overlay까지 합친 복원이 필요하면 <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+- 이 명령은 working memory를 포함하지 않습니다.
+- `--scope durable`에서는 snapshot-bound 상태를 유지합니다.
+- `--scope session|harness|evidence|all`에서는 explicit artifact/evidence overlay를 함께 사용할 수 있지만, 결과 패킷은 출력 전에 sanitize 됩니다.
 
 ## 관련 명령
 

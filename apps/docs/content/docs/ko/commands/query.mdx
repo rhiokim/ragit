@@ -24,7 +24,7 @@ command_path: query
 ## 기본 구문
 
 ```bash
-pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--scope durable|session|harness|evidence|all] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
 ```
 
 ## 인자와 옵션
@@ -32,6 +32,7 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--vie
 - `question`: 직접 검색할 질문입니다.
 - `--input <path|->`: `question`, `topK`, `at`를 담은 JSON payload를 전달합니다.
 - `--top-k <n>`: 반환 hit 개수를 조절합니다.
+- `--scope durable|session|harness|evidence|all`: durable snapshot만 볼지, explicit artifact scope를 볼지, 둘을 합칠지 고릅니다.
 - `--at <sha>`: 특정 snapshot SHA 또는 prefix를 사용합니다.
 - `--view minimal|default|full`: hit 투영의 상세 수준을 선택합니다.
 - `--format text|json|both`: 출력 형식을 선택합니다.
@@ -50,8 +51,9 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--vie
 }
 ```
 
-- JSON 출력은 `query`, `snapshotSha`, `hits`를 반환합니다.
+- JSON 출력은 `query`, `snapshotSha`, `hits`, `redactionSummary`를 반환합니다.
 - hit에는 필요할 경우 `scope`, `originType`, `artifactId`, `artifactKind`, `authority`, `confidence` 같은 artifact-aware metadata가 함께 들어올 수 있습니다.
+- text/JSON 출력은 항상 다시 마스킹된 결과를 사용합니다.
 - `--view minimal`은 가장 작은 hit 형태를 반환합니다.
 - `--view default`는 사람이 읽기 좋은 기본 투영입니다.
 - `--view full`은 richer text를 유지하므로 context window 비용이 가장 큽니다.
@@ -74,7 +76,9 @@ pnpm ragit query --input query.json --view minimal --format json
 
 - `--input`과 positional `question`, `--top-k`, `--at`를 함께 쓰면 안 됩니다.
 - `question`이 비어 있으면 실패합니다.
-- `query`는 snapshot에 인덱싱된 콘텐츠만 검색합니다. working memory나 recall 전용 artifact overlay는 읽지 않습니다.
+- `query`는 working memory를 읽지 않습니다.
+- `--scope durable`에서는 snapshot에 인덱싱된 콘텐츠만 검색합니다.
+- `--scope session|harness|evidence|all`에서는 explicit artifact/evidence overlay를 함께 사용할 수 있지만, 결과는 여전히 sanitize된 상태로만 반환합니다.
 
 ## 관련 명령
 

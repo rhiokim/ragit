@@ -44,8 +44,9 @@ pnpm ragit log [revRange] [--max-count <n>] [--view minimal|default|full] [--typ
 
 - There is no JSON payload input for `log`.
 - Default output is semantic history text, not raw commit history text.
-- JSON output includes `revRange`, `maxCount`, `showMissing`, `filters`, and `entries`.
+- JSON output includes `revRange`, `maxCount`, `showMissing`, `filters`, `entries`, and `redactionSummary`.
 - Each indexed entry also carries a sibling `semantic` block alongside `snapshot`.
+- Semantic evidence and summaries are re-masked before projection.
 
 ```json
 {

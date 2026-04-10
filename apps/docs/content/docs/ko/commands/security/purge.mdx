@@ -1,0 +1,56 @@
+---
+title: security purge
+description: 안전하지 않은 로컬 지식 상태 표면을 sanitize 하거나 제거합니다
+command_path: security purge
+---
+
+## 무엇을 하는 명령인가
+
+`security purge`는 `security audit`의 remediation 짝입니다. control-plane 파일, searchable store, embedding cache, quarantine ledger 같은 로컬 RAGit 소유 상태를 계획하거나 실제로 정리합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- `security audit`가 unsafe control-plane 또는 store 상태를 찾았을 때
+- 로컬 secret 유출 이후 cached/indexed 데이터를 제거해야 할 때
+- 파괴적 정리 전에 dry-run 계획을 보고 싶을 때
+
+### 언제 쓰지 않는가
+
+- finding만 보고 싶을 때. <a href="/ko/docs/commands/security/audit">`security audit`</a>를 사용하십시오.
+- secret가 repo-tracked 문서에 있을 때. purge는 문서를 자동 수정하지 않으므로, 문서를 먼저 고쳐야 합니다.
+
+## 기본 구문
+
+```bash
+pnpm ragit security purge [--target control-plane|store|cache|quarantine|all] [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+## 입력/출력 계약
+
+- positional 입력과 JSON payload 입력은 없습니다.
+- JSON 출력은 `mode`, `target`, `planned`, `rewritten`, `deleted`, `warnings`를 포함합니다.
+- `control-plane`은 `.ragit/log/transcripts`, `.ragit/log/events`, `.ragit/log/harness-runs`, `.ragit/artifacts`, `.ragit/memory`를 sanitize rewrite 합니다.
+- `store`는 `.ragit/store`, `.ragit/store.next`, `.ragit/store.prev`, manifest 파일을 제거해 sanitized source로 재구축할 수 있게 합니다.
+- `cache`는 embedding cache만 제거합니다.
+- `quarantine`는 quarantine ledger만 비웁니다.
+
+## 예시
+
+```bash
+pnpm ragit security purge --target control-plane --dry-run --format json
+pnpm ragit security purge --target store --format both
+```
+
+## 실패/주의 사항
+
+- `--dry-run`은 파일을 바꾸지 않고 정리 계획만 계산합니다.
+- `store` purge는 searchable state와 manifest를 제거하므로, 이후 <a href="/ko/docs/commands/ingest">`ingest`</a>를 다시 실행해야 합니다.
+- repo-tracked durable docs는 의도적으로 범위 밖입니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/security/audit">`security audit`</a>
+- <a href="/ko/docs/commands/ingest">`ingest`</a>
+- <a href="/ko/docs/commands/status">`status`</a>

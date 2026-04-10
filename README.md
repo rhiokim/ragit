@@ -98,6 +98,15 @@ sequenceDiagram
 - Turn structured docs into agent-ready inputs
 - Automate indexing without adding workflow friction
 
+## Security Model
+
+RAGit protects `knowledge state`, not just files.
+
+- Write paths sanitize before persistence, so transcripts, memory state, artifacts, harness runs, and durable docs do not keep raw-looking secrets by default.
+- Retrieval-facing commands re-mask again before printing or JSON projection, so `query`, `context pack`, `memory recall`, `log`, `timeline`, and `harness pack` do not echo raw secret material back to the user.
+- Remote embedding egress is policy-controlled. `security.remote_embedding_policy=allow-sanitized` allows only sanitized query text and durable-doc ingest text to leave the repository; `local-only` blocks remote egress entirely.
+- `ragit security audit` inspects control-plane/store/docs/provider posture, and `ragit security purge` sanitizes or clears local state without rewriting repo-tracked documents.
+
 ## MVP Document Types (v0.1)
 
 - `Architecture Decision (ADR)`: durable decision record with rationale and consequences
@@ -188,7 +197,7 @@ Deployment:
 
 - GitHub Actions deploys automatically to `gh-pages` when `main` is pushed.
 - For manual redeploy, run `docs-gh-pages` via `workflow_dispatch`.
-- In Repository Settings > Pages, set Source to `gh-pages` / root(`/`).
+- In Repository Settings > Pages, set Source to `GitHub Actions`.
 
 ## Package Publishing
 
@@ -215,6 +224,8 @@ pnpm ragit init --yes --git-init
 pnpm ragit log --max-count 5 --view default --format both
 pnpm ragit drift --scope all --view default --format both
 pnpm ragit repair --scope all --format json
+pnpm ragit security audit --format json
+pnpm ragit security purge --target control-plane --dry-run --format json
 pnpm ragit config set retrieval.top_k 8
 pnpm ragit hooks install --dry-run --format json
 pnpm ragit ingest --all --dry-run --format json

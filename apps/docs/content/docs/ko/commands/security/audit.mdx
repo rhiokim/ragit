@@ -1,0 +1,53 @@
+---
+title: security audit
+description: 지식 상태 보안 finding과 provider egress posture를 점검합니다
+command_path: security audit
+---
+
+## 무엇을 하는 명령인가
+
+`security audit`는 RAGit이 소유하는 보안 표면을 스캔하고, 상태를 변경하지 않은 채 finding만 보고합니다. control-plane 파일, 현재 searchable store, repo-tracked durable docs, quarantine 규모, 그리고 활성 embedding provider가 현재 remote egress 정책과 충돌하는지를 함께 검사합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- `.ragit/**` 안에 raw-looking secret가 남아 있는지 알고 싶을 때
+- 현재 embedding provider가 local인지 remote인지 확인하고 싶을 때
+- 릴리스 전 또는 자동화 연결 전 machine-readable posture 점검이 필요할 때
+
+### 언제 쓰지 않는가
+
+- 이미 문제 surface를 알고 있고 로컬 상태를 sanitize rewrite 또는 삭제하려고 할 때. <a href="/ko/docs/commands/security/purge">`security purge`</a>를 사용하십시오.
+- 더 넓은 런타임 진단이 필요할 때. <a href="/ko/docs/commands/doctor">`doctor`</a>를 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit security audit [--format text|json|both] [--cwd <path>]
+```
+
+## 입력/출력 계약
+
+- positional 입력과 JSON payload 입력은 없습니다.
+- JSON 출력은 `summary`, `providerEgress`, `findings`를 포함합니다.
+- `summary`는 `critical`, `warn`, `info`, `quarantineEntries`, `legacyControlPlaneFiles`, `legacyStoreFindings`, `repoDocsFlagged`를 집계합니다.
+- `providerEgress`는 effective provider, `local|remote` 분류, 현재 `security.remote_embedding_policy`, remote artifact embedding 허용 여부를 보고합니다.
+- finding은 repo-tracked 문서를 자동 수정하지 않고 다음 행동만 제안합니다.
+
+## 예시
+
+```bash
+pnpm ragit security audit --format json
+```
+
+## 실패/주의 사항
+
+- `security audit`는 `lastAuditAt` 같은 내부 감사 상태를 갱신할 수 있지만, 지식 내용을 rewrite 하지는 않습니다.
+- repo-doc finding은 advisory입니다. 문서를 직접 수정한 뒤 <a href="/ko/docs/commands/ingest">`ingest`</a>를 다시 실행하십시오.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/security/purge">`security purge`</a>
+- <a href="/ko/docs/commands/status">`status`</a>
+- <a href="/ko/docs/commands/doctor">`doctor`</a>

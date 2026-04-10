@@ -1,0 +1,24 @@
+---
+title: security
+description: Audit and purge the knowledge-state security surface
+---
+
+## What This Group Covers
+
+The `security` command group is the operational layer for protecting RAGit-owned knowledge state.
+
+- Use <a href="/en/docs/commands/security/audit">`security audit`</a> to inspect control-plane state, store state, repo-tracked docs, and provider egress posture.
+- Use <a href="/en/docs/commands/security/purge">`security purge`</a> to sanitize or remove unsafe local state without rewriting repo-tracked documents.
+
+## Operating Model
+
+- Write paths sanitize before persistence.
+- Retrieval and packet outputs re-mask before printing.
+- Remote embedding egress is policy-controlled through `security.remote_embedding_policy`.
+- Repo-tracked documents are never auto-rewritten by purge. Fix the document first, then rerun <a href="/en/docs/commands/ingest">`ingest`</a>.
+
+## Related Commands
+
+- <a href="/en/docs/commands/status">`status`</a>
+- <a href="/en/docs/commands/doctor">`doctor`</a>
+- <a href="/en/docs/commands/ingest">`ingest`</a>

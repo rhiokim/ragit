@@ -24,7 +24,7 @@ command_path: query
 ## Syntax
 
 ```bash
-pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
+pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--scope durable|session|harness|evidence|all] [--at <sha>] [--view minimal|default|full] [--format text|json|both]
 ```
 
 ## Arguments And Options
@@ -32,6 +32,7 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--vie
 - `question`: A direct search question.
 - `--input <path|->`: Provide a JSON payload with `question`, `topK`, and optional `at`.
 - `--top-k <n>`: Control how many hits to return.
+- `--scope durable|session|harness|evidence|all`: Choose whether to search the durable snapshot only, explicit artifact scopes, or both.
 - `--at <sha>`: Query a specific snapshot SHA or prefix.
 - `--view minimal|default|full`: Choose how much hit detail to project.
 - `--format text|json|both`: Choose the output form.
@@ -51,7 +52,9 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] [--at <sha>] [--vie
 ```
 
 - JSON output returns `query`, `snapshotSha`, and `hits`.
+- JSON output also returns `redactionSummary`.
 - Each hit can carry artifact-aware metadata such as `scope`, `originType`, `artifactId`, `artifactKind`, `authority`, and `confidence` when the indexed chunk originated from reviewed artifact material inside the snapshot.
+- Output is always re-masked before printing or JSON projection.
 - `--view minimal` returns the smallest useful hit shape.
 - `--view default` returns the standard readable hit projection.
 - `--view full` keeps the richest text projection and is the most expensive for context windows.
@@ -74,7 +77,9 @@ pnpm ragit query --input query.json --view minimal --format json
 
 - Do not mix `--input` with positional `question`, `--top-k`, or `--at`.
 - If `question` is empty, the command fails.
-- `query` only sees indexed content that belongs to the snapshot. It does not read working memory or recall-only artifact overlays.
+- `query` never reads working memory.
+- With `--scope durable`, it stays snapshot-only.
+- With `--scope session|harness|evidence|all`, it can merge explicit artifact/evidence overlays, but still returns sanitized output.
 
 ## Related Commands
 

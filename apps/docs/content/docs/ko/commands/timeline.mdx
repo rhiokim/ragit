@@ -44,8 +44,9 @@ pnpm ragit timeline [--goal <goalId>] [--episode <episodeId>] [--session <sessio
 ## Input And Output Contract
 
 - `timeline`은 JSON payload 입력을 받지 않습니다.
-- JSON 출력은 `filters`, `summary`, `events`를 포함합니다.
+- JSON 출력은 `filters`, `summary`, `events`, `redactionSummary`를 포함합니다.
 - 각 event record는 `eventId`, `eventType`, `recordedAt`, `goalId`, `episodeId`, `sessionId`, `sourceHeadSha`, `summary`, `artifactIds`, `relatedPaths`, `openLoops`, `nextActions`, `provenance`를 포함합니다.
+- event summary와 next action은 출력 전에 다시 마스킹됩니다.
 
 ## Examples
 

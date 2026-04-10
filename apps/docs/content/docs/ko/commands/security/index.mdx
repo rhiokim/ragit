@@ -1,0 +1,24 @@
+---
+title: security
+description: RAGit 지식 상태 보안 표면을 감사하고 정리합니다
+---
+
+## 이 그룹이 다루는 것
+
+`security` 명령 그룹은 RAGit이 소유하는 지식 상태를 보호하기 위한 운영 계층입니다.
+
+- <a href="/ko/docs/commands/security/audit">`security audit`</a>는 control-plane, store, repo-tracked docs, provider egress posture를 점검합니다.
+- <a href="/ko/docs/commands/security/purge">`security purge`</a>는 repo-tracked 문서를 건드리지 않고 로컬 상태를 sanitize rewrite 또는 삭제합니다.
+
+## 운영 모델
+
+- write path는 저장 전에 sanitize 됩니다.
+- retrieval 및 packet 출력은 표시 전에 다시 마스킹됩니다.
+- remote embedding egress는 `security.remote_embedding_policy`로 통제됩니다.
+- repo-tracked 문서는 purge가 자동 수정하지 않습니다. 문서를 먼저 고친 뒤 <a href="/ko/docs/commands/ingest">`ingest`</a>를 다시 실행하십시오.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/status">`status`</a>
+- <a href="/ko/docs/commands/doctor">`doctor`</a>
+- <a href="/ko/docs/commands/ingest">`ingest`</a>

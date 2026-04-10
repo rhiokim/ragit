@@ -44,8 +44,9 @@ pnpm ragit log [revRange] [--max-count <n>] [--view minimal|default|full] [--typ
 
 - `log`는 JSON payload 입력을 받지 않습니다.
 - 기본 출력은 raw git history가 아니라 semantic history text입니다.
-- JSON 출력에는 `revRange`, `maxCount`, `showMissing`, `filters`, `entries`가 포함됩니다.
+- JSON 출력에는 `revRange`, `maxCount`, `showMissing`, `filters`, `entries`, `redactionSummary`가 포함됩니다.
 - indexed entry에는 `snapshot` 옆에 `semantic` 블록이 함께 들어갑니다.
+- semantic evidence와 summary는 출력 전에 다시 마스킹됩니다.
 
 ```json
 {

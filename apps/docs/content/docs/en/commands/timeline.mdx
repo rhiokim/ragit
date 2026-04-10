@@ -44,8 +44,9 @@ pnpm ragit timeline [--goal <goalId>] [--episode <episodeId>] [--session <sessio
 ## Input And Output Contract
 
 - There is no JSON payload input for `timeline`.
-- JSON output includes `filters`, `summary`, and `events`.
+- JSON output includes `filters`, `summary`, `events`, and `redactionSummary`.
 - Each event record includes `eventId`, `eventType`, `recordedAt`, `goalId`, `episodeId`, `sessionId`, `sourceHeadSha`, `summary`, `artifactIds`, `relatedPaths`, `openLoops`, `nextActions`, and `provenance`.
+- Event summaries and next actions are re-masked before output.
 
 ## Examples
 

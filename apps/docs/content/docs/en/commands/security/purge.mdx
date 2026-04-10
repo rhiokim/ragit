@@ -1,0 +1,56 @@
+---
+title: security purge
+description: Sanitize or remove unsafe local knowledge-state surfaces
+command_path: security purge
+---
+
+## What It Does
+
+`security purge` is the remediation companion to `security audit`. It either plans or applies cleanup against local RAGit-owned state such as control-plane files, the searchable store, embedding cache, and quarantine ledgers.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- `security audit` found unsafe control-plane or store state.
+- You need to remove cached or indexed data after a local secret leak.
+- You want a dry-run plan before destructive cleanup.
+
+### When not to use it
+
+- You only want findings. Use <a href="/en/docs/commands/security/audit">`security audit`</a>.
+- The secret is in a repo-tracked document. Fix the document first; purge will not rewrite it.
+
+## Syntax
+
+```bash
+pnpm ragit security purge [--target control-plane|store|cache|quarantine|all] [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+## Input And Output Contract
+
+- There is no positional input and no JSON payload input.
+- JSON output includes `mode`, `target`, `planned`, `rewritten`, `deleted`, and `warnings`.
+- `control-plane` rewrites `.ragit/log/transcripts`, `.ragit/log/events`, `.ragit/log/harness-runs`, `.ragit/artifacts`, and `.ragit/memory`.
+- `store` removes `.ragit/store`, `.ragit/store.next`, `.ragit/store.prev`, and manifest files so you can rebuild from sanitized sources.
+- `cache` removes the embedding cache only.
+- `quarantine` clears the quarantine ledger only.
+
+## Examples
+
+```bash
+pnpm ragit security purge --target control-plane --dry-run --format json
+pnpm ragit security purge --target store --format both
+```
+
+## Failures And Cautions
+
+- `--dry-run` computes the cleanup plan without mutating files.
+- `store` purge removes searchable state and manifests; you must rerun <a href="/en/docs/commands/ingest">`ingest`</a> afterwards.
+- Repo-tracked durable docs are intentionally out of scope.
+
+## Related Commands
+
+- <a href="/en/docs/commands/security/audit">`security audit`</a>
+- <a href="/en/docs/commands/ingest">`ingest`</a>
+- <a href="/en/docs/commands/status">`status`</a>

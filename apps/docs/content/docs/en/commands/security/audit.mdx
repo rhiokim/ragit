@@ -1,0 +1,53 @@
+---
+title: security audit
+description: Inspect knowledge-state security findings and provider egress posture
+command_path: security audit
+---
+
+## What It Does
+
+`security audit` scans the RAGit-owned security surface and reports findings instead of mutating state. The audit covers control-plane files, the current searchable store, repo-tracked durable docs, quarantine volume, and whether the active embedding provider conflicts with the configured remote egress policy.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You want to know whether raw-looking secret material is still present in `.ragit/**`.
+- You want to inspect whether the current embedding provider is local or remote.
+- You want a machine-readable posture check before release or before enabling automation.
+
+### When not to use it
+
+- You already know the affected surface and want to rewrite or delete local state. Use <a href="/en/docs/commands/security/purge">`security purge`</a>.
+- You want the broader runtime diagnosis. Use <a href="/en/docs/commands/doctor">`doctor`</a>.
+
+## Syntax
+
+```bash
+pnpm ragit security audit [--format text|json|both] [--cwd <path>]
+```
+
+## Input And Output Contract
+
+- There is no positional input and no JSON payload input.
+- JSON output includes `summary`, `providerEgress`, and `findings`.
+- `summary` aggregates `critical`, `warn`, `info`, `quarantineEntries`, `legacyControlPlaneFiles`, `legacyStoreFindings`, and `repoDocsFlagged`.
+- `providerEgress` reports the effective provider, whether it is treated as `local` or `remote`, the current `security.remote_embedding_policy`, and whether remote artifact embedding is allowed.
+- Findings do not rewrite repo-tracked docs. They only point you to the next action.
+
+## Examples
+
+```bash
+pnpm ragit security audit --format json
+```
+
+## Failures And Cautions
+
+- `security audit` can update internal audit state such as `lastAuditAt`, but it does not rewrite knowledge content.
+- Repo-doc findings are advisory. Fix the document yourself, then rerun <a href="/en/docs/commands/ingest">`ingest`</a>.
+
+## Related Commands
+
+- <a href="/en/docs/commands/security/purge">`security purge`</a>
+- <a href="/en/docs/commands/status">`status`</a>
+- <a href="/en/docs/commands/doctor">`doctor`</a>
