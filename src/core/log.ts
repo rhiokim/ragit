@@ -2,7 +2,15 @@ import { CliView } from "./cliContract.js";
 import { listGitCommits } from "./git.js";
 import { deriveLogSemanticOverlay } from "./logSemantic.js";
 import { loadSnapshotManifestIfExists } from "./manifest.js";
-import { DocType, DocumentRecord, KnownDocType, RagitLogSemanticOverlay, SnapshotManifest } from "./types.js";
+import { attachRedactionSummary, sanitizeStructuredValue } from "./security.js";
+import {
+  DocType,
+  DocumentRecord,
+  KnownDocType,
+  RagitLogSemanticOverlay,
+  RedactionSummary,
+  SnapshotManifest,
+} from "./types.js";
 
 export interface RagitLogOptions {
   revRange?: string;
@@ -54,6 +62,7 @@ export interface RagitLogResult {
     path: string | null;
   };
   entries: RagitLogEntry[];
+  redactionSummary: RedactionSummary;
 }
 
 export interface ProjectedRagitLogResult {
@@ -65,6 +74,7 @@ export interface ProjectedRagitLogResult {
     docType: KnownDocType | null;
     path: string | null;
   };
+  redactionSummary: RedactionSummary;
   entries: Array<{
     commitSha: string;
     subject: string;
@@ -441,7 +451,7 @@ export const runRagitLog = async (cwd: string, options: RagitLogOptions = {}): P
   }
 
   const maxCount = options.maxCount && options.maxCount > 0 ? options.maxCount : null;
-  return {
+  const result: Omit<RagitLogResult, "redactionSummary"> = {
     revRange: options.revRange ?? null,
     maxCount,
     showMissing: Boolean(options.showMissing),
@@ -451,6 +461,8 @@ export const runRagitLog = async (cwd: string, options: RagitLogOptions = {}): P
     },
     entries: maxCount ? entries.slice(0, maxCount) : entries,
   };
+  const sanitized = sanitizeStructuredValue(result, "log.output", "log");
+  return attachRedactionSummary(sanitized.value, sanitized.summary);
 };
 
 const formatTypesLine = (types: Record<string, number>): string => {
@@ -579,6 +591,8 @@ export const formatRagitLogText = (result: RagitLogResult, view: CliView): strin
     `- max_count: ${result.maxCount ?? "none"}`,
     `- type_filter: ${result.filters.docType ?? "none"}`,
     `- path_filter: ${result.filters.path ?? "none"}`,
+    `- redaction_applied: ${result.redactionSummary.applied}`,
+    `- masked_count: ${result.redactionSummary.maskedCount}`,
   ];
   if (result.entries.length === 0) {
     return [...header, "", "- no matching entries"].join("\n");
@@ -683,6 +697,7 @@ export const projectRagitLogResult = (result: RagitLogResult, view: CliView): Pr
   showMissing: result.showMissing,
   view,
   filters: result.filters,
+  redactionSummary: result.redactionSummary,
   entries: result.entries.map((entry) => ({
     commitSha: entry.commitSha,
     subject: entry.subject,

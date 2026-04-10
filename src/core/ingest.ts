@@ -14,6 +14,12 @@ import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, latestSnapshotSha, loadSnapshotManifestIfExists, writeSnapshotManifest } from "./manifest.js";
 import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
 import { ensureRagitStructure } from "./project.js";
+import {
+  assertKnowledgeWriteSecurity,
+  canUseRemoteEmbedding,
+  persistQuarantineSummary,
+  sanitizeKnowledgeText,
+} from "./security.js";
 import { bootstrapCanonicalStore, closeCanonicalStore, writeChunksToCanonicalStore, writeDocumentsToCanonicalStore } from "./store.js";
 import { ChunkRecord, DocType, DocumentRecord, isKnownDocType } from "./types.js";
 import { RAGIT_VERSION } from "./version.js";
@@ -137,7 +143,11 @@ const sortChunkEntries = (chunks: Array<Pick<ChunkRecord, "id" | "documentId" | 
 export const runIngest = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, "ingest", Boolean(options.dryRun));
   const embeddingProfile = resolveEmbeddingProfile(config);
+  if (!canUseRemoteEmbedding(config, embeddingProfile, "durable-doc")) {
+    throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
+  }
   const cacheMode = options.dryRun ? "readonly" : "readwrite";
   const candidates = await resolveCandidates(cwd, options);
   const scope = options.scope ?? "durable";
@@ -154,14 +164,23 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
 
   for (const absolutePath of candidates.files) {
     const { content, hash } = await hashFileContent(absolutePath);
-    const maskedContent = config.security.secret_masking ? maskSecrets(content) : { text: content, maskedCount: 0 };
-    masked += maskedContent.maskedCount;
+    const repoPath = toRepoPath(cwd, absolutePath);
+    const maskedContent = sanitizeKnowledgeText(content, "ingest.document", repoPath);
+    masked += maskedContent.summary.maskedCount;
+    if (!options.dryRun) {
+      await persistQuarantineSummary(cwd, config, {
+        surface: "ingest.document",
+        sourceRef: repoPath,
+        summary: maskedContent.summary,
+        previewBySource: maskedContent.previewBySource,
+        operation: "ingest.completed",
+      });
+    }
     const detection = detectDocType(absolutePath, maskedContent.text, cwd);
     if (!isSupported(detection.docType, config.ingest.supported_types)) {
       skipped += 1;
       continue;
     }
-    const repoPath = toRepoPath(cwd, absolutePath);
     if (config.docs_authority.validate_on_ingest && isKnownDocType(detection.docType)) {
       const validation = validateKnownDoc(detection.docType, repoPath, maskedContent.text, config);
       if (validation.violations.length > 0) {

@@ -2,9 +2,24 @@ import { createHash } from "node:crypto";
 import { appendFile, mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { CliView } from "./cliContract.js";
+import { loadConfig } from "./config.js";
 import { toRepoPath } from "./identity.js";
 import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
-import { ArtifactEventProvenance, RagitEventMetadata, RagitEventRecord, RagitEventType, TimelineKind } from "./types.js";
+import {
+  ArtifactEventProvenance,
+  RagitEventMetadata,
+  RagitEventRecord,
+  RagitEventType,
+  RedactionSummary,
+  TimelineKind,
+} from "./types.js";
+import {
+  assertKnowledgeWriteSecurity,
+  attachRedactionSummary,
+  mergeRedactionSummaries,
+  persistQuarantineSummary,
+  sanitizeStructuredValue,
+} from "./security.js";
 
 export interface AppendLedgerEventInput {
   eventType: RagitEventType;
@@ -54,6 +69,7 @@ export interface TimelineResult {
   };
   summary: TimelineSummary;
   events: RagitEventRecord[];
+  redactionSummary: RedactionSummary;
 }
 
 export interface EventLedgerStats {
@@ -216,6 +232,8 @@ export const appendLedgerEvent = async (
   dryRun = false,
 ): Promise<{ event: RagitEventRecord; path: string; appended: boolean }> => {
   await ensureRagitStructure(cwd);
+  const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, input.eventType, dryRun);
   const recordedAt = input.recordedAt ?? new Date().toISOString();
   const eventBase: Omit<RagitEventRecord, "eventId" | "version"> = {
     eventType: input.eventType,
@@ -237,10 +255,11 @@ export const appendLedgerEvent = async (
       evidenceRefs: uniqueStrings(input.provenance.evidenceRefs),
     },
   };
+  const sanitizedBase = sanitizeStructuredValue(eventBase, "event.ledger");
   const event: RagitEventRecord = {
     version: 1,
-    eventId: createEventId(eventBase),
-    ...eventBase,
+    eventId: createEventId(sanitizedBase.value),
+    ...sanitizedBase.value,
   };
   const target = eventLedgerFilePath(cwd, recordedAt);
   let appended = false;
@@ -250,6 +269,14 @@ export const appendLedgerEvent = async (
       await appendFile(target, `${JSON.stringify(event)}\n`, "utf8");
       appended = true;
     }
+    await persistQuarantineSummary(cwd, config, {
+      surface: "event.ledger",
+      sourceRef: toRepoPath(cwd, target),
+      summary: sanitizedBase.summary,
+      previewBySource: sanitizedBase.previewBySource,
+      operation: input.eventType,
+      recordedAt,
+    });
   }
   return { event, path: toRepoPath(cwd, target), appended };
 };
@@ -298,7 +325,7 @@ export const queryTimeline = async (cwd: string, options: TimelineQueryOptions =
     latestEpisodeId: events.find((event) => event.episodeId)?.episodeId ?? null,
     latestSessionId: events.find((event) => event.sessionId)?.sessionId ?? null,
   };
-  return {
+  const rawResult = {
     filters: {
       goalId: options.goalId ?? null,
       episodeId: options.episodeId ?? null,
@@ -311,6 +338,8 @@ export const queryTimeline = async (cwd: string, options: TimelineQueryOptions =
     summary,
     events,
   };
+  const sanitized = sanitizeStructuredValue(rawResult, "timeline.output");
+  return attachRedactionSummary(sanitized.value, sanitized.summary);
 };
 
 export const readEventLedgerStats = async (cwd: string): Promise<EventLedgerStats> => {
@@ -345,6 +374,8 @@ export const formatTimelineText = (result: TimelineResult, view: CliView = "defa
     `- until: ${result.filters.until ?? "none"}`,
     `- max_count: ${result.filters.maxCount ?? "none"}`,
     `- view: ${view}`,
+    `- redaction_applied: ${result.redactionSummary.applied}`,
+    `- masked_count: ${result.redactionSummary.maskedCount}`,
     "",
   ];
   if (result.events.length === 0) {

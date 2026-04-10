@@ -17,4 +17,20 @@ describe("secret masking", () => {
     expect(result.text).toContain("api_key");
     expect(result.text).toContain("***");
   });
+
+  it("masks bearer and jwt style tokens", () => {
+    const sample = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.segment";
+    const result = maskSecrets(sample);
+    expect(result.maskedCount).toBeGreaterThanOrEqual(1);
+    expect(result.text).toContain("Bearer eyJh***");
+    expect(result.text).not.toContain(".payload.segment");
+  });
+
+  it("masks URI credentials and secret query parameters", () => {
+    const sample = "https://alice:supersecret@example.com/callback?access_token=abcdef1234567890";
+    const result = maskSecrets(sample);
+    expect(result.maskedCount).toBe(2);
+    expect(result.text).toContain("https://alice:***@example.com");
+    expect(result.text).toContain("access_token=abcd***");
+  });
 });

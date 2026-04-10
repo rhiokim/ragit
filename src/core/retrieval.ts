@@ -13,6 +13,7 @@ import {
   ArtifactRecord,
   ArtifactStatus,
   ChunkRecord,
+  RedactionSummary,
   RetrievalHit,
   RetrievalScope,
   SnapshotManifest,
@@ -26,6 +27,12 @@ import {
   zvecCosineDistanceToSimilarity,
 } from "./embedding.js";
 import { toRepoPath } from "./identity.js";
+import {
+  canUseRemoteEmbedding,
+  mergeRedactionSummaries,
+  sanitizeKnowledgeText,
+  sanitizeStructuredValue,
+} from "./security.js";
 
 const normalizeText = (text: string): string =>
   text
@@ -82,6 +89,7 @@ export interface QueryOptions {
 export interface QueryResult {
   snapshotSha: string;
   hits: RetrievalHit[];
+  redactionSummary: RedactionSummary;
 }
 
 export interface UnifiedArtifactRetrievalOptions {
@@ -103,7 +111,18 @@ export interface UnifiedRetrievalResult {
   snapshotSha: string | null;
   hits: RetrievalHit[];
   warnings: string[];
+  redactionSummary: RedactionSummary;
 }
+
+const resolveArtifactOptionsForScope = (
+  scope?: RetrievalScope,
+): UnifiedArtifactRetrievalOptions | undefined => {
+  if (!scope || scope === "durable") return undefined;
+  return {
+    mode: "explicit-scope",
+    scope: scope === "all" ? "all" : scope,
+  };
+};
 
 type ArtifactCandidate = {
   artifact: ArtifactRecord;
@@ -244,6 +263,7 @@ const buildRecallArtifactCandidates = async (cwd: string, goal: string): Promise
 
 const buildArtifactHits = async (
   cwd: string,
+  config: Awaited<ReturnType<typeof loadConfig>>,
   query: string,
   queryEmbedding: number[],
   alpha: number,
@@ -251,13 +271,17 @@ const buildArtifactHits = async (
   candidates: ArtifactCandidate[],
 ): Promise<RetrievalHit[]> => {
   if (candidates.length === 0) return [];
-  const candidateEmbeddings = await embedTexts(
-    candidates.map((candidate) => candidate.text),
-    embeddingProfile,
-    { cwd },
-  );
+  const payloadClass = candidates.some((candidate) => candidate.scopeValue === "evidence") ? "evidence" : "artifact";
+  const canEmbedCandidates = canUseRemoteEmbedding(config, embeddingProfile, payloadClass);
+  const candidateEmbeddings = canEmbedCandidates
+    ? await embedTexts(
+        candidates.map((candidate) => candidate.text),
+        embeddingProfile,
+        { cwd },
+      )
+    : [];
   return candidates.map((candidate, index) => {
-    const semantic = cosineSimilarity(queryEmbedding, candidateEmbeddings[index] ?? []);
+    const semantic = canEmbedCandidates ? cosineSimilarity(queryEmbedding, candidateEmbeddings[index] ?? []) : 0;
     const keyword = keywordScore(query, candidate.text);
     const semanticHybrid = calculateHybridScore(semantic, keyword, alpha);
     const scoreFinal =
@@ -391,7 +415,11 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
   const config = await loadConfig(cwd);
   const embeddingProfile = resolveEmbeddingProfile(config);
   const topK = request.topK ?? config.retrieval.top_k;
-  const queryEmbedding = await embedText(request.query, embeddingProfile, { cwd });
+  const sanitizedQuery = sanitizeKnowledgeText(request.query, "retrieval.query", "query");
+  if (!canUseRemoteEmbedding(config, embeddingProfile, "query")) {
+    throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
+  }
+  const queryEmbedding = await embedText(sanitizedQuery.text, embeddingProfile, { cwd });
   const hits: RetrievalHit[] = [];
   const warnings: string[] = [];
   let snapshotSha: string | null = null;
@@ -403,7 +431,7 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
         ...(await buildSnapshotHits(
           cwd,
           snapshotSha,
-          request.query,
+          sanitizedQuery.text,
           queryEmbedding,
           config.retrieval.alpha,
           embeddingProfile,
@@ -423,12 +451,21 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
   if (request.artifactOptions) {
     const candidates =
       request.artifactOptions.mode === "recall"
-        ? await buildRecallArtifactCandidates(cwd, request.artifactOptions.goal ?? request.query)
+        ? await buildRecallArtifactCandidates(cwd, request.artifactOptions.goal ?? sanitizedQuery.text)
         : await buildExplicitArtifactCandidates(cwd, request.artifactOptions.scope ?? "all");
+    const allowsArtifactEmbedding = canUseRemoteEmbedding(
+      config,
+      embeddingProfile,
+      request.artifactOptions.scope === "evidence" ? "evidence" : "artifact",
+    );
+    if (!allowsArtifactEmbedding && candidates.length > 0) {
+      warnings.push("security policy 때문에 artifact/evidence semantic embedding을 건너뛰고 keyword fallback으로 검색했습니다.");
+    }
     hits.push(
       ...(await buildArtifactHits(
         cwd,
-        request.query,
+        config,
+        sanitizedQuery.text,
         queryEmbedding,
         config.retrieval.alpha,
         embeddingProfile,
@@ -437,10 +474,14 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
     );
   }
 
+  const finalizedHits = finalizeHits(hits, topK);
+  const sanitizedHits = sanitizeStructuredValue(finalizedHits, "retrieval.hit", "hits");
+
   return {
     snapshotSha,
-    hits: finalizeHits(hits, topK),
+    hits: sanitizedHits.value,
     warnings,
+    redactionSummary: mergeRedactionSummaries(sanitizedQuery.summary, sanitizedHits.summary),
   };
 };
 
@@ -451,6 +492,7 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
     at: options.at,
     scope: options.scope,
     includeSnapshot: true,
+    artifactOptions: resolveArtifactOptionsForScope(options.scope),
   });
   if (!result.snapshotSha) {
     throw new Error("사용 가능한 snapshot이 없습니다.");
@@ -458,5 +500,6 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
   return {
     snapshotSha: result.snapshotSha,
     hits: result.hits,
+    redactionSummary: result.redactionSummary,
   };
 };

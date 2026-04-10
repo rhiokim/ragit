@@ -21,6 +21,9 @@ export interface RagitPaths {
   memoryDir: string;
   memorySessionsDir: string;
   memoryWorkingDir: string;
+  securityDir: string;
+  securityStatePath: string;
+  quarantineDir: string;
   storeDir: string;
   storeMetaPath: string;
   documentsCollectionDir: string;
@@ -46,6 +49,9 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
   memoryDir: path.join(cwd, ".ragit", "memory"),
   memorySessionsDir: path.join(cwd, ".ragit", "memory", "sessions"),
   memoryWorkingDir: path.join(cwd, ".ragit", "memory", "working"),
+  securityDir: path.join(cwd, ".ragit", "security"),
+  securityStatePath: path.join(cwd, ".ragit", "security", "state.json"),
+  quarantineDir: path.join(cwd, ".ragit", "security", "quarantine"),
   storeDir: path.join(cwd, ".ragit", "store"),
   storeMetaPath: path.join(cwd, ".ragit", "store", "meta.json"),
   documentsCollectionDir: path.join(cwd, ".ragit", "store", "documents"),
@@ -69,6 +75,8 @@ export const ensureRagitDirectories = async (cwd: string): Promise<RagitPaths> =
   await mkdir(paths.memoryDir, { recursive: true });
   await mkdir(paths.memorySessionsDir, { recursive: true });
   await mkdir(paths.memoryWorkingDir, { recursive: true });
+  await mkdir(paths.securityDir, { recursive: true });
+  await mkdir(paths.quarantineDir, { recursive: true });
   await mkdir(paths.storeDir, { recursive: true });
   await mkdir(paths.cacheDir, { recursive: true });
   await mkdir(paths.hooksDir, { recursive: true });

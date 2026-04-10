@@ -12,6 +12,13 @@ import { chunkVersionId, toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
 import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
 import {
+  assertKnowledgeWriteSecurity,
+  canUseRemoteEmbedding,
+  mergeRedactionSummaries,
+  persistQuarantineSummary,
+  sanitizeStructuredValue,
+} from "./security.js";
+import {
   ArtifactBindingStatus,
   ArtifactEventProvenance,
   ArtifactEvidenceRef,
@@ -25,6 +32,7 @@ import {
   ChunkRecord,
   EmbeddingProfile,
   HarnessArtifactKind,
+  RedactionSummary,
   RetrievalHit,
   SearchPolicy,
   SessionArtifactKind,
@@ -82,6 +90,11 @@ export interface ArtifactReviewResult {
   updated: string[];
   dryRun: boolean;
   warnings: string[];
+}
+
+export interface ArtifactSearchResult {
+  hits: RetrievalHit[];
+  redactionSummary: RedactionSummary;
 }
 
 const normalizeWhitespace = (value: string): string => value.replace(/\s+/g, " ").trim();
@@ -320,8 +333,19 @@ export const listArtifactRecords = async (
 
 export const persistArtifactRecord = async (cwd: string, artifact: ArtifactRecord, dryRun = false): Promise<string> => {
   const target = pathForArtifact(cwd, artifact);
+  const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, "artifact.persist", dryRun);
+  const sanitized = sanitizeStructuredValue(artifact, artifact.artifactScope === "harness" ? "harness.run" : "session.toolTrace");
   if (!dryRun) {
-    await writeJson(target, artifact);
+    await writeJson(target, sanitized.value);
+    await persistQuarantineSummary(cwd, config, {
+      surface: artifact.artifactScope === "harness" ? "harness.run" : "session.toolTrace",
+      sourceRef: toRepoPath(cwd, target),
+      summary: sanitized.summary,
+      previewBySource: sanitized.previewBySource,
+      operation: "artifact.persist",
+      recordedAt: artifact.updatedAt,
+    });
   }
   return toRepoPath(cwd, target);
 };
@@ -539,6 +563,7 @@ const collectSessionArtifacts = (
 export const sessionMaterialize = async (cwd: string, input: SessionMaterializeInput, dryRun = false): Promise<SessionMaterializeResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, "session.materialize", dryRun);
   const currentHeadSha = input.sourceHeadSha ?? (await safeReadHeadSha(cwd));
   const createdAt = input.createdAt ?? new Date().toISOString();
   const sessionId = createSessionId(createdAt, input.goal);
@@ -552,6 +577,8 @@ export const sessionMaterialize = async (cwd: string, input: SessionMaterializeI
   }));
   const redactedTraces = (input.toolTraces ?? []).map((trace) => ({
     ...trace,
+    title: trace.title ? (config.security.secret_masking ? maskSecrets(trace.title).text : trace.title) : undefined,
+    command: trace.command ? (config.security.secret_masking ? maskSecrets(trace.command).text : trace.command) : undefined,
     output: trace.output ? (config.security.secret_masking ? maskSecrets(trace.output).text : trace.output) : undefined,
     error: trace.error ? (config.security.secret_masking ? maskSecrets(trace.error).text : trace.error) : undefined,
   }));
@@ -574,6 +601,19 @@ export const sessionMaterialize = async (cwd: string, input: SessionMaterializeI
     for (const trace of redactedTraces) {
       await appendJsonLine(transcriptFile, { type: "toolTrace", ...trace });
     }
+    const transcriptSanitized = sanitizeStructuredValue(
+      [...redactedTurns, ...redactedTraces.map((trace) => ({ type: "toolTrace", ...trace }))],
+      "session.turn",
+      "transcript",
+    );
+    await persistQuarantineSummary(cwd, config, {
+      surface: "session.turn",
+      sourceRef: toRepoPath(cwd, transcriptFile),
+      summary: transcriptSanitized.summary,
+      previewBySource: transcriptSanitized.previewBySource,
+      operation: "session.materialize",
+      recordedAt: createdAt,
+    });
     const outputRefs: string[] = [];
     for (const artifact of artifacts) {
       outputRefs.push(await persistArtifactRecord(cwd, artifact, false));
@@ -794,6 +834,9 @@ export const buildArtifactIndexData = async (
     harness: [] as string[],
     evidence: [] as string[],
   };
+  const config = await loadConfig(cwd);
+  const allowArtifactEmbedding = canUseRemoteEmbedding(config, embeddingProfile, "artifact");
+  const allowEvidenceEmbedding = canUseRemoteEmbedding(config, embeddingProfile, "evidence");
   const chunkPlans: Array<{
     artifact: ArtifactRecord;
     pathValue: string;
@@ -807,7 +850,7 @@ export const buildArtifactIndexData = async (
     const repoPath = toRepoPath(cwd, pathForArtifact(cwd, artifact));
     const chunkIds: string[] = [];
     if (artifact.status === "reviewed" && artifact.bindingStatus !== "local_only") {
-      if (artifact.artifactScope === "session") {
+      if (artifact.artifactScope === "session" && allowArtifactEmbedding) {
         chunkPlans.push({
           artifact,
           pathValue: repoPath,
@@ -818,7 +861,7 @@ export const buildArtifactIndexData = async (
           chunkIds,
         });
       }
-      if (artifact.artifactScope === "harness") {
+      if (artifact.artifactScope === "harness" && allowArtifactEmbedding) {
         chunkPlans.push({
           artifact,
           pathValue: repoPath,
@@ -831,6 +874,7 @@ export const buildArtifactIndexData = async (
       }
     }
     for (const evidence of artifact.evidenceRefs) {
+      if (!allowEvidenceEmbedding) continue;
       chunkPlans.push({
         artifact,
         pathValue: `${repoPath}#evidence`,
@@ -857,11 +901,14 @@ export const buildArtifactIndexData = async (
       bindingStatus: artifact.bindingStatus,
     });
   }
-  const embeddings = await embedTexts(
-    chunkPlans.map((plan) => plan.text),
-    embeddingProfile,
-    { cwd, cacheMode },
-  );
+  const embeddings =
+    chunkPlans.length === 0
+      ? []
+      : await embedTexts(
+          chunkPlans.map((plan) => plan.text),
+          embeddingProfile,
+          { cwd, cacheMode },
+        );
   for (const [index, plan] of chunkPlans.entries()) {
     const chunk = artifactChunkRecord(
       plan.artifact,
@@ -904,14 +951,18 @@ export const searchArtifacts = async (
   query: string,
   scope: "session" | "harness" | "evidence" | "all",
   topK: number,
-): Promise<RetrievalHit[]> => {
+): Promise<ArtifactSearchResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const embeddingProfile = resolveEmbeddingProfile(config);
   const artifacts = await listArtifactRecords(cwd, {
     statuses: scope === "evidence" ? ["captured", "reviewed"] : ["reviewed", "promoted"],
   });
-  const queryEmbedding = await embedText(query, embeddingProfile, { cwd });
+  const sanitizedQuery = sanitizeStructuredValue({ query }, "retrieval.query");
+  if (!canUseRemoteEmbedding(config, embeddingProfile, "query")) {
+    throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
+  }
+  const queryEmbedding = await embedText(String((sanitizedQuery.value as { query: string }).query), embeddingProfile, { cwd });
   const candidatesToEmbed: Array<{
     artifact: ArtifactRecord;
     text: string;
@@ -946,15 +997,19 @@ export const searchArtifacts = async (
       });
     }
   }
-  const candidateEmbeddings = await embedTexts(
-    candidatesToEmbed.map((candidate) => candidate.text),
-    embeddingProfile,
-    { cwd },
-  );
+  const payloadClass = scope === "evidence" ? "evidence" : "artifact";
+  const canEmbedCandidates = canUseRemoteEmbedding(config, embeddingProfile, payloadClass);
+  const candidateEmbeddings = canEmbedCandidates
+    ? await embedTexts(
+        candidatesToEmbed.map((candidate) => candidate.text),
+        embeddingProfile,
+        { cwd },
+      )
+    : [];
   const candidates: RetrievalHit[] = [];
   for (const [index, candidate] of candidatesToEmbed.entries()) {
-    const semantic = cosineSimilarity(queryEmbedding, candidateEmbeddings[index] ?? []);
-    const keyword = candidate.text.toLowerCase().includes(query.toLowerCase()) ? 1 : 0;
+    const semantic = canEmbedCandidates ? cosineSimilarity(queryEmbedding, candidateEmbeddings[index] ?? []) : 0;
+    const keyword = candidate.text.toLowerCase().includes(String((sanitizedQuery.value as { query: string }).query).toLowerCase()) ? 1 : 0;
     const semanticHybrid = config.retrieval.alpha * semantic + (1 - config.retrieval.alpha) * keyword;
     const scoreFinal = 0.8 * semanticHybrid + 0.15 * authorityWeight(candidate.artifact) + 0.05 * recencyWeight(candidate.artifact.updatedAt);
     candidates.push({
@@ -973,7 +1028,12 @@ export const searchArtifacts = async (
       confidence: candidate.artifact.confidence,
     });
   }
-  return candidates.sort((left, right) => right.scoreFinal - left.scoreFinal).slice(0, topK);
+  const hits = candidates.sort((left, right) => right.scoreFinal - left.scoreFinal).slice(0, topK);
+  const sanitizedHits = sanitizeStructuredValue(hits, "retrieval.hit", "hits");
+  return {
+    hits: sanitizedHits.value,
+    redactionSummary: mergeRedactionSummaries(sanitizedQuery.summary, sanitizedHits.summary),
+  };
 };
 
 export const loadRecallArtifacts = async (cwd: string, goal: string): Promise<ArtifactRecord[]> => {

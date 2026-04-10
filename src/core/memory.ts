@@ -30,6 +30,13 @@ import { projectRetrievalHits } from "./output.js";
 import { RagitConfig, RetrievalHit } from "./types.js";
 import { RAGIT_VERSION } from "./version.js";
 import { getHeadSha } from "./git.js";
+import {
+  assertKnowledgeWriteSecurity,
+  mergeRedactionSummaries,
+  persistQuarantineSummary,
+  sanitizeKnowledgeText,
+  sanitizeStructuredValue,
+} from "./security.js";
 
 interface ResolvedMemoryPaths {
   corpusDir: string;
@@ -406,6 +413,8 @@ export const formatRecallPacket = (packet: RecallPacket, view: CliView = "defaul
     `- snapshot: ${projected.snapshotSha ?? "none"}`,
     `- source_head: ${projected.sourceHeadSha ?? "none"}`,
     `- view: ${view}`,
+    `- redaction_applied: ${projected.redactionSummary?.applied ?? false}`,
+    `- masked_count: ${projected.redactionSummary?.maskedCount ?? 0}`,
     "",
     ...renderStringList("Constraints", projected.constraints),
     ...renderOpenLoops(projected.openLoops),
@@ -469,6 +478,7 @@ export const loadLatestSessionWrap = async (cwd: string): Promise<SessionWrapRec
 export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryRun = false): Promise<MemoryWrapResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, "memory.wrap", dryRun);
   const paths = resolveMemoryPaths(cwd, config);
   await ensureMemoryLayout(paths, { includeCorpus: false });
 
@@ -478,7 +488,7 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
   const sessionId = createSessionId(createdAt, payload.goal);
   const sessionPath = path.join(paths.sessionDir, `${sessionId}.json`);
 
-  const record: SessionWrapRecord = {
+  const rawRecord: SessionWrapRecord = {
     sessionId,
     goal: payload.goal,
     summary: payload.summary,
@@ -493,17 +503,44 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
     createdAt,
   };
 
-  const working = toWorkingState(record);
+  const sanitizedRecord = sanitizeStructuredValue(rawRecord, "memory.wrap");
+  const working = toWorkingState(sanitizedRecord.value);
+  const sanitizedWorking = sanitizeStructuredValue(working, "memory.wrap");
   const registry: OpenLoopRegistry = {
     latestSessionId: sessionId,
     updatedAt: createdAt,
-    items: working.openLoops,
+    items: sanitizedWorking.value.openLoops,
   };
+  const sanitizedRegistry = sanitizeStructuredValue(registry, "memory.wrap");
 
   if (!dryRun) {
-    await writeJson(sessionPath, record);
-    await writeJson(paths.currentPath, working);
-    await writeJson(paths.openLoopsPath, registry);
+    await writeJson(sessionPath, sanitizedRecord.value);
+    await writeJson(paths.currentPath, sanitizedWorking.value);
+    await writeJson(paths.openLoopsPath, sanitizedRegistry.value);
+    await persistQuarantineSummary(cwd, config, {
+      surface: "memory.wrap",
+      sourceRef: toRepoPath(cwd, sessionPath),
+      summary: sanitizedRecord.summary,
+      previewBySource: sanitizedRecord.previewBySource,
+      operation: "memory.wrap",
+      recordedAt: createdAt,
+    });
+    await persistQuarantineSummary(cwd, config, {
+      surface: "memory.wrap",
+      sourceRef: toRepoPath(cwd, paths.currentPath),
+      summary: sanitizedWorking.summary,
+      previewBySource: sanitizedWorking.previewBySource,
+      operation: "memory.wrap",
+      recordedAt: createdAt,
+    });
+    await persistQuarantineSummary(cwd, config, {
+      surface: "memory.wrap",
+      sourceRef: toRepoPath(cwd, paths.openLoopsPath),
+      summary: sanitizedRegistry.summary,
+      previewBySource: sanitizedRegistry.previewBySource,
+      operation: "memory.wrap",
+      recordedAt: createdAt,
+    });
     await appendLedgerEvent(cwd, {
       eventType: "memory.wrap",
       recordedAt: createdAt,
@@ -513,7 +550,7 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
       sourceHeadSha,
       summary: `Wrapped session state for ${payload.goal}`,
       artifactIds: payload.artifactRefs ?? [],
-      openLoops: working.openLoops.map((item) => item.id),
+      openLoops: sanitizedWorking.value.openLoops.map((item) => item.id),
       nextActions: payload.nextActions,
       provenance: {
         actor: "assistant",
@@ -546,9 +583,10 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
   const paths = resolveMemoryPaths(cwd, config);
   await ensureMemoryLayout(paths, { includeCorpus: false });
 
+  const sanitizedGoal = sanitizeKnowledgeText(goal, "memory.recall", "goal");
   const working = await readJsonIfExists<WorkingMemoryState>(paths.currentPath);
   const latestSession = await loadLatestSessionWrap(cwd);
-  const searchGoal = working?.goal && working.goal !== goal ? `${goal}\n${working.goal}` : goal;
+  const searchGoal = working?.goal && working.goal !== sanitizedGoal.text ? `${sanitizedGoal.text}\n${working.goal}` : sanitizedGoal.text;
   const search = await runUnifiedRetrieval(cwd, {
     query: searchGoal,
     topK: config.memory.recall_top_k,
@@ -580,7 +618,7 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
     (item) => item.id,
   );
   const packet: RecallPacket = {
-    goal,
+    goal: sanitizedGoal.text,
     constraints: uniqueBy([...(working?.constraints ?? []), ...(latestSession?.constraints ?? [])], (item) => item),
     openLoops,
     relatedDecisions,
@@ -592,9 +630,14 @@ export const recallMemory = async (cwd: string, goal: string): Promise<{ packet:
     createdAt: new Date().toISOString(),
     warnings: search.warnings,
   };
-  const formatted = formatRecallPacket(packet);
+  const sanitizedPacket = sanitizeStructuredValue(packet, "memory.recall");
+  const finalPacket = {
+    ...sanitizedPacket.value,
+    redactionSummary: mergeRedactionSummaries(sanitizedGoal.summary, search.redactionSummary, sanitizedPacket.summary),
+  };
+  const formatted = formatRecallPacket(finalPacket);
   return {
-    packet,
+    packet: finalPacket,
     markdown: formatted.markdown,
     json: formatted.json,
   };
@@ -716,6 +759,7 @@ const promotionCandidateFromArtifact = (artifact: Awaited<ReturnType<typeof load
 export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dryRun = false): Promise<MemoryPromoteResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, "memory.promote", dryRun);
   const paths = resolveMemoryPaths(cwd, config);
   await ensureMemoryLayout(paths, { includeCorpus: false });
 
@@ -731,7 +775,10 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
     }
   }
   for (const candidate of candidates) {
-    const content = renderPromotionDocument(candidate, promotedAt, input.sourceSessionId);
+    const sanitizedDoc = sanitizeStructuredValue(
+      { content: renderPromotionDocument(candidate, promotedAt, input.sourceSessionId) },
+      "memory.promote",
+    );
     const docType =
       candidate.kind === "decision"
         ? "adr"
@@ -745,13 +792,21 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
       {
         docType,
         title: candidate.title,
-        content,
+        content: sanitizedDoc.value.content,
       },
       dryRun,
     );
     plannedFiles.push(created.path);
     if (!dryRun) {
       createdFiles.push(created.path);
+      await persistQuarantineSummary(cwd, config, {
+        surface: "memory.promote",
+        sourceRef: created.path,
+        summary: sanitizedDoc.summary,
+        previewBySource: sanitizedDoc.previewBySource,
+        operation: "memory.promote",
+        recordedAt: promotedAt,
+      });
     }
   }
 

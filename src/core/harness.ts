@@ -12,9 +12,11 @@ import {
   HarnessCommandExecutor,
   HarnessArtifactKind,
   HarnessExpectedRules,
+  HarnessRecordedExecutor,
   HarnessRunInput,
   HarnessRunRecord,
   HarnessRunResult,
+  RedactionSummary,
   SearchPolicy,
 } from "./types.js";
 import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
@@ -26,6 +28,12 @@ import { runIngest } from "./ingest.js";
 import { loadConfig } from "./config.js";
 import { toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
+import {
+  assertKnowledgeWriteSecurity,
+  attachRedactionSummary,
+  persistQuarantineSummary,
+  sanitizeStructuredValue,
+} from "./security.js";
 
 export interface HarnessCaptureResourceInput {
   kind: HarnessArtifactKind;
@@ -69,6 +77,7 @@ export interface HarnessPackResult {
   suiteId: string;
   goal: string | null;
   resources: Array<Pick<ArtifactRecord, "artifactId" | "kind" | "title" | "summary" | "status">>;
+  redactionSummary?: RedactionSummary;
 }
 
 export interface HarnessVerifyResult {
@@ -246,6 +255,14 @@ const resolveHarnessExecutor = (cwd: string, input: HarnessRunInput["executor"])
   cwd: resolveExecutorCwd(cwd, input.cwd),
   env: { ...(input.env ?? {}) },
   timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+});
+
+const toRecordedExecutor = (executor: HarnessCommandExecutor): HarnessRecordedExecutor => ({
+  kind: executor.kind,
+  argv: [...executor.argv],
+  cwd: executor.cwd,
+  envKeys: Object.keys(executor.env).sort(),
+  timeoutMs: executor.timeoutMs,
 });
 
 const normalizeHarnessExpectedRules = (value: unknown, label: string): HarnessExpectedRules => {
@@ -665,7 +682,8 @@ const createFailureArtifact = (
 const writeHarnessRunRecord = async (cwd: string, runId: string, record: HarnessRunRecord, dryRun: boolean): Promise<string> => {
   const target = harnessRunPath(cwd, runId);
   if (!dryRun) {
-    await writeFile(target, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+    const sanitized = sanitizeStructuredValue(record, "harness.run");
+    await writeFile(target, `${JSON.stringify(sanitized.value, null, 2)}\n`, "utf8");
   }
   return toRepoPath(cwd, target);
 };
@@ -930,6 +948,8 @@ export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dr
 
 export const promoteHarness = async (cwd: string, input: HarnessPromoteInput, dryRun = false): Promise<HarnessPromoteResult> => {
   await ensureRagitStructure(cwd);
+  const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, "harness.promote", dryRun);
   const plannedFiles: string[] = [];
   const createdFiles: string[] = [];
   const warnings: string[] = [];
@@ -948,19 +968,27 @@ export const promoteHarness = async (cwd: string, input: HarnessPromoteInput, dr
       continue;
     }
     const target = docTargetForKind(artifact);
+    const sanitizedDoc = sanitizeStructuredValue({ content: renderHarnessDoc(artifact) }, "memory.promote");
     const doc = await createDoc(
       cwd,
       {
         docType: target.docType,
         title: artifact.title,
         path: target.path,
-        content: renderHarnessDoc(artifact),
+        content: sanitizedDoc.value.content,
       },
       dryRun,
     );
     plannedFiles.push(doc.path);
     if (!dryRun) {
       createdFiles.push(doc.path);
+      await persistQuarantineSummary(cwd, config, {
+        surface: "memory.promote",
+        sourceRef: doc.path,
+        summary: sanitizedDoc.summary,
+        previewBySource: sanitizedDoc.previewBySource,
+        operation: "harness.promote",
+      });
       await persistArtifactRecord(
         cwd,
         {
@@ -1043,11 +1071,15 @@ export const packHarness = async (cwd: string, suiteRef: string): Promise<Harnes
       status: artifact.status,
     });
   }
-  return {
-    suiteId: suite.artifactId,
-    goal: typeof suite.payload?.goal === "string" ? (suite.payload.goal as string) : suite.goalId,
-    resources,
-  };
+  const sanitized = sanitizeStructuredValue(
+    {
+      suiteId: suite.artifactId,
+      goal: typeof suite.payload?.goal === "string" ? (suite.payload.goal as string) : suite.goalId,
+      resources,
+    },
+    "harness.pack",
+  );
+  return attachRedactionSummary(sanitized.value, sanitized.summary);
 };
 
 export const verifyHarness = async (cwd: string, suiteRef: string): Promise<HarnessVerifyResult> => {
@@ -1091,6 +1123,7 @@ export const verifyHarness = async (cwd: string, suiteRef: string): Promise<Harn
 export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = false): Promise<HarnessRunResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, "harness.run", dryRun);
   const suite = await loadSuiteArtifact(cwd, input.suiteRef);
   if (suite.kind !== "suite") {
     throw new Error(`suite artifact가 아닙니다: ${suite.artifactId}`);
@@ -1209,7 +1242,10 @@ export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = f
       stderrExcerpt: toMaskedExcerpt(execution.stderr, config.security.secret_masking),
       stdoutHash: hashIfPresent(execution.stdout || null),
       stderrHash: hashIfPresent(execution.stderr || null),
-      structuredOutput: execution.structuredOutput,
+      structuredOutputSummary:
+        execution.structuredOutput === undefined
+          ? undefined
+          : sanitizeStructuredValue(execution.structuredOutput, "harness.run", "structuredOutput").value,
       checkResults,
       failureArtifactIds: [],
     });
@@ -1251,7 +1287,7 @@ export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = f
     episodeId: suite.episodeId,
     sourceSessionId: suite.sourceSessionId,
     sourceHeadSha: headSha,
-    executor,
+    executor: toRecordedExecutor(executor),
     selectedCaseIds: resolvedCases.map((item) => item.caseArtifact.artifactId),
     summary,
     caseResults,
@@ -1272,6 +1308,17 @@ export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = f
   };
 
   await writeHarnessRunRecord(cwd, runId, runRecord, dryRun);
+  if (!dryRun) {
+    const sanitizedRunRecord = sanitizeStructuredValue(runRecord, "harness.run");
+    await persistQuarantineSummary(cwd, config, {
+      surface: "harness.run",
+      sourceRef: runPath,
+      summary: sanitizedRunRecord.summary,
+      previewBySource: sanitizedRunRecord.previewBySource,
+      operation: "harness.run",
+      recordedAt: finishedAt,
+    });
+  }
   if (!dryRun) {
     await appendLedgerEvent(cwd, {
       eventType: "harness.run",

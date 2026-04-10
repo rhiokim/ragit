@@ -82,6 +82,14 @@ export interface HarnessCommandExecutor {
   timeoutMs: number;
 }
 
+export interface HarnessRecordedExecutor {
+  kind: "command";
+  argv: string[];
+  cwd: string;
+  envKeys: string[];
+  timeoutMs: number;
+}
+
 export interface HarnessRunInput {
   suiteRef: string;
   executor: HarnessRunExecutorInput;
@@ -113,7 +121,7 @@ export interface HarnessCaseResult {
   stderrExcerpt: string | null;
   stdoutHash: string | null;
   stderrHash: string | null;
-  structuredOutput?: unknown;
+  structuredOutputSummary?: unknown;
   checkResults: HarnessCaseCheckResult[];
   failureArtifactIds: string[];
 }
@@ -151,7 +159,7 @@ export interface HarnessRunRecord {
   episodeId: string | null;
   sourceSessionId: string | null;
   sourceHeadSha: string | null;
-  executor: HarnessCommandExecutor;
+  executor: HarnessRecordedExecutor;
   selectedCaseIds: string[];
   summary: HarnessRunSummary;
   caseResults: HarnessCaseResult[];
@@ -247,11 +255,81 @@ export interface RagitConfig {
   };
   security: {
     secret_masking: boolean;
+    remote_embedding_policy: "allow-sanitized" | "local-only";
+    quarantine_on_redaction: boolean;
   };
   output: {
     format: "text" | "json" | "both";
     language: "ko" | "en";
   };
+}
+
+export type RemoteEmbeddingPolicy = RagitConfig["security"]["remote_embedding_policy"];
+export type EmbeddingEgressClass = "local" | "remote";
+
+export interface RedactionSummary {
+  applied: boolean;
+  maskedCount: number;
+  sources: string[];
+}
+
+export type SecuritySurface =
+  | "ingest.document"
+  | "session.turn"
+  | "session.toolTrace"
+  | "memory.wrap"
+  | "memory.recall"
+  | "memory.promote"
+  | "harness.run"
+  | "harness.pack"
+  | "event.ledger"
+  | "retrieval.query"
+  | "retrieval.hit"
+  | "query.output"
+  | "context.pack"
+  | "timeline.output"
+  | "log.output"
+  | "audit"
+  | "purge";
+
+export interface SecurityAuditFinding {
+  findingId: string;
+  severity: "critical" | "warn" | "info";
+  surface: SecuritySurface | "control-plane" | "store" | "repo-doc";
+  path: string;
+  field: string | null;
+  reason: string;
+  suggestedAction: string;
+}
+
+export interface SecurityAuditResult {
+  summary: {
+    critical: number;
+    warn: number;
+    info: number;
+    quarantineEntries: number;
+    legacyControlPlaneFiles: number;
+    legacyStoreFindings: number;
+    repoDocsFlagged: number;
+  };
+  providerEgress: {
+    provider: EmbeddingProvider;
+    class: EmbeddingEgressClass;
+    policy: RemoteEmbeddingPolicy;
+    artifactRemoteEmbeddingAllowed: boolean;
+  };
+  findings: SecurityAuditFinding[];
+}
+
+export type SecurityPurgeTarget = "control-plane" | "store" | "cache" | "quarantine" | "all";
+
+export interface SecurityPurgeResult {
+  mode: "dry-run" | "apply";
+  target: SecurityPurgeTarget;
+  planned: string[];
+  rewritten: string[];
+  deleted: string[];
+  warnings: string[];
 }
 
 export interface EmbeddingConfiguredState {

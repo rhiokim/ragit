@@ -129,14 +129,14 @@ Keep refresh token mutation outside snapshot writes.
 
       await runIngest(temp, { all: true, scope: "all" });
       const callsAfterArtifactIndex = calls;
-      expect(callsAfterArtifactIndex).toBeGreaterThan(1);
+      expect(callsAfterArtifactIndex).toBe(1);
 
       await runIngest(temp, { all: true, scope: "all" });
       expect(calls).toBe(callsAfterArtifactIndex);
 
       const artifactSearchBefore = calls;
-      const artifactHits = await searchArtifacts(temp, "keep the output concise", "session", 3);
-      expect(artifactHits[0]?.artifactId).toBeTruthy();
+      const artifactSearch = await searchArtifacts(temp, "keep the output concise", "session", 3);
+      expect(artifactSearch.hits[0]?.artifactId).toBeTruthy();
       expect(calls).toBe(artifactSearchBefore + 1);
 
       await searchArtifacts(temp, "keep the output concise", "session", 3);

@@ -1,4 +1,4 @@
-import { RetrievalHit } from "./types.js";
+import { RedactionSummary, RetrievalHit } from "./types.js";
 
 export type MemoryOpenLoopStatus = "open" | "blocked" | "in_progress" | "closed";
 
@@ -127,6 +127,7 @@ export interface RecallPacket {
   snapshotSha: string | null;
   createdAt: string;
   warnings: string[];
+  redactionSummary?: RedactionSummary;
 }
 
 export interface MemoryWrapResult {

@@ -66,6 +66,8 @@ export const defaultConfig = (): RagitConfig => ({
   },
   security: {
     secret_masking: true,
+    remote_embedding_policy: "allow-sanitized",
+    quarantine_on_redaction: true,
   },
   output: {
     format: "both",
@@ -122,6 +124,16 @@ const normalizeEmbeddingVersion = (value: unknown): string | undefined => {
   return undefined;
 };
 
+const normalizeRemoteEmbeddingPolicy = (value: unknown): RagitConfig["security"]["remote_embedding_policy"] => {
+  if (value === "allow-sanitized" || value === "local-only") return value;
+  return "allow-sanitized";
+};
+
+const normalizeQuarantineOnRedaction = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  return true;
+};
+
 const normalizeOutputFormat = (value: unknown): RagitConfig["output"]["format"] => {
   if (value === "json" || value === "both" || value === "text") return value;
   if (value === "markdown" || value === "table") return "text";
@@ -174,6 +186,10 @@ export const parseToml = (source: string): RagitConfig => {
   embedding.cache_dir = normalizeEmbeddingCacheDir(embedding.cache_dir);
   embedding.dimensions = normalizeEmbeddingDimensions(embedding.dimensions);
   embedding.version = normalizeEmbeddingVersion(embedding.version);
+  const security = result.security ?? {};
+  security.secret_masking = typeof security.secret_masking === "boolean" ? security.secret_masking : true;
+  security.remote_embedding_policy = normalizeRemoteEmbeddingPolicy(security.remote_embedding_policy);
+  security.quarantine_on_redaction = normalizeQuarantineOnRedaction(security.quarantine_on_redaction);
   return result as unknown as RagitConfig;
 };
 
@@ -250,6 +266,13 @@ export const setConfigValue = (config: RagitConfig, dottedKey: string, value: st
       container[key] = parsed;
     } else if (section === "embedding" && key === "version") {
       container[key] = normalizeEmbeddingVersion(value);
+    } else if (section === "security" && key === "remote_embedding_policy") {
+      container[key] = normalizeRemoteEmbeddingPolicy(value);
+    } else if (section === "security" && key === "quarantine_on_redaction") {
+      if (value !== "true" && value !== "false") {
+        throw new Error(`boolean 값은 true/false만 허용됩니다: ${dottedKey}`);
+      }
+      container[key] = normalizeQuarantineOnRedaction(value === "true");
     } else {
       container[key] = value;
     }

@@ -90,6 +90,8 @@ export const formatQueryResultText = (query: string, result: QueryResult, view: 
     `- snapshot: ${result.snapshotSha}`,
     `- hits: ${result.hits.length}`,
     `- view: ${view}`,
+    `- redaction_applied: ${result.redactionSummary.applied}`,
+    `- masked_count: ${result.redactionSummary.maskedCount}`,
     "",
     ...renderRetrievalHitLines(result.hits, view),
   ].join("\n");
