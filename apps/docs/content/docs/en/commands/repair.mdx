@@ -8,6 +8,33 @@ command_path: repair
 
 `repair` is the mutating orchestration layer that sits after <a href="/en/docs/commands/drift">`drift`</a>. It always computes current drift first, then turns those drift items into a structured action plan. By default it only plans. With `--apply`, it executes only the v1 safe subset: `ingest` and `harness verify`.
 
+<MermaidDiagram
+  caption="`repair` always plans from `drift` first; only `ingest` and `harness verify` can cross the v1 safe-apply gate."
+  chart={`
+flowchart TD
+  D["drift"] --> B1["Baseline missing"]
+  D --> B2["Durable path changed"]
+  D --> B3["Memory binding or path drift"]
+  D --> B4["Harness dependency or failure"]
+  B1 --> I["ingest"]
+  B2 --> I
+  B3 --> DR["doc refresh"]
+  B3 --> AR["artifact review"]
+  B3 --> MP["memory promote"]
+  B4 --> HV["harness verify"]
+  B4 --> HR["harness run"]
+  I --> P["planned"]
+  HV --> P
+  DR --> BLOCK["blocked / manual"]
+  AR --> BLOCK
+  MP --> BLOCK
+  HR --> BLOCK
+  P --> SAFE["safe apply"]
+  SAFE --> OUT["plan or execute"]
+  BLOCK --> OUT
+`}
+/>
+
 ## When To Use / When Not To Use
 
 ### When to use it

@@ -5,6 +5,31 @@ description: harness 자원을 capture, verify, run, pack, promote 하는 명령
 
 `harness` 명령군은 review 가능한 evaluation resource를 로컬에서 실행 가능한 루프로 바꿉니다.
 
+<MermaidDiagram
+  caption="harness 명령은 자원 물질화, 구조 검증, 실행, 패킷 조립을 분리해서 다룹니다."
+  chart={`
+flowchart LR
+  HC["harness capture"] --> SU["suite"]
+  HC --> CA["case"]
+  HC --> OR["oracle"]
+  HC --> EV["evidence"]
+  SU --> HV["harness verify"]
+  CA --> HV
+  OR --> HV
+  EV --> HV
+  SU --> HR["harness run"]
+  CA --> HR
+  OR --> HR
+  EV --> HR
+  HR --> RR["run record"]
+  HR --> FA["failure artifact"]
+  SU --> HP["harness pack"]
+  CA --> HP
+  OR --> HP
+  EV --> HP
+`}
+/>
+
 ## 하위 명령 선택
 
 - <a href="/ko/docs/commands/harness/capture">`harness capture`</a>: harness resource를 local artifact로 물질화합니다.

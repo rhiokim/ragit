@@ -8,6 +8,33 @@ command_path: repair
 
 `repair`는 <a href="/ko/docs/commands/drift">`drift`</a> 다음 단계의 mutating orchestration 계층입니다. 항상 먼저 현재 drift를 계산한 뒤, 그 결과를 구조화된 action plan으로 바꿉니다. 기본은 계획만 계산합니다. `--apply`를 붙였을 때만 v1의 safe subset인 `ingest`와 `harness verify`를 실제 실행합니다.
 
+<MermaidDiagram
+  caption="`repair`는 항상 먼저 `drift`를 계산하고, v1에서는 `ingest`와 `harness verify`만 safe-apply를 통과합니다."
+  chart={`
+flowchart TD
+  D["drift"] --> B1["Baseline 없음"]
+  D --> B2["Durable 경로 변경"]
+  D --> B3["Memory binding 또는 경로 drift"]
+  D --> B4["Harness dependency 또는 failure"]
+  B1 --> I["ingest"]
+  B2 --> I
+  B3 --> DR["doc refresh"]
+  B3 --> AR["artifact review"]
+  B3 --> MP["memory promote"]
+  B4 --> HV["harness verify"]
+  B4 --> HR["harness run"]
+  I --> P["planned"]
+  HV --> P
+  DR --> BLOCK["blocked / manual"]
+  AR --> BLOCK
+  MP --> BLOCK
+  HR --> BLOCK
+  P --> SAFE["safe apply"]
+  SAFE --> OUT["계획 또는 실행"]
+  BLOCK --> OUT
+`}
+/>
+
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
 ### 언제 쓰는가

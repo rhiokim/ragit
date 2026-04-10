@@ -1,4 +1,5 @@
 import { PackageManagerCodeBlock } from '@/components/package-manager-code-block';
+import { MermaidDiagram } from '@/components/mermaid-diagram';
 import {
   CodeBlock,
   type CodeBlockProps,
@@ -34,6 +35,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
     ...components,
+    MermaidDiagram,
     pre: ({ children, ...props }: PreProps) => {
       if (
         isValidElement<CodePropsWithTabs>(children) &&

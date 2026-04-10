@@ -5,6 +5,24 @@ description: Review captured artifacts before durable promotion
 
 The `artifact` family controls lifecycle transitions for captured session and harness artifacts.
 
+<MermaidDiagram
+  caption="Captured artifacts stay local until review, then promote only when they are stable enough to become durable docs."
+  chart={`
+stateDiagram-v2
+  [*] --> captured
+  captured --> reviewed: artifact review
+  captured --> superseded: artifact review
+  captured --> retracted: artifact review
+  captured --> archived: artifact review
+  reviewed --> promoted: memory promote / harness promote
+  reviewed --> superseded: artifact review
+  reviewed --> retracted: artifact review
+  reviewed --> archived: artifact review
+  session_materialize --> captured
+  harness_capture --> captured
+`}
+/>
+
 ## Choose A Subcommand
 
 - <a href="/en/docs/commands/artifact/review">`artifact review`</a>: move captured artifacts into `reviewed`, `retracted`, `superseded`, or `archived`.

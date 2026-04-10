@@ -5,6 +5,31 @@ description: Capture, verify, run, pack, and promote harness resources
 
 The `harness` family turns reviewable evaluation resources into an executable local loop.
 
+<MermaidDiagram
+  caption="Harness commands separate resource materialization, structural verification, execution, and packet assembly."
+  chart={`
+flowchart LR
+  HC["harness capture"] --> SU["suite"]
+  HC --> CA["case"]
+  HC --> OR["oracle"]
+  HC --> EV["evidence"]
+  SU --> HV["harness verify"]
+  CA --> HV
+  OR --> HV
+  EV --> HV
+  SU --> HR["harness run"]
+  CA --> HR
+  OR --> HR
+  EV --> HR
+  HR --> RR["run record"]
+  HR --> FA["failure artifact"]
+  SU --> HP["harness pack"]
+  CA --> HP
+  OR --> HP
+  EV --> HP
+`}
+/>
+
 ## Choose A Subcommand
 
 - <a href="/en/docs/commands/harness/capture">`harness capture`</a>: materialize harness resources as local artifacts.

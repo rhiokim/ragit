@@ -6,6 +6,22 @@ description: Detailed command guides for every executable RAGit CLI command
 The `commands` group is the new home for detailed command documentation.
 Each leaf page explains one executable CLI command from the user point of view and the agent integration point of view.
 
+<MermaidDiagram
+  caption="Pick the command by the question you need answered, not by surface similarity."
+  chart={`
+flowchart LR
+  Q1["Need repo summary"] --> C1["status"]
+  Q2["Need diagnosis"] --> C2["doctor"]
+  Q3["Need semantic history"] --> C3["log"]
+  Q4["Need event chronology"] --> C4["timeline"]
+  Q5["Need trust check"] --> C5["drift"]
+  Q6["Need repair orchestration"] --> C6["repair"]
+  Q7["Need retrieval hits"] --> C7["query"]
+  Q8["Need prompt packet"] --> C8["context pack"]
+  Q9["Need to resume active work"] --> C9["memory recall"]
+`}
+/>
+
 ## Start Here
 
 - Read <a href="/en/docs/commands/init">`init`</a> when you are setting up RAGit in a repository.

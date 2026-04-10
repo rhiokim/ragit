@@ -5,6 +5,24 @@ description: captured artifact를 durable promotion 전에 검토합니다
 
 `artifact` 명령군은 captured session/harness artifact의 lifecycle transition을 담당합니다.
 
+<MermaidDiagram
+  caption="artifact는 먼저 로컬 captured 상태로 들어오고, review를 통과한 뒤에만 durable docs로 승격됩니다."
+  chart={`
+stateDiagram-v2
+  [*] --> captured
+  captured --> reviewed: artifact review
+  captured --> superseded: artifact review
+  captured --> retracted: artifact review
+  captured --> archived: artifact review
+  reviewed --> promoted: memory promote / harness promote
+  reviewed --> superseded: artifact review
+  reviewed --> retracted: artifact review
+  reviewed --> archived: artifact review
+  session_materialize --> captured
+  harness_capture --> captured
+`}
+/>
+
 ## 하위 명령 선택
 
 - <a href="/ko/docs/commands/artifact/review">`artifact review`</a>: captured artifact를 `reviewed`, `retracted`, `superseded`, `archived`로 전이합니다.
