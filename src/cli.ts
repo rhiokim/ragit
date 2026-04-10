@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { runArtifactReviewCommand } from "./commands/artifact.js";
 import { resolveCwd, runConfigSet, runDoctor, runStatus } from "./commands/bootstrap.js";
 import { runDocCreateCommand, runDocReconcileCommand, runDocRefreshCommand, runDocValidateCommand } from "./commands/doc.js";
-import { runHarnessCaptureCommand, runHarnessPackCommand, runHarnessPromoteCommand, runHarnessVerifyCommand } from "./commands/harness.js";
+import { runHarnessCaptureCommand, runHarnessPackCommand, runHarnessPromoteCommand, runHarnessRunCommand, runHarnessVerifyCommand } from "./commands/harness.js";
 import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
 import { formatInitSummaryTable, resolveInitRoot, runInit } from "./commands/init.js";
 import { runMemoryPromoteCommand, runMemoryRecallCommand, runMemoryWrapCommand } from "./commands/memory.js";
@@ -668,6 +668,21 @@ harness
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runHarnessVerifyCommand(resolveCwd(options.cwd), String(options.suite), normalizeCliFormat(options.format, "json"));
+  });
+
+harness
+  .command("run")
+  .requiredOption("--input <path|->", "JSON 입력 파일 경로 또는 -")
+  .option("--dry-run", "미리보기 모드")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    await runHarnessRunCommand(
+      resolveCwd(options.cwd),
+      options.input,
+      normalizeCliFormat(options.format, "json"),
+      Boolean(options.dryRun),
+    );
   });
 
 const migrate = program.command("migrate").description("레거시 마이그레이션");

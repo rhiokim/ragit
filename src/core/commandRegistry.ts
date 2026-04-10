@@ -584,6 +584,28 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     ],
   },
   {
+    path: "harness run",
+    description: "suite를 로컬 command executor로 실행하고 deterministic rule로 평가합니다.",
+    group: "harness",
+    docSlug: "commands/harness/run",
+    relatedCommands: ["harness verify", "harness pack", "timeline"],
+    stability: "mutating",
+    mutating: true,
+    supportsDryRun: true,
+    supportsRawJsonInput: true,
+    outputSchemaSummary: ["runId", "suiteId", "runPath", "preflight", "summary", "caseResults[]", "warnings"],
+    arguments: [],
+    options: [
+      { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
+      { name: "--dry-run", type: "boolean", description: "실행 없이 preflight와 planned run만 검증" },
+      { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
+    ],
+    examples: [
+      "ragit harness run --input harness-run.json --dry-run --format json",
+      "ragit harness run --input harness-run.json",
+    ],
+  },
+  {
     path: "memory wrap",
     description: "세션 상태를 working memory에 기록합니다.",
     group: "memory",
