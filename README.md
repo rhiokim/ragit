@@ -213,6 +213,7 @@ pnpm ragit init
 pnpm ragit init --yes --output json
 pnpm ragit init --yes --git-init
 pnpm ragit log --max-count 5 --view default --format both
+pnpm ragit drift --scope all --view default --format both
 pnpm ragit config set retrieval.top_k 8
 pnpm ragit hooks install --dry-run --format json
 pnpm ragit ingest --all --dry-run --format json

@@ -39,7 +39,7 @@ describe("CLI machine contract", () => {
   );
 
   it(
-    "emits JSON envelopes for describe, log, timeline, query, context pack, memory recall, and status",
+    "emits JSON envelopes for describe, log, timeline, drift, query, context pack, memory recall, and status",
     async () => {
       const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-contract-"));
       git(temp, ["init"]);
@@ -114,6 +114,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeTimelineOutput.data.spec.path).toBe("timeline");
       expect(describeTimelineOutput.data.spec.options.some((option: { name: string }) => option.name === "--kind")).toBe(true);
 
+      const describeDriftOutput = JSON.parse(runCli(["describe", "drift", "--format", "json"]));
+      expect(describeDriftOutput.command).toBe("describe");
+      expect(describeDriftOutput.ok).toBe(true);
+      expect(describeDriftOutput.data.spec.path).toBe("drift");
+      expect(describeDriftOutput.data.spec.options.some((option: { name: string }) => option.name === "--scope")).toBe(true);
+
       const describeHarnessRunOutput = JSON.parse(runCli(["describe", "harness", "run", "--format", "json"]));
       expect(describeHarnessRunOutput.command).toBe("describe");
       expect(describeHarnessRunOutput.ok).toBe(true);
@@ -166,6 +172,13 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(timelineOutput.data.events.every((event: { eventType: string }) => event.eventType.startsWith("memory."))).toBe(true);
       expect(timelineOutput.data.events.every((event: { semantic?: unknown }) => event.semantic === undefined)).toBe(true);
 
+      const driftOutput = JSON.parse(runCli(["drift", "--cwd", temp, "--format", "json", "--scope", "all", "--view", "default"]));
+      expect(driftOutput.command).toBe("drift");
+      expect(driftOutput.ok).toBe(true);
+      expect(driftOutput.data.overallStatus).toBeTruthy();
+      expect(driftOutput.data.counts).toBeTruthy();
+      expect(Array.isArray(driftOutput.data.items)).toBe(true);
+
       const statusOutput = JSON.parse(runCli(["status", "--cwd", temp, "--format", "json"]));
       expect(statusOutput.command).toBe("status");
       expect(statusOutput.ok).toBe(true);
@@ -174,6 +187,6 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(statusOutput.data.embedding.cache).toBeTruthy();
       expect(typeof statusOutput.data.embedding.cache.entryCount).toBe("number");
     },
-    20_000,
+    90_000,
   );
 });

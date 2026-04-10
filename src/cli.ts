@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { runArtifactReviewCommand } from "./commands/artifact.js";
 import { resolveCwd, runConfigSet, runDoctor, runStatus } from "./commands/bootstrap.js";
+import { runDriftCommand } from "./commands/drift.js";
 import { runDocCreateCommand, runDocReconcileCommand, runDocRefreshCommand, runDocValidateCommand } from "./commands/doc.js";
 import { runHarnessCaptureCommand, runHarnessPackCommand, runHarnessPromoteCommand, runHarnessRunCommand, runHarnessVerifyCommand } from "./commands/harness.js";
 import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
@@ -239,6 +240,37 @@ program
         since: options.since ? String(options.since) : undefined,
         until: options.until ? String(options.until) : undefined,
         maxCount: parseOptionalPositiveNumber(options.maxCount as string | undefined, "timeline.maxCount"),
+      },
+      normalizeCliFormat(options.format, "text"),
+      normalizeCliView(options.view, "default"),
+    );
+  });
+
+program
+  .command("drift")
+  .description("현재 HEAD 기준으로 durable/memory/harness 지식 객체의 stale 여부를 판정")
+  .option("--scope <scope>", "durable|memory|harness|all", "all")
+  .option("--path <glob>", "repo 내부 glob 필터")
+  .option("--goal <goalId>", "goalId 필터")
+  .option("--session <sessionId>", "sessionId 필터")
+  .option("-n, --max-count <n>", "최종 출력 item 개수")
+  .option("--view <view>", "minimal|default|full", "default")
+  .option("--format <format>", "text|json|both", "text")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const cwd = resolveCwd(options.cwd);
+    const scope = String(options.scope ?? "all").trim().toLowerCase();
+    if (!["durable", "memory", "harness", "all"].includes(scope)) {
+      throw new Error(`지원하지 않는 drift scope입니다: ${options.scope}`);
+    }
+    await runDriftCommand(
+      cwd,
+      {
+        scope: scope as "durable" | "memory" | "harness" | "all",
+        path: options.path ? assertSafeGlobText(String(options.path), "drift.path") : undefined,
+        goalId: options.goal ? String(options.goal) : undefined,
+        sessionId: options.session ? String(options.session) : undefined,
+        maxCount: parseOptionalPositiveNumber(options.maxCount as string | undefined, "drift.maxCount"),
       },
       normalizeCliFormat(options.format, "text"),
       normalizeCliView(options.view, "default"),

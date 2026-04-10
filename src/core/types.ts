@@ -3,6 +3,20 @@ export const KNOWN_DOC_TYPES = ["adr", "prd", "srs", "spec", "plan", "ddd", "glo
 export type KnownDocType = (typeof KNOWN_DOC_TYPES)[number];
 export type DocType = KnownDocType | "unknown";
 export type RetrievalScope = "durable" | "session" | "harness" | "evidence" | "all";
+export type DriftScope = "durable" | "memory" | "harness" | "all";
+export type DriftStatus = "fresh" | "suspect" | "stale";
+export type DriftReasonCode =
+  | "no_baseline"
+  | "missing_manifest_anchor"
+  | "missing_binding"
+  | "binding_local_only"
+  | "tracked_path_changed"
+  | "related_path_changed"
+  | "related_path_missing"
+  | "source_head_behind"
+  | "bound_head_behind"
+  | "failure_evidence_present"
+  | "dependency_stale";
 export type EmbeddingProvider = "local-placeholder" | "openai" | "ollama";
 export type TimelineKind = "session" | "artifact" | "memory" | "harness" | "ingest";
 export type ArtifactStatus = "captured" | "reviewed" | "promoted" | "superseded" | "retracted" | "archived";
@@ -488,4 +502,46 @@ export interface RetrievalHit {
   artifactKind?: ArtifactKind | null;
   authority?: ArtifactAuthority | null;
   confidence?: number | null;
+}
+
+export interface DriftItem {
+  scope: Exclude<DriftScope, "all">;
+  itemType: "baseline" | "document" | "memoryArtifact" | "harnessSuite";
+  id: string;
+  title: string;
+  status: DriftStatus;
+  reasonCodes: DriftReasonCode[];
+  affectedPaths: string[];
+  sourceRefs: {
+    headSha: string | null;
+    snapshotSha?: string | null;
+    anchorSha?: string | null;
+    sourceHeadSha?: string | null;
+    boundHeadSha?: string | null;
+    captureHeadSha?: string | null;
+    artifactId?: string | null;
+    goalId?: string | null;
+    episodeId?: string | null;
+    sourceSessionId?: string | null;
+  };
+  recommendedActions: string[];
+}
+
+export interface DriftResult {
+  overallStatus: DriftStatus;
+  counts: Record<DriftStatus, number>;
+  filters: {
+    scope: DriftScope;
+    path: string | null;
+    goalId: string | null;
+    sessionId: string | null;
+    maxCount: number | null;
+  };
+  baseline: {
+    headSha: string | null;
+    snapshotSha: string | null;
+    snapshotCommitSha: string | null;
+    reasonCodes: DriftReasonCode[];
+  };
+  items: DriftItem[];
 }

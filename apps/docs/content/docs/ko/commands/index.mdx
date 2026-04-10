@@ -11,6 +11,7 @@ description: 실행 가능한 모든 RAGit CLI 명령의 상세 가이드
 - 저장소를 처음 설정할 때는 <a href="/ko/docs/commands/init">`init`</a>부터 읽으십시오.
 - 커밋 사이에서 snapshot 지식과 결속된 beliefs/open loops가 의미적으로 어떻게 달라졌는지 보고 싶을 때는 <a href="/ko/docs/commands/log">`log`</a>를 읽으십시오.
 - 세션, memory, harness, ingest 흐름의 시간축을 읽고 싶을 때는 <a href="/ko/docs/commands/timeline">`timeline`</a>을 읽으십시오.
+- 현재 `HEAD` 기준으로 어떤 지식 객체를 다시 검토해야 하는지 보고 싶을 때는 <a href="/ko/docs/commands/drift">`drift`</a>를 읽으십시오.
 - 인덱싱된 지식에서 바로 검색할 때는 <a href="/ko/docs/commands/query">`query`</a>를 읽으십시오.
 - 다음 에이전트 단계에 넣을 압축된 패킷이 필요하면 <a href="/ko/docs/commands/context/pack">`context pack`</a>을 읽으십시오.
 - 일반 검색이 아니라 현재 작업을 이어서 복원하려면 <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 읽으십시오.
@@ -19,7 +20,7 @@ description: 실행 가능한 모든 RAGit CLI 명령의 상세 가이드
 
 ## 명령어 패밀리
 
-- 최상위 명령: <a href="/ko/docs/commands/init">`init`</a>, <a href="/ko/docs/commands/log">`log`</a>, <a href="/ko/docs/commands/timeline">`timeline`</a>, <a href="/ko/docs/commands/describe">`describe`</a>, <a href="/ko/docs/commands/ingest">`ingest`</a>, <a href="/ko/docs/commands/query">`query`</a>, <a href="/ko/docs/commands/status">`status`</a>, <a href="/ko/docs/commands/doctor">`doctor`</a>
+- 최상위 명령: <a href="/ko/docs/commands/init">`init`</a>, <a href="/ko/docs/commands/log">`log`</a>, <a href="/ko/docs/commands/timeline">`timeline`</a>, <a href="/ko/docs/commands/drift">`drift`</a>, <a href="/ko/docs/commands/describe">`describe`</a>, <a href="/ko/docs/commands/ingest">`ingest`</a>, <a href="/ko/docs/commands/query">`query`</a>, <a href="/ko/docs/commands/status">`status`</a>, <a href="/ko/docs/commands/doctor">`doctor`</a>
 - Doc: <a href="/ko/docs/commands/doc">`doc`</a>
 - Config: <a href="/ko/docs/commands/config">`config`</a>
 - Context: <a href="/ko/docs/commands/context">`context`</a>
@@ -42,6 +43,7 @@ description: 실행 가능한 모든 RAGit CLI 명령의 상세 가이드
 - `query`: "이 질문에 맞는 인덱싱된 지식은 무엇인가?"
 - `log`: "snapshot 이력에서 무엇이 의미적으로 달라졌고, 다음 agent는 무엇을 계속 믿어야 하는가?"
 - `timeline`: "session, memory, harness, ingest 흐름에서 실제로 무슨 일이 일어났는가?"
+- `drift`: "현재 HEAD 기준으로 무엇이 아직 믿을 만하고, 무엇을 다시 검토해야 하는가?"
 - `context pack`: "이 목표를 위해 최소-충분 컨텍스트 패킷은 무엇인가?"
 - `memory wrap`: "작업을 멈추기 전에 무엇을 기록해야 하는가?"
 - `memory recall`: "작업을 다시 시작하기 전에 무엇을 불러와야 하는가?"

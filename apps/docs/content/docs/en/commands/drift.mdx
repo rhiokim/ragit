@@ -1,0 +1,118 @@
+---
+title: drift
+description: Evaluate which durable, memory, and harness knowledge objects have drifted at the current HEAD
+command_path: drift
+---
+
+## What It Does
+
+`drift` is a read-only evaluator that checks whether indexed docs, reviewed/promoted memory artifacts, and reviewed/promoted harness suites are still trustworthy at the current `HEAD`. It does not diagnose infrastructure or replay history. It only tells you which knowledge objects look `fresh`, `suspect`, or `stale`.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You changed code or docs and want to know which knowledge objects now need review.
+- You want a quick trust pass before `query`, `context pack`, or `memory recall`.
+- You want to inspect harness suite freshness without running the suite again.
+
+### When not to use it
+
+- You want a general repository status summary. Use <a href="/en/docs/commands/status">`status`</a>.
+- You want failure diagnostics. Use <a href="/en/docs/commands/doctor">`doctor`</a>.
+- You want semantic history across snapshots. Use <a href="/en/docs/commands/log">`log`</a>.
+- You want the event ledger. Use <a href="/en/docs/commands/timeline">`timeline`</a>.
+
+## Syntax
+
+```bash
+pnpm ragit drift [--scope durable|memory|harness|all] [--path <glob>] [--goal <goalId>] [--session <sessionId>] [--max-count <n>] [--view minimal|default|full] [--format text|json|both]
+```
+
+## Arguments And Options
+
+- `--scope durable|memory|harness|all`: Select which trust layer to evaluate. `all` means the focused v1 set: durable docs, reviewed/promoted memory, and reviewed/promoted harness suites.
+- `--path <glob>`: Restrict the result set to repo-relative paths that match the glob.
+- `--goal <goalId>`: Filter memory/harness items by `goalId`.
+- `--session <sessionId>`: Filter memory/harness items by `sourceSessionId`.
+- `--max-count <n>`: Limit how many drift items are returned after sorting.
+- `--view minimal|default|full`: Choose how much per-item detail to project.
+- `--format text|json|both`: Choose the output form.
+- `--cwd <path>`: Run against another repository.
+
+## Input And Output Contract
+
+- `drift` has no JSON input payload in v1.
+- JSON output always includes `overallStatus`, `counts`, `filters`, `baseline`, and `items`.
+- Each item includes `scope`, `itemType`, `id`, `title`, `status`, `reasonCodes`, `affectedPaths`, `sourceRefs`, and `recommendedActions`.
+
+```json
+{
+  "overallStatus": "stale",
+  "counts": {
+    "fresh": 8,
+    "suspect": 1,
+    "stale": 2
+  },
+  "filters": {
+    "scope": "all",
+    "path": null,
+    "goalId": null,
+    "sessionId": null,
+    "maxCount": 20
+  },
+  "baseline": {
+    "headSha": "abc123...",
+    "snapshotSha": "abc123...",
+    "snapshotCommitSha": "abc123...",
+    "reasonCodes": []
+  },
+  "items": [
+    {
+      "scope": "memory",
+      "itemType": "memoryArtifact",
+      "id": "art_session_feedback_123",
+      "title": "Keep answers concise",
+      "status": "stale",
+      "reasonCodes": ["related_path_changed"],
+      "affectedPaths": ["docs/auth.adr.md"],
+      "sourceRefs": {
+        "headSha": "def456...",
+        "anchorSha": "abc123...",
+        "artifactId": "art_session_feedback_123",
+        "goalId": "resume-auth"
+      },
+      "recommendedActions": ["doc refresh", "artifact review", "memory promote"]
+    }
+  ]
+}
+```
+
+## Examples
+
+Human terminal flow:
+
+```bash
+pnpm ragit drift --scope all --view default --format both
+```
+
+Focused harness review:
+
+```bash
+pnpm ragit drift --scope harness --goal validate-auth-refresh --format json
+```
+
+## Failures And Cautions
+
+- `drift` is structural only in v1. It does not perform semantic contradiction detection or LLM judging.
+- `captured` session artifacts are not first-class drift items.
+- Raw harness run ledgers are not first-class drift items either. Only materialized failure artifacts influence suite freshness.
+- `recommendedActions` are suggestions, not automatic repairs.
+
+## Related Commands
+
+- <a href="/en/docs/commands/status">`status`</a>
+- <a href="/en/docs/commands/doctor">`doctor`</a>
+- <a href="/en/docs/commands/log">`log`</a>
+- <a href="/en/docs/commands/timeline">`timeline`</a>
+- <a href="/en/docs/commands/ingest">`ingest`</a>
