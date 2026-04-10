@@ -138,6 +138,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const embeddingProfile = resolveEmbeddingProfile(config);
+  const cacheMode = options.dryRun ? "readonly" : "readwrite";
   const candidates = await resolveCandidates(cwd, options);
   const scope = options.scope ?? "durable";
   const headSha = await getHeadSha(cwd);
@@ -186,6 +187,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
     const embeddings = await embedTexts(
       chunkCandidates.map((chunk) => chunk.text),
       embeddingProfile,
+      { cwd, cacheMode },
     );
     const chunks = chunkCandidates.map((chunk, index) => {
       const id = chunkVersionId(versionId, chunk.sectionId, index, chunk.text);
@@ -276,7 +278,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
     }
 
     const newDocuments = Array.from(changedDocuments.values());
-    const artifactIndex = await buildArtifactIndexData(cwd, headSha, scope, embeddingProfile);
+    const artifactIndex = await buildArtifactIndexData(cwd, headSha, scope, embeddingProfile, cacheMode);
     const newChunks = [...Array.from(changedChunks.values()).flat(), ...artifactIndex.chunks];
     writeDocumentsToCanonicalStore(store, newDocuments);
     writeChunksToCanonicalStore(store, newChunks);

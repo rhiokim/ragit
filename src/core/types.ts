@@ -89,6 +89,8 @@ export interface RagitConfig {
     model?: string;
     base_url?: string;
     timeout_ms?: number;
+    cache_enabled?: boolean;
+    cache_dir?: string;
     dimensions?: number;
     version?: string;
   };
@@ -129,6 +131,8 @@ export interface EmbeddingConfiguredState {
   model: string;
   baseUrl: string | null;
   timeoutMs: number;
+  cacheEnabled: boolean;
+  cacheDir: string;
   deprecatedDimensions: number | null;
   deprecatedVersion: string | null;
 }
@@ -140,6 +144,8 @@ export interface EmbeddingProfile {
   version: string;
   baseUrl: string | null;
   timeoutMs: number;
+  cacheEnabled: boolean;
+  cacheDir: string;
   ignoredLegacyFields: Array<"dimensions" | "version">;
 }
 

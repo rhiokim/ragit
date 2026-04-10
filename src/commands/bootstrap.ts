@@ -3,7 +3,13 @@ import path from "node:path";
 import { countArtifactState } from "../core/artifacts.js";
 import { loadConfig, setConfigValue, writeConfig } from "../core/config.js";
 import { readDocAuthorityIndex } from "../core/doc-authority.js";
-import { EmbeddingProviderError, resolveEmbeddingConfiguredState, resolveEmbeddingProfile } from "../core/embedding.js";
+import {
+  checkEmbeddingCacheHealth,
+  EmbeddingProviderError,
+  readEmbeddingCacheSummary,
+  resolveEmbeddingConfiguredState,
+  resolveEmbeddingProfile,
+} from "../core/embedding.js";
 import { readEventLedgerStats } from "../core/event-ledger.js";
 import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
@@ -33,6 +39,7 @@ type StatusEmbeddingState = {
     version: string;
     schemaVersion: number;
   } | null;
+  cache: Awaited<ReturnType<typeof readEmbeddingCacheSummary>>;
   ready: boolean;
   needsMigration: boolean;
 };
@@ -92,6 +99,7 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   const config = await loadConfig(cwd);
   const configuredProfile = resolveEmbeddingProfile(config);
   const storeMeta = await readCanonicalStoreMeta(cwd);
+  const cache = await readEmbeddingCacheSummary(cwd, configuredProfile);
   const needsMigration = embeddingNeedsMigration(configuredProfile, storeMeta);
   const manifests = (await readdir(paths.manifestDir)).filter((name) => name.endsWith(".json"));
   const branch = await currentBranch(cwd);
@@ -162,6 +170,7 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
             schemaVersion: storeMeta.schemaVersion,
           }
         : null,
+      cache,
       ready: hasCredentialForProfile(configuredProfile) && !needsMigration,
       needsMigration,
     },
@@ -337,6 +346,33 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
       ok: !migrationNeeded,
       detail: migrationNeeded ? "run ragit migrate embeddings" : "none",
     });
+    if (profile) {
+      const cacheHealth = await checkEmbeddingCacheHealth(cwd, profile);
+      checks.push({
+        name: "embedding.cache-dir",
+        ok:
+          !cacheHealth.enabled ||
+          (!cacheHealth.invalidConfig && cacheHealth.writable),
+        detail:
+          !cacheHealth.enabled
+            ? "disabled"
+            : cacheHealth.invalidConfig
+              ? `invalid cache_dir: ${cacheHealth.dir}`
+              : `dir=${cacheHealth.dir}, writable=${cacheHealth.writable}`,
+      });
+      checks.push({
+        name: "embedding.cache-namespace",
+        ok:
+          !cacheHealth.enabled ||
+          (!cacheHealth.invalidConfig && (cacheHealth.namespaceReadable || cacheHealth.entryCount === 0)),
+        detail:
+          !cacheHealth.enabled
+            ? "disabled"
+            : cacheHealth.invalidConfig
+              ? "cache namespace unavailable because cache_dir is invalid"
+              : `namespace=${cacheHealth.namespaceId ?? "none"}, entries=${cacheHealth.entryCount}, manifest=${cacheHealth.namespaceReadable ? "readable" : "missing"}`,
+      });
+    }
     try {
       if (!storeMeta) {
         throw new Error("zvec store가 아직 초기화되지 않았습니다.");

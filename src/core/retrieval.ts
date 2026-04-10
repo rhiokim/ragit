@@ -132,7 +132,7 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
       hits: [],
     };
   }
-  const queryEmbedding = await embedText(query, embeddingProfile);
+  const queryEmbedding = await embedText(query, embeddingProfile, { cwd });
   const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), true);
 
   try {

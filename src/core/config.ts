@@ -36,6 +36,8 @@ export const defaultConfig = (): RagitConfig => ({
     provider: "local-placeholder",
     model: "placeholder-v1",
     timeout_ms: 30_000,
+    cache_enabled: true,
+    cache_dir: ".ragit/cache/embeddings",
     dimensions: 64,
     version: "v1",
   },
@@ -100,6 +102,16 @@ const normalizeEmbeddingTimeout = (value: unknown): number => {
   return 30_000;
 };
 
+const normalizeEmbeddingCacheEnabled = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  return true;
+};
+
+const normalizeEmbeddingCacheDir = (value: unknown): string => {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return ".ragit/cache/embeddings";
+};
+
 const normalizeEmbeddingDimensions = (value: unknown): number | undefined => {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
   return undefined;
@@ -158,6 +170,8 @@ export const parseToml = (source: string): RagitConfig => {
   embedding.model = normalizeEmbeddingModel(provider, embedding.model);
   embedding.base_url = normalizeEmbeddingBaseUrl(embedding.base_url);
   embedding.timeout_ms = normalizeEmbeddingTimeout(embedding.timeout_ms);
+  embedding.cache_enabled = normalizeEmbeddingCacheEnabled(embedding.cache_enabled);
+  embedding.cache_dir = normalizeEmbeddingCacheDir(embedding.cache_dir);
   embedding.dimensions = normalizeEmbeddingDimensions(embedding.dimensions);
   embedding.version = normalizeEmbeddingVersion(embedding.version);
   return result as unknown as RagitConfig;
@@ -196,7 +210,7 @@ export const setConfigValue = (config: RagitConfig, dottedKey: string, value: st
   }
   const [section, key] = segments;
   const container = (config as unknown as Record<string, Record<string, unknown>>)[section];
-  const optionalEmbeddingKeys = new Set(["model", "base_url", "timeout_ms", "dimensions", "version"]);
+  const optionalEmbeddingKeys = new Set(["model", "base_url", "timeout_ms", "cache_enabled", "cache_dir", "dimensions", "version"]);
   if (!container || (!(key in container) && !(section === "embedding" && optionalEmbeddingKeys.has(key)))) {
     throw new Error(`알 수 없는 설정 키입니다: ${dottedKey}`);
   }
@@ -221,6 +235,13 @@ export const setConfigValue = (config: RagitConfig, dottedKey: string, value: st
       container[key] = normalizeEmbeddingProvider(value);
     } else if (section === "embedding" && key === "timeout_ms") {
       container[key] = normalizeEmbeddingTimeout(Number(value));
+    } else if (section === "embedding" && key === "cache_enabled") {
+      if (value !== "true" && value !== "false") {
+        throw new Error(`boolean 값은 true/false만 허용됩니다: ${dottedKey}`);
+      }
+      container[key] = normalizeEmbeddingCacheEnabled(value === "true");
+    } else if (section === "embedding" && key === "cache_dir") {
+      container[key] = normalizeEmbeddingCacheDir(value);
     } else if (section === "embedding" && key === "dimensions") {
       const parsed = normalizeEmbeddingDimensions(Number(value));
       if (parsed === undefined) {

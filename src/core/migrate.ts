@@ -234,6 +234,7 @@ export const migrateEmbeddings = async (cwd: string, dryRun: boolean): Promise<E
     const embeddings = await embedTexts(
       sourceChunks.map((chunk) => chunk.text),
       targetProfile,
+      { cwd, cacheMode: "readwrite" },
     );
     const targetChunks = sourceChunks.map((chunk, index) => ({
       ...chunk,
@@ -336,6 +337,7 @@ export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promis
     const embeddings = await embedTexts(
       pendingChunks.map((item) => item.chunk.text),
       embeddingProfile,
+      { cwd, cacheMode: "readwrite" },
     );
     const chunks = pendingChunks.map((item, index) => ({
       ...item.chunk,
@@ -433,6 +435,7 @@ export const migrateFromJsonStore = async (cwd: string, dryRun: boolean): Promis
     const embeddings = await embedTexts(
       pendingChunks.map((chunk) => chunk.text),
       embeddingProfile,
+      { cwd, cacheMode: "readwrite" },
     );
     const normalizedChunks = pendingChunks.map((chunk, index) => ({
       ...chunk,

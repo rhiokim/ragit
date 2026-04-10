@@ -5,7 +5,7 @@ import path from "node:path";
 import { assertAllowedKeys, assertRepoRelativePathArray } from "./cliInput.js";
 import { chunkSections, parseSections } from "./chunk.js";
 import { loadConfig } from "./config.js";
-import { cosineSimilarity, embedText, embedTexts, resolveEmbeddingProfile } from "./embedding.js";
+import { cosineSimilarity, EmbeddingCacheMode, embedText, embedTexts, resolveEmbeddingProfile } from "./embedding.js";
 import { appendLedgerEvent, eventLedgerRepoPath } from "./event-ledger.js";
 import { getHeadSha, tryGetGitRoot } from "./git.js";
 import { chunkVersionId, toRepoPath } from "./identity.js";
@@ -765,6 +765,7 @@ export const buildArtifactIndexData = async (
   headSha: string,
   scope: "durable" | "all",
   embeddingProfile: EmbeddingProfile,
+  cacheMode: EmbeddingCacheMode = "readwrite",
 ): Promise<{
   artifactEntries: ArtifactManifestEntry[];
   chunks: ChunkRecord[];
@@ -859,6 +860,7 @@ export const buildArtifactIndexData = async (
   const embeddings = await embedTexts(
     chunkPlans.map((plan) => plan.text),
     embeddingProfile,
+    { cwd, cacheMode },
   );
   for (const [index, plan] of chunkPlans.entries()) {
     const chunk = artifactChunkRecord(
@@ -909,7 +911,7 @@ export const searchArtifacts = async (
   const artifacts = await listArtifactRecords(cwd, {
     statuses: scope === "evidence" ? ["captured", "reviewed"] : ["reviewed", "promoted"],
   });
-  const queryEmbedding = await embedText(query, embeddingProfile);
+  const queryEmbedding = await embedText(query, embeddingProfile, { cwd });
   const candidatesToEmbed: Array<{
     artifact: ArtifactRecord;
     text: string;
@@ -947,6 +949,7 @@ export const searchArtifacts = async (
   const candidateEmbeddings = await embedTexts(
     candidatesToEmbed.map((candidate) => candidate.text),
     embeddingProfile,
+    { cwd },
   );
   const candidates: RetrievalHit[] = [];
   for (const [index, candidate] of candidatesToEmbed.entries()) {
