@@ -54,8 +54,9 @@ pnpm ragit config set ingest.supported_types '["adr","spec"]'
 ## 실패/주의 사항
 
 - 잘못된 key나 잘못된 value는 config 쓰기 전에 실패합니다.
-- real provider에서는 `embedding.provider`, `embedding.model`, `embedding.base_url`, `embedding.timeout_ms`만 공식 조절면으로 보십시오. `embedding.dimensions`와 `embedding.version`은 `local-placeholder`에만 의미가 남아 있는 레거시 필드입니다.
+- real provider에서는 `embedding.provider`, `embedding.model`, `embedding.base_url`, `embedding.timeout_ms`, `embedding.cache_enabled`, `embedding.cache_dir`를 공식 조절면으로 보십시오. `embedding.dimensions`와 `embedding.version`은 `local-placeholder`에만 의미가 남아 있는 레거시 필드입니다.
 - target embedding provider를 바꿔도 persisted store contract는 자동으로 바뀌지 않습니다. `status`에서 `embedding.needsMigration=true`가 보이면 이어서 <a href="/ko/docs/commands/migrate/embeddings">`migrate embeddings`</a>를 실행하십시오.
+- `embedding.cache_dir`는 반드시 저장소 루트 내부를 가리켜야 합니다. 저장소 밖을 가리키면 cache 쓰기가 비활성화되고 <a href="/ko/docs/commands/doctor">`doctor`</a>가 invalid config로 보고합니다.
 - 출력이 텍스트뿐이므로, 에이전트는 후속으로 <a href="/ko/docs/commands/status">`status`</a>로 상태를 검증하는 편이 좋습니다.
 
 ## 관련 명령

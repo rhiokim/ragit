@@ -6,7 +6,7 @@ command_path: status
 
 ## What It Does
 
-`status` prints the current repository state that matters to RAGit: branch, HEAD, backend, manifest count, knowledge readiness, event-ledger activity, and the split between the configured embedding profile and the persisted store contract.
+`status` prints the current repository state that matters to RAGit: branch, HEAD, backend, manifest count, knowledge readiness, event-ledger activity, the split between the configured embedding profile and the persisted store contract, and the active embedding-cache namespace summary.
 
 ## When To Use / When Not To Use
 
@@ -35,7 +35,8 @@ pnpm ragit status [--format text|json|both] [--cwd <path>]
 ## Input And Output Contract
 
 - There is no positional input and no JSON payload input.
-- JSON output includes `branch`, `head`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `events`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.ready`, `embedding.needsMigration`, and `format`.
+- JSON output includes `branch`, `head`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `events`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.cache`, `embedding.ready`, `embedding.needsMigration`, and `format`.
+- `embedding.cache` reports `enabled`, `dir`, `namespaceId`, `entryCount`, `batchPolicy`, `retryPolicy`, `writable`, and `namespaceReadable`.
 - Agents should usually call `--format json`.
 
 ## Examples
@@ -58,6 +59,7 @@ pnpm ragit status --format json
 - A loaded store does not guarantee that your latest docs are indexed. Run <a href="/en/docs/commands/ingest">`ingest`</a> after content changes.
 - Event counters reflect append-only operational ledger activity, not snapshot semantic deltas. Use <a href="/en/docs/commands/timeline">`timeline`</a> when you need the detailed time axis.
 - When `embedding.needsMigration=true`, change the store with <a href="/en/docs/commands/migrate/embeddings">`migrate embeddings`</a> before running write paths against the new provider contract.
+- When `embedding.cache.enabled=false` while cache is expected, inspect <a href="/en/docs/commands/doctor">`doctor`</a> for `embedding.cache-dir` and `embedding.cache-namespace`.
 
 ## Related Commands
 

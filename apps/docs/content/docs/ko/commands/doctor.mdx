@@ -6,7 +6,7 @@ command_path: doctor
 
 ## 무엇을 하는 명령인가
 
-`doctor`는 git 설정, RAGit 구조, config, zvec runtime, schema layout, manifest consistency를 한 번에 진단합니다.
+`doctor`는 git 설정, RAGit 구조, config, embedding contract 상태, embedding cache health, zvec runtime, schema layout, manifest consistency를 한 번에 진단합니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -37,6 +37,7 @@ pnpm ragit doctor [--format text|json|both] [--cwd <path>]
 - positional 입력도 JSON payload 입력도 없습니다.
 - JSON 출력에는 `checks`와 `hasFailure`가 포함됩니다.
 - 하나라도 실패한 check가 있으면 결과 출력 후 non-zero code로 종료합니다.
+- embedding 관련 주요 check 이름은 `embedding.credentials`, `embedding.deprecated-fields`, `embedding.contract`, `embedding.migration-needed`, `embedding.cache-dir`, `embedding.cache-namespace`입니다.
 
 ## 대표 사용 예시
 
@@ -56,6 +57,8 @@ pnpm ragit doctor --format json
 
 - `doctor` 실패는 단일 명령 문제가 아니라 저장소 또는 런타임 설정 문제일 가능성이 높습니다.
 - 자동화 후속 조치를 만들 때는 JSON output 안의 check name을 기준으로 분기하는 편이 안전합니다.
+- `embedding.cache-dir`은 설정된 cache directory가 저장소 내부에 있고 쓰기 가능한지 확인합니다.
+- `embedding.cache-namespace`는 활성 namespace manifest를 읽을 수 있는지, 또는 아직 namespace가 materialize되지 않은 정상 초기 상태인지를 확인합니다.
 
 ## 관련 명령
 

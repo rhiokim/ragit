@@ -6,7 +6,7 @@ command_path: doctor
 
 ## What It Does
 
-`doctor` runs a multi-check diagnosis across git setup, RAGit structure, config, zvec runtime, schema layout, and manifest consistency.
+`doctor` runs a multi-check diagnosis across git setup, RAGit structure, config, embedding contract state, embedding cache health, zvec runtime, schema layout, and manifest consistency.
 
 ## When To Use / When Not To Use
 
@@ -37,6 +37,7 @@ pnpm ragit doctor [--format text|json|both] [--cwd <path>]
 - There is no positional input and no JSON payload input.
 - JSON output includes `checks` and `hasFailure`.
 - If any check fails, the process exits with a non-zero code after printing the result.
+- Embedding-oriented check names include `embedding.credentials`, `embedding.deprecated-fields`, `embedding.contract`, `embedding.migration-needed`, `embedding.cache-dir`, and `embedding.cache-namespace`.
 
 ## Examples
 
@@ -56,6 +57,8 @@ pnpm ragit doctor --format json
 
 - A failing `doctor` result often signals repository or runtime setup problems outside a single command.
 - Use the individual check names in the JSON output when automating follow-up actions.
+- `embedding.cache-dir` validates that the configured cache directory stays inside the repository and is writable.
+- `embedding.cache-namespace` validates that the active namespace manifest is readable, or that no namespace has been materialized yet.
 
 ## Related Commands
 
