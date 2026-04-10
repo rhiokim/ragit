@@ -161,6 +161,8 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(statusOutput.ok).toBe(true);
       expect(statusOutput.data.zvec.searchReady).toBe(true);
       expect(statusOutput.data.events.eventCount).toBeGreaterThan(0);
+      expect(statusOutput.data.embedding.cache).toBeTruthy();
+      expect(typeof statusOutput.data.embedding.cache.entryCount).toBe("number");
     },
     20_000,
   );
