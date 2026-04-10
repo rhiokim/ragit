@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { runArtifactReviewCommand } from "./commands/artifact.js";
 import { resolveCwd, runConfigSet, runDoctor, runStatus } from "./commands/bootstrap.js";
 import { runDriftCommand } from "./commands/drift.js";
+import { runRepairCommand } from "./commands/repair.js";
 import { runDocCreateCommand, runDocReconcileCommand, runDocRefreshCommand, runDocValidateCommand } from "./commands/doc.js";
 import { runHarnessCaptureCommand, runHarnessPackCommand, runHarnessPromoteCommand, runHarnessRunCommand, runHarnessVerifyCommand } from "./commands/harness.js";
 import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
@@ -19,6 +20,7 @@ import { formatContextPackText, packContext, projectContextPack } from "./core/c
 import { runIngest } from "./core/ingest.js";
 import { formatRagitLogText, projectRagitLogResult, runRagitLog } from "./core/log.js";
 import { formatQueryResultText, projectRetrievalHits } from "./core/output.js";
+import { normalizeRepairActionKind } from "./core/repair.js";
 import { searchKnowledge } from "./core/retrieval.js";
 import { normalizeKnownDocType } from "./core/types.js";
 import { RAGIT_VERSION } from "./core/version.js";
@@ -273,6 +275,49 @@ program
         maxCount: parseOptionalPositiveNumber(options.maxCount as string | undefined, "drift.maxCount"),
       },
       normalizeCliFormat(options.format, "text"),
+      normalizeCliView(options.view, "default"),
+    );
+  });
+
+program
+  .command("repair")
+  .description("drift 결과를 기반으로 기존 복구 명령을 orchestration 합니다")
+  .option("--apply", "safe action만 실제 실행")
+  .option("--scope <scope>", "durable|memory|harness|all", "all")
+  .option("--path <glob>", "repo 내부 glob 필터")
+  .option("--goal <goalId>", "goalId 필터")
+  .option("--session <sessionId>", "sessionId 필터")
+  .option("-n, --max-count <n>", "최종 출력 item 개수")
+  .option("--action <kind>", "ingest|doc-refresh|artifact-review|harness-verify|harness-run|memory-promote", collectRepeatedOption, [])
+  .option("--view <view>", "minimal|default|full", "default")
+  .option("--format <format>", "text|json|both", "json")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (options) => {
+    const cwd = resolveCwd(options.cwd);
+    const scope = String(options.scope ?? "all").trim().toLowerCase();
+    if (!["durable", "memory", "harness", "all"].includes(scope)) {
+      throw new Error(`지원하지 않는 repair scope입니다: ${options.scope}`);
+    }
+    const actionValues = Array.isArray(options.action) ? (options.action as string[]) : [];
+    const actions = actionValues.map((entry) => {
+      const normalized = normalizeRepairActionKind(String(entry));
+      if (!normalized) {
+        throw new Error(`지원하지 않는 repair action입니다: ${entry}`);
+      }
+      return normalized;
+    });
+    await runRepairCommand(
+      cwd,
+      {
+        apply: Boolean(options.apply),
+        scope: scope as "durable" | "memory" | "harness" | "all",
+        path: options.path ? assertSafeGlobText(String(options.path), "repair.path") : undefined,
+        goalId: options.goal ? String(options.goal) : undefined,
+        sessionId: options.session ? String(options.session) : undefined,
+        maxCount: parseOptionalPositiveNumber(options.maxCount as string | undefined, "repair.maxCount"),
+        actions,
+      },
+      normalizeCliFormat(options.format, "json"),
       normalizeCliView(options.view, "default"),
     );
   });

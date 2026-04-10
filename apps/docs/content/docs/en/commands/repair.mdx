@@ -1,0 +1,137 @@
+---
+title: repair
+description: Build a conservative repair plan from current drift results and optionally apply only safe actions
+command_path: repair
+---
+
+## What It Does
+
+`repair` is the mutating orchestration layer that sits after <a href="/en/docs/commands/drift">`drift`</a>. It always computes current drift first, then turns those drift items into a structured action plan. By default it only plans. With `--apply`, it executes only the v1 safe subset: `ingest` and `harness verify`.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You already know drift exists and want the next conservative repair actions in one machine-readable plan.
+- You want to safely auto-run targeted/full `ingest` or `harness verify` from current drift results.
+- You want one command that explains which actions are blocked, skipped, safe, or executed.
+
+### When not to use it
+
+- You only want to know what is stale. Use <a href="/en/docs/commands/drift">`drift`</a>.
+- You want a repository summary. Use <a href="/en/docs/commands/status">`status`</a>.
+- You want failure diagnosis. Use <a href="/en/docs/commands/doctor">`doctor`</a>.
+- You need semantic history across snapshots. Use <a href="/en/docs/commands/log">`log`</a>.
+- You need the append-only event timeline. Use <a href="/en/docs/commands/timeline">`timeline`</a>.
+
+## Syntax
+
+```bash
+pnpm ragit repair [--apply] [--scope durable|memory|harness|all] [--path <glob>] [--goal <goalId>] [--session <sessionId>] [--max-count <n>] [--action <kind>]... [--view minimal|default|full] [--format text|json|both]
+```
+
+## Arguments And Options
+
+- `--apply`: Execute only actions that are both safe in v1 and do not require extra input.
+- `--scope durable|memory|harness|all`: Forward the repair focus to internal drift evaluation. `all` means the focused v1 set: durable docs, reviewed/promoted memory, and reviewed/promoted harness suites.
+- `--path <glob>`: Restrict drift items, and therefore repair actions, to repo-relative paths that match the glob.
+- `--goal <goalId>`: Filter memory/harness items by `goalId`.
+- `--session <sessionId>`: Filter memory/harness items by `sourceSessionId`.
+- `--max-count <n>`: Limit how many drift items are considered after sorting.
+- `--action <kind>`: Repeatable filter for `ingest`, `doc-refresh`, `artifact-review`, `harness-verify`, `harness-run`, or `memory-promote`.
+- `--view minimal|default|full`: Choose how much detail to project in text output.
+- `--format text|json|both`: Choose the output form. JSON is the canonical interface.
+- `--cwd <path>`: Run against another repository.
+
+## Input And Output Contract
+
+- `repair` has no JSON input payload in v1. It always derives its plan from an internal `drift` pass.
+- JSON output always includes `mode`, `summary`, `filters`, `drift`, `plannedActions`, `executedActions`, `skippedActions`, and `warnings`.
+- Each planned or executed action includes `actionId`, `action`, `sourceItemId`, `sourceScope`, `reasonCodes`, `status`, `safeToApply`, `requiresInput`, `commandPath`, `args`, and `notes`.
+
+```json
+{
+  "mode": "plan",
+  "summary": {
+    "planned": 2,
+    "executed": 0,
+    "blocked": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "filters": {
+    "scope": "all",
+    "path": null,
+    "goalId": null,
+    "sessionId": null,
+    "maxCount": 20,
+    "actions": []
+  },
+  "drift": {
+    "overallStatus": "stale"
+  },
+  "plannedActions": [
+    {
+      "actionId": "repair_ingest_001",
+      "action": "ingest",
+      "sourceItemId": "doc_auth",
+      "sourceScope": "durable",
+      "reasonCodes": ["tracked_path_changed"],
+      "status": "planned",
+      "safeToApply": true,
+      "requiresInput": false,
+      "commandPath": "ingest",
+      "args": ["--path", "docs/auth.adr.md", "--scope", "durable"],
+      "notes": ["targeted reindex for changed durable docs"]
+    }
+  ],
+  "executedActions": [],
+  "skippedActions": [],
+  "warnings": []
+}
+```
+
+## Planner And Apply Semantics
+
+- `repair` always runs `drift` first and never accepts an external action plan in v1.
+- Default mode is plan-first. Without `--apply`, no repo-tracked files are changed.
+- `--apply` runs only safe actions with no extra payload requirement.
+- In v1 that means only `ingest` and `harness verify` may actually execute.
+- `doc refresh`, `artifact review`, `memory promote`, and `harness run` stay as blocked plan items because v1 does not synthesize the required payloads automatically.
+- Blocked actions are normal plan output, not command failures.
+
+## Examples
+
+Review the whole repository and emit the action plan:
+
+```bash
+pnpm ragit repair --scope all --format json
+```
+
+Apply only safe ingest and harness verification actions:
+
+```bash
+pnpm ragit repair --apply --action ingest --action harness-verify --format both
+```
+
+Focus on one goal without mutating anything:
+
+```bash
+pnpm ragit repair --goal validate-auth-refresh --scope harness --format both
+```
+
+## Failures And Cautions
+
+- `repair` does not invent new repair algorithms in v1. It only orchestrates existing commands.
+- `repair` is conservative by design. It does not auto-run `artifact review`, `memory promote`, `doc refresh`, or `harness run`.
+- Apply mode fails only when an actually executed action fails.
+- Semantic contradiction detection, LLM judging, and automatic payload synthesis are outside v1.
+
+## Related Commands
+
+- <a href="/en/docs/commands/drift">`drift`</a>
+- <a href="/en/docs/commands/ingest">`ingest`</a>
+- <a href="/en/docs/commands/harness/verify">`harness verify`</a>
+- <a href="/en/docs/commands/doc/refresh">`doc refresh`</a>
+- <a href="/en/docs/commands/artifact/review">`artifact review`</a>
+- <a href="/en/docs/commands/memory/promote">`memory promote`</a>

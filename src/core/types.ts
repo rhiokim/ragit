@@ -5,6 +5,14 @@ export type DocType = KnownDocType | "unknown";
 export type RetrievalScope = "durable" | "session" | "harness" | "evidence" | "all";
 export type DriftScope = "durable" | "memory" | "harness" | "all";
 export type DriftStatus = "fresh" | "suspect" | "stale";
+export type RepairActionKind =
+  | "ingest"
+  | "doc-refresh"
+  | "artifact-review"
+  | "harness-verify"
+  | "harness-run"
+  | "memory-promote";
+export type RepairActionStatus = "planned" | "executed" | "blocked" | "skipped" | "failed";
 export type DriftReasonCode =
   | "no_baseline"
   | "missing_manifest_anchor"
@@ -544,4 +552,42 @@ export interface DriftResult {
     reasonCodes: DriftReasonCode[];
   };
   items: DriftItem[];
+}
+
+export interface RepairAction {
+  actionId: string;
+  action: RepairActionKind;
+  sourceItemId: string;
+  sourceScope: Exclude<DriftScope, "all">;
+  reasonCodes: DriftReasonCode[];
+  status: RepairActionStatus;
+  safeToApply: boolean;
+  requiresInput: boolean;
+  commandPath: string;
+  args: string[];
+  notes: string[];
+}
+
+export interface RepairResult {
+  mode: "plan" | "apply";
+  summary: {
+    planned: number;
+    executed: number;
+    blocked: number;
+    failed: number;
+    skipped: number;
+  };
+  filters: {
+    scope: DriftScope;
+    path: string | null;
+    goalId: string | null;
+    sessionId: string | null;
+    maxCount: number | null;
+    actions: RepairActionKind[];
+  };
+  drift: DriftResult;
+  plannedActions: RepairAction[];
+  executedActions: RepairAction[];
+  skippedActions: RepairAction[];
+  warnings: string[];
 }

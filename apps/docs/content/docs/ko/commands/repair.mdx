@@ -1,0 +1,137 @@
+---
+title: repair
+description: 현재 drift 결과에서 보수적인 복구 계획을 만들고 안전한 액션만 선택적으로 적용합니다
+command_path: repair
+---
+
+## 무엇을 하는 명령인가
+
+`repair`는 <a href="/ko/docs/commands/drift">`drift`</a> 다음 단계의 mutating orchestration 계층입니다. 항상 먼저 현재 drift를 계산한 뒤, 그 결과를 구조화된 action plan으로 바꿉니다. 기본은 계획만 계산합니다. `--apply`를 붙였을 때만 v1의 safe subset인 `ingest`와 `harness verify`를 실제 실행합니다.
+
+## 언제 쓰는가 / 언제 쓰지 않는가
+
+### 언제 쓰는가
+
+- 현재 drift 결과를 바탕으로 다음 복구 액션을 한 번에, 기계가 읽기 쉬운 형태로 받고 싶을 때
+- 현재 drift에서 파생되는 `ingest` 또는 `harness verify`를 안전하게 자동 실행하고 싶을 때
+- 어떤 액션이 blocked, skipped, safe, executed인지 한 명령에서 함께 보고 싶을 때
+
+### 언제 쓰지 않는가
+
+- 무엇이 stale인지 판정만 하고 싶을 때. <a href="/ko/docs/commands/drift">`drift`</a>를 사용하십시오.
+- 저장소 상태 요약이 필요할 때. <a href="/ko/docs/commands/status">`status`</a>를 사용하십시오.
+- 실패 원인 진단이 필요할 때. <a href="/ko/docs/commands/doctor">`doctor`</a>를 사용하십시오.
+- snapshot semantic history를 보고 싶을 때. <a href="/ko/docs/commands/log">`log`</a>를 사용하십시오.
+- append-only event timeline이 필요할 때. <a href="/ko/docs/commands/timeline">`timeline`</a>을 사용하십시오.
+
+## 기본 구문
+
+```bash
+pnpm ragit repair [--apply] [--scope durable|memory|harness|all] [--path <glob>] [--goal <goalId>] [--session <sessionId>] [--max-count <n>] [--action <kind>]... [--view minimal|default|full] [--format text|json|both]
+```
+
+## 인자와 옵션
+
+- `--apply`: v1에서 safe하고 추가 입력이 필요 없는 액션만 실제 실행합니다.
+- `--scope durable|memory|harness|all`: 내부 drift 평가 범위를 전달합니다. `all`은 v1 집중 범위인 durable docs, reviewed/promoted memory, reviewed/promoted harness suites를 뜻합니다.
+- `--path <glob>`: repo-relative path glob으로 drift item과 repair action을 함께 좁힙니다.
+- `--goal <goalId>`: memory/harness 항목을 `goalId`로 필터링합니다.
+- `--session <sessionId>`: memory/harness 항목을 `sourceSessionId`로 필터링합니다.
+- `--max-count <n>`: 정렬 후 고려할 drift item 개수를 제한합니다.
+- `--action <kind>`: `ingest`, `doc-refresh`, `artifact-review`, `harness-verify`, `harness-run`, `memory-promote` 중에서 반복 지정할 수 있는 필터입니다.
+- `--view minimal|default|full`: text 출력의 상세 투영 수준을 선택합니다.
+- `--format text|json|both`: 출력 형식을 선택합니다. canonical 인터페이스는 JSON입니다.
+- `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+## 입력/출력 계약
+
+- v1의 `repair`는 JSON 입력 payload를 받지 않습니다. 내부 `drift` 결과에서 항상 계획을 만듭니다.
+- JSON 출력은 항상 `mode`, `summary`, `filters`, `drift`, `plannedActions`, `executedActions`, `skippedActions`, `warnings`를 포함합니다.
+- 각 action은 `actionId`, `action`, `sourceItemId`, `sourceScope`, `reasonCodes`, `status`, `safeToApply`, `requiresInput`, `commandPath`, `args`, `notes`를 포함합니다.
+
+```json
+{
+  "mode": "plan",
+  "summary": {
+    "planned": 2,
+    "executed": 0,
+    "blocked": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "filters": {
+    "scope": "all",
+    "path": null,
+    "goalId": null,
+    "sessionId": null,
+    "maxCount": 20,
+    "actions": []
+  },
+  "drift": {
+    "overallStatus": "stale"
+  },
+  "plannedActions": [
+    {
+      "actionId": "repair_ingest_001",
+      "action": "ingest",
+      "sourceItemId": "doc_auth",
+      "sourceScope": "durable",
+      "reasonCodes": ["tracked_path_changed"],
+      "status": "planned",
+      "safeToApply": true,
+      "requiresInput": false,
+      "commandPath": "ingest",
+      "args": ["--path", "docs/auth.adr.md", "--scope", "durable"],
+      "notes": ["targeted reindex for changed durable docs"]
+    }
+  ],
+  "executedActions": [],
+  "skippedActions": [],
+  "warnings": []
+}
+```
+
+## planner / apply 의미론
+
+- `repair`는 항상 먼저 `drift`를 실행하며, v1에서는 외부 action plan을 받지 않습니다.
+- 기본은 plan-first입니다. `--apply`가 없으면 repo-tracked 파일을 변경하지 않습니다.
+- `--apply`는 safe하고 추가 payload가 필요 없는 액션만 실행합니다.
+- v1에서 실제 실행 가능한 것은 `ingest`와 `harness verify`뿐입니다.
+- `doc refresh`, `artifact review`, `memory promote`, `harness run`은 필요한 payload를 자동 합성하지 않으므로 blocked 계획 항목으로만 남깁니다.
+- blocked action은 오류가 아니라 정상적인 계획 결과입니다.
+
+## 대표 사용 예시
+
+전체 저장소 기준으로 action plan만 계산:
+
+```bash
+pnpm ragit repair --scope all --format json
+```
+
+safe한 ingest/harness verify만 실제 적용:
+
+```bash
+pnpm ragit repair --apply --action ingest --action harness-verify --format both
+```
+
+특정 goal에만 집중하고 실제 변경은 하지 않기:
+
+```bash
+pnpm ragit repair --goal validate-auth-refresh --scope harness --format both
+```
+
+## 실패/주의 사항
+
+- v1의 `repair`는 새로운 복구 알고리즘을 만들지 않습니다. 기존 명령만 orchestration합니다.
+- `repair`는 의도적으로 보수적입니다. `artifact review`, `memory promote`, `doc refresh`, `harness run`은 자동 실행하지 않습니다.
+- apply 모드는 실제 실행된 action 중 하나라도 실패할 때만 명령 실패로 처리됩니다.
+- 의미 모순 탐지, LLM judge, 자동 payload 합성은 v1 범위 밖입니다.
+
+## 관련 명령
+
+- <a href="/ko/docs/commands/drift">`drift`</a>
+- <a href="/ko/docs/commands/ingest">`ingest`</a>
+- <a href="/ko/docs/commands/harness/verify">`harness verify`</a>
+- <a href="/ko/docs/commands/doc/refresh">`doc refresh`</a>
+- <a href="/ko/docs/commands/artifact/review">`artifact review`</a>
+- <a href="/ko/docs/commands/memory/promote">`memory promote`</a>

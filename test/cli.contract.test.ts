@@ -39,7 +39,7 @@ describe("CLI machine contract", () => {
   );
 
   it(
-    "emits JSON envelopes for describe, log, timeline, drift, query, context pack, memory recall, and status",
+    "emits JSON envelopes for describe, log, timeline, drift, repair, query, context pack, memory recall, and status",
     async () => {
       const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-contract-"));
       git(temp, ["init"]);
@@ -120,6 +120,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeDriftOutput.data.spec.path).toBe("drift");
       expect(describeDriftOutput.data.spec.options.some((option: { name: string }) => option.name === "--scope")).toBe(true);
 
+      const describeRepairOutput = JSON.parse(runCli(["describe", "repair", "--format", "json"]));
+      expect(describeRepairOutput.command).toBe("describe");
+      expect(describeRepairOutput.ok).toBe(true);
+      expect(describeRepairOutput.data.spec.path).toBe("repair");
+      expect(describeRepairOutput.data.spec.options.some((option: { name: string }) => option.name === "--apply")).toBe(true);
+
       const describeHarnessRunOutput = JSON.parse(runCli(["describe", "harness", "run", "--format", "json"]));
       expect(describeHarnessRunOutput.command).toBe("describe");
       expect(describeHarnessRunOutput.ok).toBe(true);
@@ -178,6 +184,14 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(driftOutput.data.overallStatus).toBeTruthy();
       expect(driftOutput.data.counts).toBeTruthy();
       expect(Array.isArray(driftOutput.data.items)).toBe(true);
+
+      const repairOutput = JSON.parse(runCli(["repair", "--cwd", temp, "--format", "json", "--scope", "all", "--view", "default"]));
+      expect(repairOutput.command).toBe("repair");
+      expect(repairOutput.ok).toBe(true);
+      expect(repairOutput.data.mode).toBe("plan");
+      expect(repairOutput.data.summary).toBeTruthy();
+      expect(Array.isArray(repairOutput.data.plannedActions)).toBe(true);
+      expect(repairOutput.data.drift).toBeTruthy();
 
       const statusOutput = JSON.parse(runCli(["status", "--cwd", temp, "--format", "json"]));
       expect(statusOutput.command).toBe("status");
