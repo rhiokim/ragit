@@ -1,0 +1,19 @@
+# doc validate
+
+
+
+What It Does [#what-it-does]
+
+`doc validate` checks tracked project docs against the standard document contract and reports violations.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit doc validate [--type <type> | --all] [--format text|json|both]
+```
+
+Key Points [#key-points]
+
+* This command is read-only.
+* Use `--all` when you want every known document type checked together.
+* JSON output includes `checkedFiles`, `tracked`, `violations`, and per-file details.

@@ -1,0 +1,14 @@
+# Session
+
+
+
+`session` 명령군은 대화 기록과 도구 흔적을 review 가능한 로컬 artifact로 바꿉니다.
+
+하위 명령 선택 [#하위-명령-선택]
+
+* <a href="/ko/docs/commands/session/materialize">`session materialize`</a>: redacted transcript ledger와 candidate session artifact를 만듭니다.
+
+명령군 경계 [#명령군-경계]
+
+* `materialize`는 `.ragit/log/**`와 `.ragit/artifacts/session/**`에 기록합니다.
+* durable memory 승격은 직접 하지 않습니다. 이후에는 <a href="/ko/docs/commands/artifact/review">`artifact review`</a>와 <a href="/ko/docs/commands/memory/promote">`memory promote`</a>를 사용하십시오.

@@ -1,0 +1,60 @@
+# RAGit Agent Skill
+
+
+
+`use-ragit` is the repository-managed canonical skill source for operating RAGit inside Codex, while keeping the main rules reusable for Claude and Gemini through shared reference files.
+
+What It Solves [#what-it-solves]
+
+* Resolve the correct runtime before the first RAGit command
+* Check repository readiness with `status --format json`
+* Route agent intent to the right command
+* Keep `query`, `context pack`, `memory recall`, `memory wrap`, `memory promote`, and `hooks install` from being mixed up
+* Enforce `--dry-run` before mutating commands
+
+Command Selection [#command-selection]
+
+* Use `status` for the first readiness check.
+* Use `doctor` only after a failure or when you need structured diagnostics.
+* Use `describe` before first-time command integration.
+* Use `query` for raw retrieval hits.
+* Use `context pack` for a prompt-sized, goal-bounded handoff packet.
+* Use `memory recall` to resume active work from working memory.
+* Use `memory wrap` to preserve session continuity.
+* Use `memory promote` only for stable, searchable knowledge.
+* Use `hooks install` only when automatic post-commit or post-merge ingest is explicitly requested.
+
+Codex Install Path [#codex-install-path]
+
+Canonical source in this repository:
+
+```text
+skills/use-ragit
+```
+
+Recommended Codex install target:
+
+```text
+${CODEX_HOME:-$HOME/.codex}/skills/use-ragit
+```
+
+Typical symlink flow:
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+ln -s "/absolute/path/to/ragit/skills/use-ragit" "${CODEX_HOME:-$HOME/.codex}/skills/use-ragit"
+```
+
+If you prefer not to symlink, copy the folder instead.
+
+Shared References For Claude And Gemini [#shared-references-for-claude-and-gemini]
+
+Claude and Gemini do not need a separate v1 wrapper pack.
+Reuse the same rules by pointing project instructions to these files:
+
+* `skills/use-ragit/references/command-routing.md`
+* `skills/use-ragit/references/memory-discipline.md`
+* `skills/use-ragit/references/payload-patterns.md`
+* `skills/use-ragit/references/interop.md`
+
+That keeps command routing, safety rules, and memory discipline aligned across agents while leaving only metadata and trigger wording product-specific.

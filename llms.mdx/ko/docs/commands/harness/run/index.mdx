@@ -1,0 +1,57 @@
+# harness run
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`harness run`은 저장된 suite를 하나의 로컬 `command` executor backend에 실행합니다. 구조 preflight를 수행하고, 선택된 case를 순차 실행하며, deterministic rule로 출력 결과를 판정하고, `.ragit/log/harness-runs/**`에 run record를 남기며, `timeline`에는 `harness.run` event를 기록합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 이미 suite artifact가 있고 실제 실행 결과가 필요할 때
+* 구조 검사만이 아니라 failure evidence artifact까지 만들고 싶을 때
+* operational timeline에 남는 실행 기록이 필요할 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* suite wiring만 확인하고 싶을 때. <a href="/ko/docs/commands/harness/verify">`harness verify`</a>를 사용하십시오.
+* resource를 먼저 물질화하거나 review하고 싶을 때. <a href="/ko/docs/commands/harness/capture">`harness capture`</a>를 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit harness run --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+입력 계약 [#입력-계약]
+
+```json
+{
+  "suiteRef": "art_harness_suite_xxx",
+  "executor": {
+    "kind": "command",
+    "argv": ["node", "scripts/run-harness-case.mjs"],
+    "cwd": ".",
+    "env": {},
+    "timeoutMs": 60000
+  },
+  "cases": ["art_harness_case_xxx"],
+  "concurrency": 1
+}
+```
+
+deterministic evaluation 규칙 [#deterministic-evaluation-규칙]
+
+* v1은 `executor.kind = "command"`만 지원합니다.
+* v1은 순차 실행만 지원합니다. `concurrency`는 생략하거나 `1`만 사용할 수 있습니다.
+* rule을 제공하는 resource는 `case`, `oracle`, `checker`, `rubric`, `golden`입니다.
+* 지원하는 rule 필드는 `exitCode`, `mustInclude`, `mustNotInclude`, `stderrMustInclude`, `stderrMustNotInclude`, `jsonSubset`입니다.
+* `fixture`, `trace`, `envAssumption`은 support resource로 전달되지만 별도의 평가 언어는 아닙니다.
+
+출력 계약 [#출력-계약]
+
+* JSON 출력에는 `runId`, `suiteId`, `runPath`, `preflight`, `summary`, `caseResults`, `dryRun`, `warnings`가 포함됩니다.
+* failed 또는 errored case는 compact masked excerpt를 담은 harness `failure` artifact를 만들 수 있습니다.
+* `--dry-run`은 suite와 executor 계약만 검증하고, run record와 failure artifact는 쓰지 않습니다.

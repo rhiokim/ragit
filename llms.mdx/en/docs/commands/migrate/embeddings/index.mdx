@@ -1,0 +1,69 @@
+# migrate embeddings
+
+
+
+What It Does [#what-it-does]
+
+`migrate embeddings` rebuilds `.ragit/store` from the manifests that already exist in the repository, using the embedding provider contract described by the current config.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You changed `embedding.provider`, `embedding.model`, or local placeholder dimensions/version.
+* <a href="/en/docs/commands/status">`status`</a> reports `embedding.needsMigration=true`.
+* You need to move the same snapshot corpus onto a different embedding contract without rewriting manifests.
+
+When not to use it [#when-not-to-use-it]
+
+* You only changed document content. Use <a href="/en/docs/commands/ingest">`ingest`</a>.
+* You are importing a legacy store. Use the other `migrate` subcommands instead.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit migrate embeddings [--dry-run] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--dry-run`: Return the current contract, target contract, and manifest/doc/chunk counts without rewriting the store.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* There is no positional input and no JSON payload input.
+* Output is JSON and includes `mode`, `currentContract`, `targetContract`, `manifests`, `documents`, `chunks`, and `migrationNeeded`.
+* The command rewrites `.ragit/store` only on apply. Manifest files stay unchanged.
+
+Examples [#examples]
+
+Preview the migration:
+
+```bash
+pnpm ragit migrate embeddings --dry-run
+```
+
+Apply the migration:
+
+```bash
+pnpm ragit migrate embeddings
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* The source store must still contain every chunk referenced by the manifests. Missing chunks fail fast.
+* The command creates `.ragit/store.next` and `.ragit/store.prev` during the swap.
+* Provider credentials are still env-only. For OpenAI, set `OPENAI_API_KEY` before apply.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/status">
+    `status`
+  </a>
+* <a href="/en/docs/commands/doctor">
+    `doctor`
+  </a>
+* <a href="/en/docs/commands/config/set">
+    `config set`
+  </a>

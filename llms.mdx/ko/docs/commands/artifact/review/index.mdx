@@ -1,0 +1,34 @@
+# artifact review
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`artifact review`는 captured artifact를 reviewed 계열 상태로 전이합니다. session artifact와 harness artifact 모두 durable promotion 전에 이 명시적 검토 단계를 거칩니다.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit artifact review --input <path|-> [--dry-run] [--format text|json|both]
+```
+
+입력 계약 [#입력-계약]
+
+```json
+{
+  "updates": [
+    {
+      "artifactId": "art_session_feedback_xxx",
+      "nextStatus": "reviewed",
+      "reason": "confirmed by user feedback",
+      "supersedes": []
+    }
+  ]
+}
+```
+
+핵심 포인트 [#핵심-포인트]
+
+* 허용되는 target state는 `reviewed`, `retracted`, `superseded`, `archived`입니다.
+* `--dry-run`은 artifact record를 다시 쓰지 않고 전이 계획만 검증합니다.
+* reviewed 이후에는 <a href="/ko/docs/commands/memory/promote">`memory promote`</a> 또는 <a href="/ko/docs/commands/harness/promote">`harness promote`</a>로 이어갑니다.

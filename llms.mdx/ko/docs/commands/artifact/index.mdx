@@ -1,0 +1,14 @@
+# Artifact
+
+
+
+`artifact` 명령군은 captured session/harness artifact의 lifecycle transition을 담당합니다.
+
+하위 명령 선택 [#하위-명령-선택]
+
+* <a href="/ko/docs/commands/artifact/review">`artifact review`</a>: captured artifact를 `reviewed`, `retracted`, `superseded`, `archived`로 전이합니다.
+
+명령군 경계 [#명령군-경계]
+
+* `artifact review`는 capture/materialize와 promotion 사이의 품질 게이트입니다.
+* durable docs를 직접 만들지는 않습니다.

@@ -1,0 +1,68 @@
+# hooks install
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`hooks install`은 incremental ingest를 트리거하는 관리형 `post-commit`과 `post-merge` hook을 기록합니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* 저장소 변경과 인덱싱을 더 자동으로 연결하고 싶을 때
+* `init` 직후 후속 작업으로 hook까지 설치하고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* hook 상태만 보고 싶을 때. <a href="/ko/docs/commands/hooks/status">`hooks status`</a>를 사용하십시오.
+* 관리 hook을 제거하고 싶을 때. <a href="/ko/docs/commands/hooks/uninstall">`hooks uninstall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit hooks install [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `--dry-run`: 파일을 쓰지 않고 설치 계획만 보여줍니다.
+* `--format text|json|both`: 출력 형식을 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* 입력은 플래그 기반만 지원합니다.
+* JSON 출력에는 `dryRun`, `root`, `hooks`가 포함됩니다.
+* `--dry-run`은 경로를 검증하고 planned hook state를 반환하지만 실제 변경은 하지 않습니다.
+
+대표 사용 예시 [#대표-사용-예시]
+
+사람용 터미널 예시:
+
+```bash
+pnpm ragit hooks install
+```
+
+에이전트 호출 예시:
+
+```bash
+pnpm ragit hooks install --dry-run --format json
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `.git/hooks`에 기록되므로 유효한 git root가 필요합니다.
+* 설치되는 hook은 RAGit이 관리하는 hook이며 임의의 셸 자동화를 대체하는 범용 시스템은 아닙니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/hooks/status">
+    `hooks status`
+  </a>
+* <a href="/ko/docs/commands/hooks/uninstall">
+    `hooks uninstall`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>

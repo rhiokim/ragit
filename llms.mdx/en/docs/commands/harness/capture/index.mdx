@@ -1,0 +1,19 @@
+# harness capture
+
+
+
+What It Does [#what-it-does]
+
+`harness capture` stores harness resources such as `case`, `oracle`, `checker`, `fixture`, and `suite` as local JSON artifacts under `.ragit/artifacts/harness/**`.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit harness capture --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+Key Points [#key-points]
+
+* Use it when you want to materialize a suite before review or execution.
+* `--dry-run` validates payload shape and planned artifact ids without writing files.
+* `capture` does not execute the suite. Use <a href="/en/docs/commands/harness/run">`harness run`</a> for execution.

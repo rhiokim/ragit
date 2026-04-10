@@ -1,0 +1,63 @@
+# hooks status
+
+
+
+What It Does [#what-it-does]
+
+`hooks status` reports whether the expected `post-commit` and `post-merge` hooks are installed, absent, or external.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You want to verify hook state before install or uninstall.
+* You want a machine-readable view of hook ownership.
+
+When not to use it [#when-not-to-use-it]
+
+* You want to mutate hook state. Use <a href="/en/docs/commands/hooks/install">`hooks install`</a> or <a href="/en/docs/commands/hooks/uninstall">`hooks uninstall`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit hooks status [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+* Input is flag-based only.
+* JSON output includes `dryRun`, `root`, and `hooks`.
+* Each hook item reports `name`, `target`, `action`, and `state`.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit hooks status
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit hooks status --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* External hooks are not an error by themselves; they are a signal to avoid destructive automation.
+* `hooks status` does not confirm that the hook target command succeeded in previous runs. It only inspects file state.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/hooks/install">
+    `hooks install`
+  </a>
+* <a href="/en/docs/commands/hooks/uninstall">
+    `hooks uninstall`
+  </a>

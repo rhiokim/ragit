@@ -1,0 +1,79 @@
+# timeline
+
+
+
+What It Does [#what-it-does]
+
+`timeline`은 `.ragit/log/events/*.jsonl` 아래의 append-only event ledger를 읽어 session materialize, artifact review, memory workflow, harness workflow, ingest 완료의 시간축을 투영합니다. snapshot semantic state를 요약하려고 하지 않는다는 점이 중요하며, 그 역할은 `log`가 맡습니다.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* snapshot 이력만이 아니라 협업 워크플로 전체에서 실제로 무슨 일이 일어났는지 보고 싶을 때
+* 특정 `goalId`, `episodeId`, `sessionId`를 따라가고 싶을 때
+* 작업을 재개하기 전에 운영 이벤트 흐름을 빠르게 훑고 싶을 때
+
+When not to use it [#when-not-to-use-it]
+
+* 커밋 순서의 semantic snapshot delta가 필요할 때. <a href="/ko/docs/commands/log">`log`</a>를 사용하십시오.
+* 현재 저장소 요약만 필요할 때. <a href="/ko/docs/commands/status">`status`</a>를 사용하십시오.
+* 질문에 대한 직접 retrieval hit가 필요할 때. <a href="/ko/docs/commands/query">`query`</a>를 사용하십시오.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit timeline [--goal <goalId>] [--episode <episodeId>] [--session <sessionId>] [--kind <kind>] [--since <iso>] [--until <iso>] [--max-count <n>] [--view minimal|default|full] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--goal <goalId>`: 하나의 goal identifier로 필터링합니다.
+* `--episode <episodeId>`: 하나의 episode identifier로 필터링합니다.
+* `--session <sessionId>`: 하나의 source session identifier로 필터링합니다.
+* `--kind <kind>`: `session`, `artifact`, `memory`, `harness`, `ingest` 중 하나로 제한합니다.
+* `--since <iso>`: `recordedAt` 하한입니다.
+* `--until <iso>`: `recordedAt` 상한입니다.
+* `-n, --max-count <n>`: 최종 event 개수를 제한합니다.
+* `--view minimal|default|full`: 한 줄 스캔, 구조화된 이벤트 블록, 더 자세한 provenance 포함 출력 중 하나를 고릅니다.
+* `--format text|json|both`: 사람용 text, JSON, 또는 둘 다를 선택합니다.
+* `--cwd <path>`: 다른 저장소 경로를 대상으로 실행합니다.
+
+Input And Output Contract [#input-and-output-contract]
+
+* `timeline`은 JSON payload 입력을 받지 않습니다.
+* JSON 출력은 `filters`, `summary`, `events`를 포함합니다.
+* 각 event record는 `eventId`, `eventType`, `recordedAt`, `goalId`, `episodeId`, `sessionId`, `sourceHeadSha`, `summary`, `artifactIds`, `relatedPaths`, `openLoops`, `nextActions`, `provenance`를 포함합니다.
+
+Examples [#examples]
+
+최근 memory workflow 이벤트만 훑기:
+
+```bash
+pnpm ragit timeline --kind memory --max-count 10
+```
+
+하나의 세션을 JSON으로 보기:
+
+```bash
+pnpm ragit timeline --session 20260410T090000Z-a1b2c3d4 --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* `timeline`은 event ledger reader이지 repair 명령이 아닙니다.
+* dry-run 명령은 ledger event를 기록하지 않습니다.
+* 이 ledger는 append-only operational surface입니다. <a href="/ko/docs/commands/log">`log`</a>를 대체하지 않고 보완합니다.
+* 특정 commit에 결속된 beliefs, open loops, evidence가 필요하면 `timeline`이 아니라 <a href="/ko/docs/commands/log">`log`</a>를 사용하십시오.
+
+Related Commands [#related-commands]
+
+* <a href="/ko/docs/commands/log">
+    `log`
+  </a>
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/memory/wrap">
+    `memory wrap`
+  </a>

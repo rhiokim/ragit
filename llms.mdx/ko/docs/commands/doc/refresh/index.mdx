@@ -1,0 +1,20 @@
+# doc refresh
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`doc refresh`는 기존 문서를 표준 문서 계약에 맞게 비파괴적으로 다시 써서 구조를 정렬합니다.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit doc refresh [--type <type> | --files <glob>] [--dry-run] [--format text|json|both]
+```
+
+핵심 포인트 [#핵심-포인트]
+
+* 기존 문서를 수동으로 하나씩 손보지 않고 정리하고 싶을 때 사용합니다.
+* `--type`으로 문서 타입별 범위를 좁힐 수 있습니다.
+* `--files`로 저장소 내부 glob만 타깃할 수 있습니다.
+* `--dry-run`은 `plannedFiles`, `violationsBefore`, `violationsAfter`만 보여 줍니다.

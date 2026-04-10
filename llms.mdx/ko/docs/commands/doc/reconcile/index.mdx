@@ -1,0 +1,19 @@
+# doc reconcile
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`doc reconcile`은 기존 문서를 canonical path에 비파괴적으로 매핑하고, 문서 인덱스를 다시 쓰며, durable doc corpus의 추적 상태를 갱신합니다.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit doc reconcile [--dry-run] [--format text|json|both]
+```
+
+핵심 포인트 [#핵심-포인트]
+
+* canonical path 매핑이나 문서 인덱스가 오래되었을 때 사용합니다.
+* `--dry-run`은 index를 다시 쓰지 않고 결과만 계산합니다.
+* 이 명령은 embedding을 다루지 않고 doc authority metadata를 다룹니다.

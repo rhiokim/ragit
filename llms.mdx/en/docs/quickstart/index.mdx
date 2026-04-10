@@ -1,0 +1,58 @@
+# Quickstart
+
+
+
+Requirements [#requirements]
+
+* Node.js 20+
+* pnpm 10+
+* Git repository
+
+Install [#install]
+
+For repository-local development:
+
+```bash
+pnpm install
+```
+
+Inside a repository checkout, run CLI commands with the project script entry for your selected package manager.
+To confirm that the local CLI entry is wired correctly, run:
+
+```bash
+pnpm ragit --help
+```
+
+The local build step is optional and only needed when you want to generate the `dist/` bundle locally.
+
+```bash
+pnpm build
+```
+
+For the published CLI:
+
+```bash
+npm install -g ragit
+pnpm add -g ragit
+bun add -g ragit
+npx ragit --help
+```
+
+Initialize RAGit [#initialize-ragit]
+
+```bash
+pnpm ragit init
+pnpm ragit hooks install
+pnpm ragit ingest --all
+```
+
+At this point you can start using commit-bound retrieval. If you want the philosophy behind `memory wrap`, `memory recall`, and `memory promote`, read <a href="/en/docs/memory-model">Memory Model Guide</a> before you add memory workflows to your project.
+If you want detailed command syntax and per-command examples, continue with <a href="/en/docs/commands">Commands</a>.
+
+Run docs locally [#run-docs-locally]
+
+```bash
+pnpm docs:dev
+```
+
+Then open `/en/docs` and `/ko/docs`.

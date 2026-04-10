@@ -1,0 +1,310 @@
+# log
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`log`는 commit 순서에 맞춰 snapshot history를 읽고, 커밋 사이에서 인덱싱된 지식이 의미적으로 어떻게 달라졌는지 요약합니다. 기본 단위는 `git log`처럼 "어떤 파일이 바뀌었는가?"가 아니라 "다음 agent가 써야 할 searchable knowledge가 어떻게 달라졌는가, 무엇을 계속 믿어야 하는가, 무엇이 아직 열려 있는가?"입니다.
+
+언제 쓰는가 / 언제 쓰지 않는가 [#언제-쓰는가--언제-쓰지-않는가]
+
+언제 쓰는가 [#언제-쓰는가]
+
+* retrieval 결과가 왜 달라졌는지 추적하고 싶을 때
+* 추가/수정/삭제된 indexed document를 semantic delta로 보고 싶을 때
+* 특정 snapshot에 결속된 beliefs, open loops, evidence를 함께 읽고 싶을 때
+* manifest 파일을 직접 열지 않고 snapshot history를 읽고 싶을 때
+
+언제 쓰지 않는가 [#언제-쓰지-않는가]
+
+* 현재 저장소 상태만 빠르게 보고 싶을 때. <a href="/ko/docs/commands/status">`status`</a>를 사용하십시오.
+* 질문에 대한 직접 검색 결과만 필요할 때. <a href="/ko/docs/commands/query">`query`</a>를 사용하십시오.
+* working memory에서 현재 작업을 복원하고 싶을 때. <a href="/ko/docs/commands/memory/recall">`memory recall`</a>을 사용하십시오.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit log [revRange] [--max-count <n>] [--view minimal|default|full] [--type <docType>] [--path <glob>] [--show-missing] [--format text|json|both]
+```
+
+인자와 옵션 [#인자와-옵션]
+
+* `[revRange]`: `HEAD~10..HEAD` 같은 선택적 git revision range입니다.
+* `-n, --max-count <n>`: 최종으로 보여줄 entry 개수를 제한합니다.
+* `--view minimal|default|full`: 한 줄 요약, semantic block, 더 자세한 문서별 정보 중 하나를 고릅니다.
+* `--type <docType>`: 특정 canonical 문서 타입으로 history를 필터합니다.
+* `--path <glob>`: repo 내부 glob으로 indexed docs를 필터합니다.
+* `--show-missing`: snapshot manifest가 없는 commit도 함께 표시합니다.
+* `--format text|json|both`: 사람이 읽는 출력, JSON, 둘 다 중 하나를 선택합니다.
+* `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
+
+입력/출력 계약 [#입력출력-계약]
+
+* `log`는 JSON payload 입력을 받지 않습니다.
+* 기본 출력은 raw git history가 아니라 semantic history text입니다.
+* JSON 출력에는 `revRange`, `maxCount`, `showMissing`, `filters`, `entries`가 포함됩니다.
+* indexed entry에는 `snapshot` 옆에 `semantic` 블록이 함께 들어갑니다.
+
+```json
+{
+  "entries": [
+    {
+      "commitSha": "abc123",
+      "subject": "update auth docs",
+      "snapshot": {
+        "status": "indexed",
+        "docs": 3,
+        "chunks": 12,
+        "delta": {
+          "added": 1,
+          "modified": 1,
+          "deleted": 0
+        },
+        "types": {
+          "adr": 1,
+          "spec": 2
+        },
+        "changed": [
+          {
+            "path": "docs/auth/api.spec.md",
+            "status": "M",
+            "docType": "spec"
+          }
+        ]
+      },
+      "semantic": {
+        "available": true,
+        "headline": "beliefs=2 open_loops=1 evidence=2 artifacts=4",
+        "counts": {
+          "beliefs": 2,
+          "openLoops": 1,
+          "evidence": 2,
+          "artifacts": 4
+        }
+      }
+    }
+  ]
+}
+```
+
+대표 사용 예시 [#대표-사용-예시]
+
+아래 예시는 하나의 동일한 샘플 저장소를 기준으로 보여주므로, 각 view의 차이를 바로 비교할 수 있습니다.
+
+minimal view [#minimal-view]
+
+```bash
+pnpm ragit log --view minimal --max-count 5
+```
+
+```text
+# ragit log
+- entries: 5
+- show_missing: false
+- view: minimal
+- rev_range: HEAD
+- max_count: 5
+- type_filter: none
+- path_filter: none
+
+b5537bb indexed docs=10 chunks=26 +0 ~0 -1 | adr=1 ddd=1 glossary=1 pbd=1 plan=2 prd=1 spec=2 srs=1 | semantic beliefs=0 open=0 evidence=0 artifacts=0 | remove old adr
+61449a7 indexed docs=11 chunks=27 +9 ~1 -0 | adr=2 ddd=1 glossary=1 pbd=1 plan=2 prd=1 spec=2 srs=1 | semantic beliefs=2 open=1 evidence=2 artifacts=4 | update spec and add plan
+e783de5 indexed docs=2 chunks=2 +2 ~0 -0 | adr=1 spec=1 | semantic beliefs=0 open=0 evidence=0 artifacts=0 | seed docs
+```
+
+default view [#default-view]
+
+```bash
+pnpm ragit log --view default --max-count 1
+```
+
+```text
+# ragit log
+- entries: 1
+- show_missing: false
+- view: default
+- rev_range: HEAD
+- max_count: 1
+- type_filter: none
+- path_filter: none
+
+commit 61449a78c559f4eefccfab4834c6b4b0c032f6b0
+Subject: update spec and add plan
+Author: ragit-test
+AuthoredAt: 2026-04-09T23:30:32+09:00
+
+Snapshot: indexed (2026-04-09T14:30:33.368Z)
+Based on: e783de501e1271eebac967830affa1893676e6fc
+Knowledge: docs=11 chunks=27
+Semantic delta: +9 modified=1 deleted=0
+Semantic: beliefs=2 open_loops=1 evidence=2 artifacts=4
+Semantic counts: beliefs=2 open=1 evidence=2 artifacts=4
+Beliefs:
+  - Keep answers concise [feedback reviewed] 사용자 선호가 다음 agent를 위한 안정된 기준으로 확인됨
+Open loops:
+  - Finalize refresh-token boundary [openLoop captured] 구현 재개 전에 auth spec을 패치해야 함
+Evidence:
+  - art_failure_1/evid_1 [failure captured] Error: token refresh regression
+Artifacts:
+  - art_feedback_1 [feedback reviewed session] Keep answers concise
+Changed:
+  A .ragit/guide/templates/adr.template.md [adr]
+  A .ragit/guide/templates/ddd.template.md [ddd]
+  A .ragit/guide/templates/glossary.template.md [glossary]
+  A .ragit/guide/templates/pbd.template.md [pbd]
+  A .ragit/guide/templates/plan.template.md [plan]
+  A .ragit/guide/templates/prd.template.md [prd]
+  A .ragit/guide/templates/spec.template.md [spec]
+  A .ragit/guide/templates/srs.template.md [srs]
+  M docs/auth-api.spec.md [spec]
+  A docs/rollout.plan.md [plan]
+Types:
+  adr=2
+  ddd=1
+  glossary=1
+  pbd=1
+  plan=2
+  prd=1
+  spec=2
+  srs=1
+```
+
+missing snapshot 포함 [#missing-snapshot-포함]
+
+```bash
+pnpm ragit log --show-missing --max-count 4
+```
+
+```text
+# ragit log
+- entries: 4
+- show_missing: true
+- view: default
+- rev_range: HEAD
+- max_count: 4
+- type_filter: none
+- path_filter: none
+
+commit b5537bb6af70f7a90037d618a2f608f1fb1fd660
+Subject: remove old adr
+Author: ragit-test
+AuthoredAt: 2026-04-09T23:30:33+09:00
+
+Snapshot: indexed (2026-04-09T14:30:34.204Z)
+Based on: 61449a78c559f4eefccfab4834c6b4b0c032f6b0
+Knowledge: docs=10 chunks=26
+Semantic delta: +0 modified=0 deleted=1
+Changed:
+  D docs/auth-boundary.adr.md [adr]
+Types:
+  adr=1
+  ddd=1
+  glossary=1
+  pbd=1
+  plan=2
+  prd=1
+  spec=2
+  srs=1
+
+commit 9ad31c2b9b72a8e3e0d8b736ee11f4f8dc3d8f3a
+Subject: notes only
+Author: ragit-test
+AuthoredAt: 2026-04-09T23:30:31+09:00
+
+Snapshot: missing
+Knowledge: no indexed snapshot for this commit
+Semantic: 이 commit에는 indexed snapshot이 없어서 semantic overlay를 계산할 수 없습니다.
+```
+
+에이전트용 JSON [#에이전트용-json]
+
+```bash
+pnpm ragit log HEAD~10..HEAD --max-count 2 --format json
+```
+
+```json
+{
+  "command": "log",
+  "ok": true,
+  "version": "1.0.1",
+  "cwd": "/repo",
+  "data": {
+    "revRange": "HEAD~10..HEAD",
+    "maxCount": 2,
+    "showMissing": false,
+    "view": "default",
+    "filters": {
+      "docType": null,
+      "path": null
+    },
+    "entries": [
+      {
+        "commitSha": "61449a78c559f4eefccfab4834c6b4b0c032f6b0",
+        "subject": "update spec and add plan",
+        "authorName": "ragit-test",
+        "authoredAt": "2026-04-09T23:30:32+09:00",
+        "snapshot": {
+          "status": "indexed",
+          "createdAt": "2026-04-09T14:30:33.368Z",
+          "previousSnapshotSha": "e783de501e1271eebac967830affa1893676e6fc",
+          "docs": 11,
+          "chunks": 27,
+          "delta": {
+            "added": 9,
+            "modified": 1,
+            "deleted": 0
+          },
+          "types": {
+            "adr": 2,
+            "ddd": 1,
+            "glossary": 1,
+            "pbd": 1,
+            "plan": 2,
+            "prd": 1,
+            "spec": 2,
+            "srs": 1
+          },
+          "changed": [
+            {
+              "path": "docs/auth-api.spec.md",
+              "status": "M",
+              "docType": "spec"
+            },
+            {
+              "path": "docs/rollout.plan.md",
+              "status": "A",
+              "docType": "plan"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "warnings": []
+}
+```
+
+실패/주의 사항 [#실패주의-사항]
+
+* `log`는 snapshot 중심이므로 manifest가 없는 commit은 `--show-missing`을 주지 않으면 기본적으로 숨깁니다.
+* `--type`, `--path`는 raw git diff가 아니라 snapshot content를 필터합니다.
+* missing commit은 snapshot이 없으므로 semantic document delta를 계산할 수 없습니다.
+* semantic overlay는 snapshot에 결속된 artifact entry만을 읽어 만듭니다. event ledger를 역재생하지 않고, raw transcript를 history에 다시 넣지 않습니다.
+
+관련 명령 [#관련-명령]
+
+* <a href="/ko/docs/commands/timeline">
+    `timeline`
+  </a>
+* <a href="/ko/docs/commands/status">
+    `status`
+  </a>
+* <a href="/ko/docs/commands/ingest">
+    `ingest`
+  </a>
+* <a href="/ko/docs/commands/query">
+    `query`
+  </a>
+* <a href="/ko/docs/commands/memory/recall">
+    `memory recall`
+  </a>

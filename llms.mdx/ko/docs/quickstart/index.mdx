@@ -1,0 +1,58 @@
+# 빠른 시작
+
+
+
+요구 사항 [#요구-사항]
+
+* Node.js 20+
+* pnpm 10+
+* Git 저장소
+
+설치 [#설치]
+
+저장소 로컬 개발용:
+
+```bash
+pnpm install
+```
+
+저장소 체크아웃 안에서는 선택한 package manager에 맞는 프로젝트 스크립트 엔트리로 CLI 명령을 실행합니다.
+로컬 CLI 엔트리가 올바르게 연결됐는지 확인하려면 다음 명령을 실행합니다.
+
+```bash
+pnpm ragit --help
+```
+
+로컬 build 단계는 선택 사항이며, `dist/` 번들을 직접 생성하거나 검증할 때만 필요합니다.
+
+```bash
+pnpm build
+```
+
+배포된 CLI 설치:
+
+```bash
+npm install -g ragit
+pnpm add -g ragit
+bun add -g ragit
+npx ragit --help
+```
+
+RAGit 초기화 [#ragit-초기화]
+
+```bash
+pnpm ragit init
+pnpm ragit hooks install
+pnpm ragit ingest --all
+```
+
+여기까지 하면 커밋 결속 검색은 바로 사용할 수 있습니다. `memory wrap`, `memory recall`, `memory promote`가 왜 분리되어 있는지 이해하고 싶다면, 프로젝트에 memory 워크플로를 넣기 전에 <a href="/ko/docs/memory-model">Memory Model Guide</a>를 먼저 읽으세요.
+세부 구문과 명령별 예시가 필요하시면 <a href="/ko/docs/commands">Commands</a>로 이어서 보시면 됩니다.
+
+문서 사이트 로컬 실행 [#문서-사이트-로컬-실행]
+
+```bash
+pnpm docs:dev
+```
+
+브라우저에서 `/en/docs` 및 `/ko/docs`를 확인합니다.

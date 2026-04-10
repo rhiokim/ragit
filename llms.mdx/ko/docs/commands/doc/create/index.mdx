@@ -1,0 +1,19 @@
+# doc create
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`doc create`는 `adr`, `spec`, `plan`, `pbd` 같은 표준 문서를 올바른 템플릿과 canonical path 처리 규약으로 생성합니다.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit doc create --type <type> --title <title> [--path <repo-relative-path>] [--dry-run] [--format text|json|both]
+```
+
+핵심 포인트 [#핵심-포인트]
+
+* 임의 Markdown 파일이 아니라 durable project document를 만들고 싶을 때 사용합니다.
+* `--dry-run`은 target path와 template 계획만 계산하고 실제 파일은 쓰지 않습니다.
+* JSON 출력에는 `docType`, `path`, `canonicalPath`, `usedTemplate`, `reconcile`이 포함됩니다.

@@ -1,0 +1,19 @@
+# doc create
+
+
+
+What It Does [#what-it-does]
+
+`doc create` creates a new standard document such as `adr`, `spec`, `plan`, or `pbd` with the expected template and canonical-path handling.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit doc create --type <type> --title <title> [--path <repo-relative-path>] [--dry-run] [--format text|json|both]
+```
+
+Key Points [#key-points]
+
+* Use it when you want a new durable project document instead of an ad hoc Markdown file.
+* `--dry-run` computes the planned target path and template without writing files.
+* JSON output includes `docType`, `path`, `canonicalPath`, `usedTemplate`, and `reconcile`.

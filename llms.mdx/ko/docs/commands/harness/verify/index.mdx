@@ -1,0 +1,19 @@
+# harness verify
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`harness verify`는 suite에 `resourceRefs`가 있는지, 그리고 case resource가 oracle/evidence binding을 선언했는지 확인합니다.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit harness verify --suite <idOrPath> [--format text|json|both] [--cwd <path>]
+```
+
+핵심 포인트 [#핵심-포인트]
+
+* `verify`는 구조 preflight 전용입니다.
+* executor를 호출하지 않고 run evidence도 만들지 않습니다.
+* `harness run`은 유효하지 않은 suite를 기본적으로 거부합니다.

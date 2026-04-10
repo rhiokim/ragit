@@ -1,0 +1,90 @@
+# memory wrap
+
+
+
+What It Does [#what-it-does]
+
+`memory wrap` records the current session state into `.ragit/memory/**`. It writes a session wrap, refreshes the current working state, and updates the open-loops registry.
+
+When To Use / When Not To Use [#when-to-use--when-not-to-use]
+
+When to use it [#when-to-use-it]
+
+* You are stopping work and want tomorrow's restart point preserved.
+* You want the current goal, constraints, open loops, and next actions written into working memory.
+
+When not to use it [#when-not-to-use-it]
+
+* You want to search stable project knowledge. Use <a href="/en/docs/commands/query">`query`</a> or <a href="/en/docs/commands/context/pack">`context pack`</a>.
+* You want to promote stable knowledge into searchable memory. Use <a href="/en/docs/commands/memory/promote">`memory promote`</a>.
+
+Syntax [#syntax]
+
+```bash
+pnpm ragit memory wrap --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+Arguments And Options [#arguments-and-options]
+
+* `--input <path|->`: Required JSON payload describing the session wrap.
+* `--dry-run`: Validate the wrap and show planned writes without changing files.
+* `--format text|json|both`: Choose text, JSON, or both.
+* `--cwd <path>`: Run against another repository.
+
+Input And Output Contract [#input-and-output-contract]
+
+```json
+{
+  "goal": "finish auth migration",
+  "summary": "Refined refresh token boundaries and left one open loop.",
+  "constraints": ["Do not break snapshot contracts."],
+  "decisions": ["Keep refresh handling outside manifest mutation."],
+  "openLoops": [
+    {
+      "id": "auth-refresh",
+      "title": "Finish refresh token handling",
+      "status": "open",
+      "nextAction": "Update the adapter tests"
+    }
+  ],
+  "nextActions": ["Update adapter tests", "Run pnpm test"],
+  "promotionCandidates": [],
+  "sourceHeadSha": "HEAD",
+  "createdAt": "2026-03-08T10:00:00.000Z"
+}
+```
+
+* JSON output includes `sessionId`, `sessionPath`, `currentPath`, `openLoopsPath`, `sourceHeadSha`, and `dryRun`.
+* `--dry-run` validates payload shape and shows target files without writing them.
+
+Examples [#examples]
+
+Human terminal flow:
+
+```bash
+pnpm ragit memory wrap --input session-wrap.json
+```
+
+Agent-oriented flow:
+
+```bash
+pnpm ragit memory wrap --input - --dry-run --format json
+```
+
+Failures And Cautions [#failures-and-cautions]
+
+* The payload must match the wrap schema. Unexpected or malformed fields are rejected.
+* `memory wrap` does not ingest anything into searchable retrieval.
+* If `HEAD` is missing, wrap can still write state, but it will record the missing source reference accordingly.
+
+Related Commands [#related-commands]
+
+* <a href="/en/docs/commands/memory/recall">
+    `memory recall`
+  </a>
+* <a href="/en/docs/commands/memory/promote">
+    `memory promote`
+  </a>
+* <a href="/en/docs/memory-model">
+    Memory Model Guide
+  </a>

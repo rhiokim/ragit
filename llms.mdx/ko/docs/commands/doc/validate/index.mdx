@@ -1,0 +1,19 @@
+# doc validate
+
+
+
+무엇을 하는 명령인가 [#무엇을-하는-명령인가]
+
+`doc validate`는 추적 중인 프로젝트 문서가 표준 문서 계약을 위반하는지 점검하고 결과를 보고합니다.
+
+기본 구문 [#기본-구문]
+
+```bash
+pnpm ragit doc validate [--type <type> | --all] [--format text|json|both]
+```
+
+핵심 포인트 [#핵심-포인트]
+
+* 이 명령은 읽기 전용입니다.
+* `--all`을 쓰면 모든 표준 문서 타입을 한 번에 검사합니다.
+* JSON 출력에는 `checkedFiles`, `tracked`, `violations`, 파일별 세부 정보가 포함됩니다.

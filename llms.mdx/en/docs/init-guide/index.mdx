@@ -1,0 +1,115 @@
+# Init Guide
+
+
+
+The repository init command is now a discover-first bootstrap flow. It still anchors to the repository root, still prepares `.ragit/**`, `AGENTS.md`, guide assets, and the empty zvec store, but it does that only after it scans the repository and decides what knowledge already exists.
+
+Flow [#flow]
+
+1. Check Git context and optionally run `git init`
+2. Scan repository code/docs/build files
+3. Select `empty`, `existing`, `docs-heavy`, or `monorepo` mode
+4. Run documentation census, coverage scoring, and maturity scoring
+5. Build a knowledge-slot map from existing repository sources
+6. Plan missing foundational docs and reuse existing sources first
+7. Write stage-1 drafts, bootstrap `.ragit/**`, and bootstrap the zvec store
+8. Print the final report and next actions
+
+Stage-1 generated docs [#stage-1-generated-docs]
+
+`init` can generate only these draft docs in stage 1:
+
+* `RAGIT.md`
+* `docs/workspace-map.md`
+* `docs/ragit/ingestion-policy.md`
+* `docs/known-gaps.md`
+* `docs/adr/README.md`
+
+Every generated doc is marked as inferred draft content so humans can distinguish generated scaffolding from validated repository truth.
+
+What init prepares [#what-init-prepares]
+
+* Git-aware repository normalization
+* Existing-doc discovery and coverage evaluation
+* Draft foundational docs for missing gaps only
+* `.ragit/config.toml`
+* `.ragit/guide/templates/*`
+* `.ragit/guide/guide-index.json`
+* `.ragit/store/meta.json`
+* Empty zvec collections for `documents` and `chunks`
+
+What init does not prepare [#what-init-does-not-prepare]
+
+* No searchable corpus
+* No chunk/document record creation in zvec
+* No snapshot manifests
+* No query-ready knowledge state
+
+`init` can inspect repository docs, but searchable knowledge still begins with <a href="/en/docs/commands/ingest">`ingest`</a>.
+
+Representative scenarios [#representative-scenarios]
+
+Empty repository [#empty-repository]
+
+* `pnpm ragit init --yes --git-init`
+* Mode selected: `empty`
+* Expected result: foundational drafts plus control-plane/bootstrap assets
+
+Existing codebase [#existing-codebase]
+
+* `pnpm ragit init`
+* Mode selected: `existing`
+* Expected result: existing docs are reused, missing drafts are added, no core docs are overwritten
+
+Docs-heavy repository [#docs-heavy-repository]
+
+* `pnpm ragit init`
+* Mode selected: `docs-heavy`
+* Expected result: high reuse ratio, low generated-doc count
+
+Monorepo [#monorepo]
+
+* `pnpm ragit init`
+* Mode selected: `monorepo`
+* Expected result: apps/packages are reflected in the workspace map and knowledge map
+
+Dry-run [#dry-run]
+
+```bash
+pnpm ragit init --dry-run --output json
+```
+
+Expected result:
+
+* full scan/coverage/maturity report
+* planned create/reuse/skip actions
+* no file system mutations
+
+Non-interactive examples [#non-interactive-examples]
+
+```bash
+pnpm ragit init --yes
+pnpm ragit init --yes --git-init
+pnpm ragit init --mode auto --strategy balanced --merge-existing --output json
+pnpm ragit init --dry-run --output json
+```
+
+Generated structure [#generated-structure]
+
+```text
+RAGIT.md
+docs/
+  adr/README.md
+  known-gaps.md
+  ragit/ingestion-policy.md
+  workspace-map.md
+.ragit/
+  config.toml
+  guide/
+    guide-index.json
+    templates/
+  store/
+    meta.json
+    documents/
+    chunks/
+```

@@ -1,0 +1,14 @@
+# Session
+
+
+
+The `session` family turns conversation history and tool traces into reviewable local artifacts.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* <a href="/en/docs/commands/session/materialize">`session materialize`</a>: extract redacted transcript-ledger data and candidate session artifacts.
+
+Family Boundary [#family-boundary]
+
+* `materialize` writes session-side control-plane artifacts under `.ragit/log/**` and `.ragit/artifacts/session/**`.
+* It does not promote durable memory by itself. Review and promote through <a href="/en/docs/commands/artifact/review">`artifact review`</a> and <a href="/en/docs/commands/memory/promote">`memory promote`</a>.

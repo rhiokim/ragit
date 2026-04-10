@@ -1,0 +1,21 @@
+# Harness
+
+
+
+The `harness` family turns reviewable evaluation resources into an executable local loop.
+
+Choose A Subcommand [#choose-a-subcommand]
+
+* <a href="/en/docs/commands/harness/capture">`harness capture`</a>: materialize harness resources as local artifacts.
+* <a href="/en/docs/commands/harness/verify">`harness verify`</a>: run structural checks only.
+* <a href="/en/docs/commands/harness/run">`harness run`</a>: execute a suite against a local command executor and persist a run record.
+* <a href="/en/docs/commands/harness/pack">`harness pack`</a>: assemble an agent-facing packet from a suite.
+* <a href="/en/docs/commands/harness/promote">`harness promote`</a>: turn reviewed harness artifacts into durable `docs/harness/**`.
+
+Family Boundary [#family-boundary]
+
+* `capture` writes candidate artifacts under `.ragit/artifacts/harness/**`.
+* `verify` checks bindings and structure, but it does not execute anything.
+* `run` executes selected cases, records `.ragit/log/harness-runs/**`, and can emit failure artifacts.
+* `pack` is the read side for agent payload assembly.
+* `promote` is the durable-write side that can trigger targeted ingest.

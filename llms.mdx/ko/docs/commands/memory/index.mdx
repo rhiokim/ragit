@@ -1,0 +1,17 @@
+# memory
+
+
+
+`memory` 패밀리는 활성 작업 연속성과 durable searchable knowledge를 분리합니다.
+
+어떤 하위 명령을 선택하는가 [#어떤-하위-명령을-선택하는가]
+
+* <a href="/ko/docs/commands/memory/wrap">`memory wrap`</a>: 현재 세션 상태를 기록합니다.
+* <a href="/ko/docs/commands/memory/recall">`memory recall`</a>: 다음 세션 복원 패킷을 만듭니다.
+* <a href="/ko/docs/commands/memory/promote">`memory promote`</a>: 안정된 지식을 searchable doc으로 승격합니다.
+
+패밀리 경계 [#패밀리-경계]
+
+* `wrap`은 `.ragit/memory/**`에 control-plane state를 씁니다.
+* `recall`은 working state를 읽고 retrieval과 합칩니다.
+* `promote`는 `docs/memory/**`에 durable doc을 쓰고 targeted ingest를 연결할 수 있습니다.
