@@ -300,6 +300,71 @@ export interface SnapshotManifest {
   chunkScopes?: SnapshotChunkScopes;
 }
 
+export interface RagitLogSemanticCounts {
+  beliefs: number;
+  openLoops: number;
+  evidence: number;
+  artifacts: number;
+}
+
+export interface RagitLogSemanticStatement {
+  artifactId: string;
+  kind: ArtifactKind;
+  scope: ArtifactScope;
+  status: ArtifactStatus;
+  title: string;
+  summary: string;
+  authority: ArtifactAuthority | null;
+  confidence: number | null;
+  sourceSessionId: string | null;
+  goalId: string | null;
+  episodeId: string | null;
+}
+
+export interface RagitLogSemanticEvidence {
+  artifactId: string;
+  artifactKind: ArtifactKind;
+  artifactScope: ArtifactScope;
+  artifactStatus: ArtifactStatus;
+  evidenceId: string;
+  excerpt: string;
+  authority: ArtifactAuthority | null;
+  confidence: number | null;
+  sourceSessionId: string | null;
+  goalId: string | null;
+  episodeId: string | null;
+}
+
+export interface RagitLogSemanticArtifactSupport {
+  artifactId: string;
+  kind: ArtifactKind;
+  scope: ArtifactScope;
+  status: ArtifactStatus;
+  tier: ArtifactTier;
+  bindingStatus: ArtifactBindingStatus;
+  searchPolicy: SearchPolicy;
+  sourceSessionId: string | null;
+  goalId: string | null;
+  episodeId: string | null;
+  sourceHeadSha: string | null;
+  path: string;
+  loaded: boolean;
+  title: string | null;
+  summary: string | null;
+  authority: ArtifactAuthority | null;
+  confidence: number | null;
+}
+
+export interface RagitLogSemanticOverlay {
+  available: boolean;
+  headline: string;
+  counts: RagitLogSemanticCounts;
+  beliefs: RagitLogSemanticStatement[];
+  openLoops: RagitLogSemanticStatement[];
+  evidence: RagitLogSemanticEvidence[];
+  artifacts: RagitLogSemanticArtifactSupport[];
+}
+
 export interface RetrievalHit {
   chunkId: string;
   path: string;
