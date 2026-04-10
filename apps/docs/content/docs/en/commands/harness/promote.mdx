@@ -1,0 +1,21 @@
+---
+title: harness promote
+description: Promote reviewed harness artifacts into durable docs
+command_path: harness promote
+---
+
+## What It Does
+
+`harness promote` turns reviewed harness artifacts into durable `docs/harness/**` documents and can trigger targeted ingest when `HEAD` is available.
+
+## Syntax
+
+```bash
+pnpm ragit harness promote --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+## Key Points
+
+- Only `reviewed` harness artifacts can be promoted.
+- `promote` writes durable docs. It is not execution.
+- Use <a href="/en/docs/commands/harness/run">`harness run`</a> when you want operational evidence instead of durable docs.

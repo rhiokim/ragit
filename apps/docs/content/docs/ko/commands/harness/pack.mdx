@@ -1,0 +1,21 @@
+---
+title: harness pack
+description: suite 기준의 agent-facing packet을 조립합니다
+command_path: harness pack
+---
+
+## 무엇을 하는 명령인가
+
+`harness pack`은 suite를 읽어 참조된 resource를 다른 agent나 tool이 소비하기 쉬운 packet으로 돌려줍니다.
+
+## 기본 구문
+
+```bash
+pnpm ragit harness pack <suiteRef> [--format text|json|both] [--cwd <path>]
+```
+
+## 핵심 포인트
+
+- `pack`은 읽기 전용입니다.
+- suite를 실행하지 않습니다.
+- 실행 전에 suite context를 다른 단계로 넘길 때 사용합니다.

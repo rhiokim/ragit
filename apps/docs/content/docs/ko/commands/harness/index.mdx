@@ -1,0 +1,22 @@
+---
+title: Harness
+description: harness 자원을 capture, verify, run, pack, promote 하는 명령군
+---
+
+`harness` 명령군은 review 가능한 evaluation resource를 로컬에서 실행 가능한 루프로 바꿉니다.
+
+## 하위 명령 선택
+
+- <a href="/ko/docs/commands/harness/capture">`harness capture`</a>: harness resource를 local artifact로 물질화합니다.
+- <a href="/ko/docs/commands/harness/verify">`harness verify`</a>: 구조와 binding만 검사합니다.
+- <a href="/ko/docs/commands/harness/run">`harness run`</a>: suite를 로컬 command executor에 실행하고 run record를 남깁니다.
+- <a href="/ko/docs/commands/harness/pack">`harness pack`</a>: suite 기준의 agent-facing packet을 조립합니다.
+- <a href="/ko/docs/commands/harness/promote">`harness promote`</a>: reviewed harness artifact를 durable `docs/harness/**`로 승격합니다.
+
+## 명령군 경계
+
+- `capture`는 `.ragit/artifacts/harness/**`에 candidate artifact를 씁니다.
+- `verify`는 구조 검사만 하고 실제 실행은 하지 않습니다.
+- `run`은 선택된 case를 실행하고 `.ragit/log/harness-runs/**` 및 failure artifact를 남길 수 있습니다.
+- `pack`은 읽기 전용 조립 명령입니다.
+- `promote`는 durable write와 targeted ingest 쪽입니다.

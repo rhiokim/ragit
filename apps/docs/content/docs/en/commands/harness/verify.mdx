@@ -1,0 +1,21 @@
+---
+title: harness verify
+description: Validate suite shape and resource bindings without executing
+command_path: harness verify
+---
+
+## What It Does
+
+`harness verify` checks that a suite has `resourceRefs` and that case resources declare the expected oracle/evidence bindings.
+
+## Syntax
+
+```bash
+pnpm ragit harness verify --suite <idOrPath> [--format text|json|both] [--cwd <path>]
+```
+
+## Key Points
+
+- `verify` is structural preflight only.
+- It does not call any executor and does not create run evidence.
+- `harness run` refuses invalid suites unless you are using `--dry-run`.

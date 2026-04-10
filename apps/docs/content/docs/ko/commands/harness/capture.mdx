@@ -1,0 +1,21 @@
+---
+title: harness capture
+description: harness resource를 local artifact로 물질화합니다
+command_path: harness capture
+---
+
+## 무엇을 하는 명령인가
+
+`harness capture`는 `case`, `oracle`, `checker`, `fixture`, `suite` 같은 harness resource를 `.ragit/artifacts/harness/**` 아래의 로컬 JSON artifact로 저장합니다.
+
+## 기본 구문
+
+```bash
+pnpm ragit harness capture --input <path|-> [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+## 핵심 포인트
+
+- suite를 review하거나 실행하기 전에 resource를 먼저 물질화할 때 사용합니다.
+- `--dry-run`은 payload와 planned artifact id만 검증하고 파일은 쓰지 않습니다.
+- 실제 실행은 하지 않습니다. 실행은 <a href="/ko/docs/commands/harness/run">`harness run`</a>을 사용하십시오.

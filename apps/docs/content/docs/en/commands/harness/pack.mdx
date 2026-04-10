@@ -1,0 +1,21 @@
+---
+title: harness pack
+description: Assemble an agent-facing packet from a suite
+command_path: harness pack
+---
+
+## What It Does
+
+`harness pack` reads a suite and returns the referenced resources as a compact packet for another agent or tool.
+
+## Syntax
+
+```bash
+pnpm ragit harness pack <suiteRef> [--format text|json|both] [--cwd <path>]
+```
+
+## Key Points
+
+- `pack` is read-only.
+- It does not validate execution semantics beyond loading the suite resources.
+- Use it when you want to hand the suite context to another step without executing it.

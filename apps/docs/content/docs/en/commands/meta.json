@@ -13,6 +13,7 @@
     "config",
     "context",
     "hooks",
+    "harness",
     "memory",
     "migrate"
   ]
