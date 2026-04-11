@@ -243,7 +243,11 @@ pnpm ragit status --format json
 pnpm ragit doctor --format json
 ```
 
-`ragit narrative` continues to generate the canonical self-contained HTML report. If you also want the experimental local OpenTUI explorer, export a sanitized model and open it separately:
+`ragit narrative` usage boundary:
+
+- Canonical artifact: self-contained HTML report
+- Optional viewer input: sanitized model export at `.ragit/reports/narrative/current.model.json`
+- Experimental local explorer: isolated OpenTUI viewer under `tools/narrative-tui/`
 
 ```bash
 pnpm ragit narrative --emit-model .ragit/reports/narrative/current.model.json
