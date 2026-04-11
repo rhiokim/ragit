@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "bun run src/index.ts",
-    "smoke": "NARRATIVE_TUI_SMOKE=1 bun run src/index.ts --model fixtures/sample-model.json"
+    "smoke": "NARRATIVE_TUI_SMOKE=1 bun run src/index.ts --model fixtures/sample-model.json",
+    "test": "bun test"
   },
   "dependencies": {
     "@opentui/core": "0.1.97"
