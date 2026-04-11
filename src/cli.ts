@@ -271,6 +271,7 @@ program
   .argument("[revRange]")
   .option("-n, --max-commits <n>", "선택할 indexed snapshot commit 개수")
   .option("--output <path>", "report 출력 경로")
+  .option("--emit-model <path>", "sanitized narrative model JSON 출력 경로")
   .option("--open", "생성 후 기본 브라우저로 열기")
   .option("--dry-run", "파일을 쓰지 않고 계획만 계산")
   .option("--format <format>", "text|json|both", "text")
@@ -282,6 +283,7 @@ program
         revRange: revRange ? String(revRange) : undefined,
         maxCommits: parseOptionalPositiveNumber(options.maxCommits as string | undefined, "narrative.maxCommits"),
         output: options.output ? String(options.output) : undefined,
+        emitModel: options.emitModel ? String(options.emitModel) : undefined,
         open: Boolean(options.open),
         dryRun: Boolean(options.dryRun),
       },

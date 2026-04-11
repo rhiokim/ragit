@@ -129,8 +129,9 @@ Ship the recovery changes in two deliberate phases.
         artifactRefs: reviewTargets,
       });
 
-      const result = await runNarrativeReport(temp);
+      const result = await runNarrativeReport(temp, { emitModel: ".ragit/reports/narrative/model.json" });
       expect(result.dryRun).toBe(false);
+      expect(result.modelPath).toBe(".ragit/reports/narrative/model.json");
       expect(result.window.selectedSnapshotShas).toHaveLength(2);
       expect(result.window.missingSnapshotCommits).toBe(1);
       expect(result.summary.decisionThreads).toBeGreaterThan(0);
@@ -141,6 +142,7 @@ Ship the recovery changes in two deliberate phases.
 
       const reportPath = path.join(temp, result.reportPath);
       const html = await readFile(reportPath, "utf8");
+      const modelJson = JSON.parse(await readFile(path.join(temp, result.modelPath as string), "utf8"));
       expect(html).toContain('id="report-summary"');
       expect(html).toContain('id="decision-evolution"');
       expect(html).toContain('id="intent-panel"');
@@ -149,6 +151,9 @@ Ship the recovery changes in two deliberate phases.
       expect(html).toContain("Auth Rollout");
       expect(html).not.toContain("super-secret-value");
       expect(html).not.toMatch(/<(?:script|link|img)[^>]+https?:\/\//i);
+      expect(modelJson.summary).toEqual(result.summary);
+      expect(modelJson.window).toEqual(result.window);
+      expect(JSON.stringify(modelJson)).not.toContain("super-secret-value");
     },
     30_000,
   );
@@ -166,6 +171,7 @@ Ship the recovery changes in two deliberate phases.
 
       const dryRun = await runNarrativeReport(temp, { dryRun: true });
       expect(dryRun.dryRun).toBe(true);
+      expect(dryRun.modelPath).toBeNull();
       expect(dryRun.window.selectedSnapshotShas).toHaveLength(0);
       expect(dryRun.summary.decisionThreads).toBe(0);
       await expect(readFile(path.join(temp, dryRun.reportPath), "utf8")).rejects.toThrow();

@@ -28,6 +28,19 @@ export { buildNarrativeViewModel } from "./narrative-model.js";
 
 const shortSha = (value: string): string => value.slice(0, 7);
 
+const resolveNarrativeModelOutput = (
+  cwd: string,
+  output: string,
+): { absolutePath: string; displayPath: string } => {
+  if (path.isAbsolute(output)) {
+    return { absolutePath: output, displayPath: output };
+  }
+  return {
+    absolutePath: path.resolve(cwd, output),
+    displayPath: output.replaceAll("\\", "/"),
+  };
+};
+
 const escapeHtml = (value: string): string =>
   value
     .replaceAll("&", "&amp;")
@@ -601,14 +614,22 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
 export const runNarrativeReport = async (cwd: string, options: NarrativeOptions = {}): Promise<NarrativeResult> => {
   const paths = resolveRagitPaths(cwd);
   const built = await buildNarrativeViewModel(cwd, options);
+  const modelOutput = options.emitModel ? resolveNarrativeModelOutput(cwd, options.emitModel) : null;
   if (!options.dryRun) {
     await mkdir(path.dirname(built.absoluteReportPath), { recursive: true });
     await writeFile(built.absoluteReportPath, renderNarrativeReport(built.viewModel), "utf8");
+    if (modelOutput) {
+      await mkdir(path.dirname(modelOutput.absolutePath), { recursive: true });
+      await writeFile(modelOutput.absolutePath, `${JSON.stringify(built.viewModel, null, 2)}\n`, "utf8");
+    }
   }
   if (!options.output && built.result.reportPath.startsWith(".ragit/")) {
     await mkdir(paths.narrativeReportsDir, { recursive: true });
   }
-  return built.result;
+  return {
+    ...built.result,
+    modelPath: modelOutput?.displayPath ?? null,
+  };
 };
 
 export const formatNarrativeText = (result: NarrativeResult): string =>
@@ -616,6 +637,7 @@ export const formatNarrativeText = (result: NarrativeResult): string =>
     "# ragit narrative",
     `- dry_run: ${result.dryRun}`,
     `- report_path: ${result.reportPath}`,
+    ...(result.modelPath ? [`- model_path: ${result.modelPath}`] : []),
     `- head: ${result.headSha}`,
     `- window_rev_range: ${result.window.revRange ?? "HEAD"}`,
     `- selected_snapshots: ${result.window.selectedSnapshotShas.length}`,

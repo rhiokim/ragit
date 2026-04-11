@@ -32,6 +32,7 @@ export interface NarrativeOptions {
   revRange?: string;
   maxCommits?: number;
   output?: string;
+  emitModel?: string;
   dryRun?: boolean;
 }
 
@@ -53,6 +54,7 @@ export interface NarrativeSummary {
 export interface NarrativeResult {
   dryRun: boolean;
   reportPath: string;
+  modelPath: string | null;
   headSha: string;
   window: NarrativeWindowSummary;
   summary: NarrativeSummary;
@@ -766,6 +768,7 @@ export const buildNarrativeViewModel = async (
   const result: NarrativeResult = {
     dryRun: Boolean(options.dryRun),
     reportPath: outputTarget.displayPath,
+    modelPath: null,
     headSha,
     window: viewModel.window,
     summary: viewModel.summary,

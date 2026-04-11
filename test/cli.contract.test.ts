@@ -119,6 +119,7 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeNarrativeOutput.ok).toBe(true);
       expect(describeNarrativeOutput.data.spec.path).toBe("narrative");
       expect(describeNarrativeOutput.data.spec.options.some((option: { name: string }) => option.name === "--open")).toBe(true);
+      expect(describeNarrativeOutput.data.spec.options.some((option: { name: string }) => option.name === "--emit-model")).toBe(true);
 
       const describeDriftOutput = JSON.parse(runCli(["describe", "drift", "--format", "json"]));
       expect(describeDriftOutput.command).toBe("describe");
@@ -195,11 +196,24 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(timelineOutput.data.events.every((event: { eventType: string }) => event.eventType.startsWith("memory."))).toBe(true);
       expect(timelineOutput.data.events.every((event: { semantic?: unknown }) => event.semantic === undefined)).toBe(true);
 
-      const narrativeOutput = JSON.parse(runCli(["narrative", "--cwd", temp, "--format", "json", "--dry-run", "--open"]));
+      const narrativeOutput = JSON.parse(
+        runCli([
+          "narrative",
+          "--cwd",
+          temp,
+          "--format",
+          "json",
+          "--dry-run",
+          "--open",
+          "--emit-model",
+          ".ragit/reports/narrative/model.json",
+        ]),
+      );
       expect(narrativeOutput.command).toBe("narrative");
       expect(narrativeOutput.ok).toBe(true);
       expect(narrativeOutput.data.dryRun).toBe(true);
       expect(narrativeOutput.data.reportPath).toContain(".ragit/reports/narrative/");
+      expect(narrativeOutput.data.modelPath).toBe(".ragit/reports/narrative/model.json");
       expect(Array.isArray(narrativeOutput.data.window.selectedSnapshotShas)).toBe(true);
       expect(narrativeOutput.data.summary).toBeTruthy();
       expect(narrativeOutput.warnings.some((warning: string) => warning.includes("--open"))).toBe(true);
