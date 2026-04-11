@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { buildCliEnvelope, CliFormat, emitCliOutput } from "../core/cliContract.js";
 import { formatNarrativeText, NarrativeOptions, runNarrativeReport } from "../core/narrative.js";
+import { NARRATIVE_MODEL_SCHEMA_VERSION } from "../core/narrative-model.js";
 
 const openReportInBrowser = async (target: string): Promise<void> =>
   await new Promise((resolve, reject) => {
@@ -26,18 +27,22 @@ export const runNarrativeCommand = async (
   format: CliFormat,
 ): Promise<void> => {
   const result = await runNarrativeReport(cwd, options);
+  const cliResult = {
+    ...result,
+    schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
+  };
   if (options.open && options.dryRun) {
-    result.warnings.push("--open은 dry-run에서 무시됩니다.");
+    cliResult.warnings.push("--open은 dry-run에서 무시됩니다.");
   } else if (options.open) {
     try {
       await openReportInBrowser(path.resolve(cwd, result.reportPath));
     } catch {
-      result.warnings.push("기본 브라우저를 열 수 없어 report 파일만 생성했습니다.");
+      cliResult.warnings.push("기본 브라우저를 열 수 없어 report 파일만 생성했습니다.");
     }
   }
   emitCliOutput({
-    envelope: buildCliEnvelope("narrative", cwd, result, result.warnings),
+    envelope: buildCliEnvelope("narrative", cwd, cliResult, cliResult.warnings),
     format,
-    text: formatNarrativeText(result),
+    text: formatNarrativeText(cliResult),
   });
 };

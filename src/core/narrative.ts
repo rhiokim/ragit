@@ -3,6 +3,7 @@ import path from "node:path";
 import { resolveRagitPaths } from "./project.js";
 import {
   buildNarrativeViewModel,
+  NARRATIVE_MODEL_SCHEMA_VERSION,
   NarrativeEventItem,
   NarrativeIntentItem,
   NarrativeOptions,
@@ -632,12 +633,13 @@ export const runNarrativeReport = async (cwd: string, options: NarrativeOptions 
   };
 };
 
-export const formatNarrativeText = (result: NarrativeResult): string =>
+export const formatNarrativeText = (result: NarrativeResult & { schemaVersion?: number }): string =>
   [
     "# ragit narrative",
     `- dry_run: ${result.dryRun}`,
     `- report_path: ${result.reportPath}`,
     ...(result.modelPath ? [`- model_path: ${result.modelPath}`] : []),
+    `- schema_version: ${result.schemaVersion ?? NARRATIVE_MODEL_SCHEMA_VERSION}`,
     `- head: ${result.headSha}`,
     `- window_rev_range: ${result.window.revRange ?? "HEAD"}`,
     `- selected_snapshots: ${result.window.selectedSnapshotShas.length}`,
