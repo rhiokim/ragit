@@ -38,11 +38,18 @@ export type NarrativeProjectionMode = typeof NARRATIVE_PROJECTION_MODE;
 export type NarrativeTrustBadge = "durable-doc" | "reviewed-artifact" | "promoted-artifact" | "operational-event";
 export type NarrativeSensitivityBadge = "standard" | "redacted" | "restricted";
 export type NarrativeFreshnessStatus = "fresh" | "suspect" | "stale";
+export type NarrativeValidationStatus = "verified" | "attention" | "unverified";
 
 export interface NarrativeFreshnessCounts {
   fresh: number;
   suspect: number;
   stale: number;
+}
+
+export interface NarrativeValidationCounts {
+  verified: number;
+  attention: number;
+  unverified: number;
 }
 
 export interface NarrativeOptions {
@@ -67,6 +74,7 @@ export interface NarrativeSummary {
   timelineEvents: number;
   heuristicEdges: number;
   freshnessCounts: NarrativeFreshnessCounts;
+  validationCounts: NarrativeValidationCounts;
 }
 
 export interface NarrativeResult {
@@ -118,6 +126,10 @@ interface NarrativeSynthesisDecisionNode extends RawNarrativeDecisionNode {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
 }
 
 interface NarrativeSynthesisDecisionThread {
@@ -134,6 +146,10 @@ interface NarrativeSynthesisDecisionThread {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
 }
 
 interface NarrativeSynthesisIntentItem {
@@ -154,6 +170,10 @@ interface NarrativeSynthesisIntentItem {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
 }
 
 interface NarrativeSynthesisEventItem {
@@ -195,6 +215,10 @@ export interface NarrativeDecisionThread {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
   badges: {
     trust: "durable-doc";
     sensitivity: NarrativeSensitivityBadge;
@@ -222,6 +246,10 @@ export interface NarrativeDecisionNode {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
   badges: {
     trust: "durable-doc";
     sensitivity: NarrativeSensitivityBadge;
@@ -245,6 +273,10 @@ export interface NarrativeIntentItem {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
   badges: {
     trust: "reviewed-artifact" | "promoted-artifact";
     sensitivity: NarrativeSensitivityBadge;
@@ -344,6 +376,12 @@ const emptyFreshnessCounts = (): NarrativeFreshnessCounts => ({
   stale: 0,
 });
 
+const emptyValidationCounts = (): NarrativeValidationCounts => ({
+  verified: 0,
+  attention: 0,
+  unverified: 0,
+});
+
 const emptyDriftOverlayFields = (): {
   freshnessStatus: NarrativeFreshnessStatus | null;
   driftReasonCodes: string[];
@@ -356,12 +394,33 @@ const emptyDriftOverlayFields = (): {
   driftSourceRefs: [],
 });
 
+const emptyValidationOverlayFields = (): {
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
+} => ({
+  validationStatus: null,
+  validationReasonCodes: [],
+  validationEvidenceRefs: [],
+  validationRecommendedActions: [],
+});
+
 const coerceFreshnessCounts = (value: unknown): NarrativeFreshnessCounts => {
   if (!isPlainObject(value)) return emptyFreshnessCounts();
   return {
     fresh: typeof value.fresh === "number" && Number.isFinite(value.fresh) ? value.fresh : 0,
     suspect: typeof value.suspect === "number" && Number.isFinite(value.suspect) ? value.suspect : 0,
     stale: typeof value.stale === "number" && Number.isFinite(value.stale) ? value.stale : 0,
+  };
+};
+
+const coerceValidationCounts = (value: unknown): NarrativeValidationCounts => {
+  if (!isPlainObject(value)) return emptyValidationCounts();
+  return {
+    verified: typeof value.verified === "number" && Number.isFinite(value.verified) ? value.verified : 0,
+    attention: typeof value.attention === "number" && Number.isFinite(value.attention) ? value.attention : 0,
+    unverified: typeof value.unverified === "number" && Number.isFinite(value.unverified) ? value.unverified : 0,
   };
 };
 
@@ -391,9 +450,40 @@ const coerceDriftOverlayFields = (
   };
 };
 
+const coerceValidationOverlayFields = (
+  value: unknown,
+): {
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
+} => {
+  if (!isPlainObject(value)) return emptyValidationOverlayFields();
+  return {
+    validationStatus:
+      value.validationStatus === "verified" || value.validationStatus === "attention" || value.validationStatus === "unverified"
+        ? value.validationStatus
+        : null,
+    validationReasonCodes: Array.isArray(value.validationReasonCodes)
+      ? value.validationReasonCodes.filter((item): item is string => typeof item === "string")
+      : [],
+    validationEvidenceRefs: Array.isArray(value.validationEvidenceRefs)
+      ? value.validationEvidenceRefs.filter((item): item is string => typeof item === "string")
+      : [],
+    validationRecommendedActions: Array.isArray(value.validationRecommendedActions)
+      ? value.validationRecommendedActions.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+};
+
 const attachNarrativeDriftDefaults = <T extends object>(value: T): T & ReturnType<typeof emptyDriftOverlayFields> => ({
   ...value,
   ...coerceDriftOverlayFields(value),
+});
+
+const attachNarrativeValidationDefaults = <T extends object>(value: T): T & ReturnType<typeof emptyValidationOverlayFields> => ({
+  ...value,
+  ...coerceValidationOverlayFields(value),
 });
 
 const hasNarrativeViewModelCoreShape = (value: Record<string, unknown>): boolean =>
@@ -437,18 +527,21 @@ export const normalizeNarrativeViewModel = (
         summary: {
           ...legacyValue.summary,
           freshnessCounts: coerceFreshnessCounts((legacyValue.summary as unknown as Record<string, unknown>).freshnessCounts),
+          validationCounts: coerceValidationCounts(
+            (legacyValue.summary as unknown as Record<string, unknown>).validationCounts,
+          ),
         },
         threads: Array.isArray(legacyValue.threads)
-          ? (legacyValue.threads.map((thread) => attachNarrativeDriftDefaults(thread)) as NarrativeDecisionThread[])
+          ? (legacyValue.threads.map((thread) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(thread))) as NarrativeDecisionThread[])
           : [],
         nodes: Array.isArray(legacyValue.nodes)
-          ? (legacyValue.nodes.map((node) => attachNarrativeDriftDefaults(node)) as NarrativeDecisionNode[])
+          ? (legacyValue.nodes.map((node) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(node))) as NarrativeDecisionNode[])
           : [],
         intentItems: Array.isArray(legacyValue.intentItems)
-          ? (legacyValue.intentItems.map((item) => attachNarrativeDriftDefaults(item)) as NarrativeIntentItem[])
+          ? (legacyValue.intentItems.map((item) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(item))) as NarrativeIntentItem[])
           : [],
         unassignedIntentItems: Array.isArray(legacyValue.unassignedIntentItems)
-          ? (legacyValue.unassignedIntentItems.map((item) => attachNarrativeDriftDefaults(item)) as NarrativeIntentItem[])
+          ? (legacyValue.unassignedIntentItems.map((item) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(item))) as NarrativeIntentItem[])
           : [],
         timelineEvents: Array.isArray(legacyValue.timelineEvents) ? legacyValue.timelineEvents : [],
       },
@@ -480,14 +573,19 @@ export const normalizeNarrativeViewModel = (
       summary: {
         ...(value.summary as NarrativeSummary),
         freshnessCounts: coerceFreshnessCounts((value.summary as unknown as Record<string, unknown>).freshnessCounts),
+        validationCounts: coerceValidationCounts((value.summary as unknown as Record<string, unknown>).validationCounts),
       },
-      threads: Array.isArray(value.threads) ? value.threads.map((thread) => attachNarrativeDriftDefaults(thread)) : [],
-      nodes: Array.isArray(value.nodes) ? value.nodes.map((node) => attachNarrativeDriftDefaults(node)) : [],
+      threads: Array.isArray(value.threads)
+        ? value.threads.map((thread) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(thread)))
+        : [],
+      nodes: Array.isArray(value.nodes)
+        ? value.nodes.map((node) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(node)))
+        : [],
       intentItems: Array.isArray(value.intentItems)
-        ? value.intentItems.map((item) => attachNarrativeDriftDefaults(item))
+        ? value.intentItems.map((item) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(item)))
         : [],
       unassignedIntentItems: Array.isArray(value.unassignedIntentItems)
-        ? value.unassignedIntentItems.map((item) => attachNarrativeDriftDefaults(item))
+        ? value.unassignedIntentItems.map((item) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(item)))
         : [],
       timelineEvents: Array.isArray(value.timelineEvents) ? value.timelineEvents : [],
     },
@@ -697,6 +795,7 @@ const collectCandidateIntentItems = async (
       createdAt: artifact.createdAt,
       threadIds: [],
       ...emptyDriftOverlayFields(),
+      ...emptyValidationOverlayFields(),
     }));
 };
 
@@ -820,6 +919,7 @@ const assignNarrativeThreads = async (
       relationKind,
       confidence: relationConfidence(relationKind),
       ...emptyDriftOverlayFields(),
+      ...emptyValidationOverlayFields(),
     });
   }
 
@@ -851,6 +951,7 @@ const buildThreads = (nodes: NarrativeSynthesisDecisionNode[]): NarrativeSynthes
         snapshotShas: uniqueStrings(orderedNodes.map((node) => node.commitSha)),
         nodeIds: orderedNodes.map((node) => node.nodeId),
         ...emptyDriftOverlayFields(),
+        ...emptyValidationOverlayFields(),
       };
     })
     .sort((left, right) => left.title.localeCompare(right.title));
@@ -876,6 +977,7 @@ const attachIntentItems = (
       ...item,
       threadIds: matched.map((thread) => thread.threadId),
       ...emptyDriftOverlayFields(),
+      ...emptyValidationOverlayFields(),
     };
   });
   return {
@@ -1030,6 +1132,7 @@ const toSummary = (
   timelineEvents: timelineEvents.length,
   heuristicEdges: nodes.filter((node) => node.relationKind === "heuristic-high" || node.relationKind === "heuristic-medium").length,
   freshnessCounts: emptyFreshnessCounts(),
+  validationCounts: emptyValidationCounts(),
 });
 
 const toBindingSummary = (input: {
@@ -1078,6 +1181,7 @@ const projectDecisionNodeForViewerSafe = (node: NarrativeSynthesisDecisionNode):
     ...(sanitized.value as typeof projected),
     binding,
     ...emptyDriftOverlayFields(),
+    ...emptyValidationOverlayFields(),
     badges: {
       trust: "durable-doc",
       sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
@@ -1111,6 +1215,7 @@ const projectThreadForViewerSafe = (
     ...(sanitized.value as typeof projected),
     binding,
     ...emptyDriftOverlayFields(),
+    ...emptyValidationOverlayFields(),
     badges: {
       trust: "durable-doc",
       sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
@@ -1143,6 +1248,7 @@ const projectIntentItemForViewerSafe = (item: NarrativeSynthesisIntentItem): Nar
     ...(sanitized.value as typeof projected),
     binding,
     ...emptyDriftOverlayFields(),
+    ...emptyValidationOverlayFields(),
     badges: {
       trust: item.status === "promoted" ? "promoted-artifact" : "reviewed-artifact",
       sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),

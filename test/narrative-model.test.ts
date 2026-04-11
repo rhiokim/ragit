@@ -95,6 +95,11 @@ Keep report synthesis separate from viewer rendering.
         suspect: 0,
         stale: 0,
       });
+      expect(built.viewModel.summary.validationCounts).toEqual({
+        verified: 0,
+        attention: 0,
+        unverified: 0,
+      });
       expect(built.viewModel.snapshots).toHaveLength(1);
       expect(built.viewModel.threads.length).toBeGreaterThan(0);
       expect(built.viewModel.intentItems.length).toBeGreaterThan(0);
@@ -106,8 +111,12 @@ Keep report synthesis separate from viewer rendering.
       expect(built.viewModel.intentItems[0].badges.sensitivity).toBe("restricted");
       expect(built.viewModel.threads[0].freshnessStatus).toBeNull();
       expect(built.viewModel.threads[0].driftReasonCodes).toEqual([]);
+      expect(built.viewModel.threads[0].validationStatus).toBeNull();
+      expect(built.viewModel.threads[0].validationReasonCodes).toEqual([]);
       expect(built.viewModel.nodes[0].recommendedActions).toEqual([]);
+      expect(built.viewModel.nodes[0].validationEvidenceRefs).toEqual([]);
       expect(built.viewModel.intentItems[0].driftSourceRefs).toEqual([]);
+      expect(built.viewModel.intentItems[0].validationRecommendedActions).toEqual([]);
 
       const serialized = JSON.stringify(built.viewModel);
       expect(serialized).not.toContain("very-secret-model-value");
@@ -147,17 +156,22 @@ Keep report synthesis separate from viewer rendering.
     const normalized = normalizeNarrativeViewModel(legacyPayload);
 
     expect(normalized.compatibility).toBe("legacy-unversioned");
-    expect(normalized.value?.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
-    expect(normalized.value?.producerVersion).toBe(NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION);
-    expect(normalized.value?.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
-    expect(normalized.value?.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
-    expect(normalized.value?.summary.freshnessCounts).toEqual({
-      fresh: 0,
-      suspect: 0,
-      stale: 0,
+      expect(normalized.value?.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
+      expect(normalized.value?.producerVersion).toBe(NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION);
+      expect(normalized.value?.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
+      expect(normalized.value?.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
+      expect(normalized.value?.summary.freshnessCounts).toEqual({
+        fresh: 0,
+        suspect: 0,
+        stale: 0,
+      });
+      expect(normalized.value?.summary.validationCounts).toEqual({
+        verified: 0,
+        attention: 0,
+        unverified: 0,
+      });
+      expect(normalized.warnings[0]).toContain("legacy-unversioned");
     });
-    expect(normalized.warnings[0]).toContain("legacy-unversioned");
-  });
 
   it("hydrates missing drift overlay fields on versioned payloads", () => {
     const versionedPayload: Record<string, unknown> = {
@@ -185,6 +199,11 @@ Keep report synthesis separate from viewer rendering.
           suspect: 1,
           stale: 0,
         },
+        validationCounts: {
+          verified: 1,
+          attention: 0,
+          unverified: 2,
+        },
       },
       snapshots: [],
       threads: [{ threadId: "thread-1" }],
@@ -202,11 +221,18 @@ Keep report synthesis separate from viewer rendering.
     expect(normalized.value?.threads[0].freshnessStatus).toBeNull();
     expect(normalized.value?.threads[0].driftReasonCodes).toEqual([]);
     expect(normalized.value?.nodes[0].recommendedActions).toEqual([]);
+    expect(normalized.value?.nodes[0].validationStatus).toBeNull();
+    expect(normalized.value?.intentItems[0].validationEvidenceRefs).toEqual([]);
     expect(normalized.value?.intentItems[0].driftSourceRefs).toEqual([]);
     expect(normalized.value?.summary.freshnessCounts).toEqual({
       fresh: 2,
       suspect: 1,
       stale: 0,
+    });
+    expect(normalized.value?.summary.validationCounts).toEqual({
+      verified: 1,
+      attention: 0,
+      unverified: 2,
     });
   });
 });
