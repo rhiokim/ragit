@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { listArtifactRecords } from "./artifacts.js";
 import { runDrift } from "./drift.js";
 import { resolveRagitPaths } from "./project.js";
 import {
@@ -13,14 +14,13 @@ import {
   NarrativeOptions,
   NarrativeResult,
   NarrativeViewModel,
+  NarrativeValidationStatus,
 } from "./narrative-model.js";
-import type { DriftItem, DriftResult, DriftStatus } from "./types.js";
+import type { ArtifactRecord, DriftItem, DriftResult, DriftStatus } from "./types.js";
 
 export type {
   NarrativeBuildResult,
   NarrativeChangeType,
-  NarrativeDecisionNode,
-  NarrativeDecisionThread,
   NarrativeEventItem,
   NarrativeIntentItem,
   NarrativeOptions,
@@ -276,6 +276,379 @@ const applyDriftOverlay = (viewModel: NarrativeViewModel, drift: DriftResult): N
     unassignedIntentItems: refreshedIntentItems.filter((item) =>
       viewModel.unassignedIntentItems.some((candidate) => candidate.itemId === item.itemId),
     ),
+  };
+};
+
+type ValidationContext = {
+  relatedPaths: string[];
+  goalIds: string[];
+  episodeIds: string[];
+  snapshotAnchors: string[];
+};
+
+type ValidationAttachment = {
+  status: NarrativeValidationStatus;
+  reasonCodes: string[];
+  evidenceRefs: string[];
+  recommendedActions: string[];
+};
+
+type HarnessArtifactIndex = {
+  artifactsById: Map<string, ArtifactRecord>;
+  suitesById: Map<string, ArtifactRecord>;
+  failuresBySuiteId: Map<string, ArtifactRecord[]>;
+};
+
+const uniqueOrderedStrings = (values: Array<string | null | undefined>): string[] =>
+  Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.trim().length > 0)));
+
+const EMPTY_VALIDATION_CONTEXT: ValidationContext = {
+  relatedPaths: [],
+  goalIds: [],
+  episodeIds: [],
+  snapshotAnchors: [],
+};
+
+const collectValidationContext = (
+  artifactIds: string[],
+  artifactIndex: HarnessArtifactIndex["artifactsById"],
+): ValidationContext => {
+  const relatedPaths: string[] = [];
+  const goalIds: string[] = [];
+  const episodeIds: string[] = [];
+  const snapshotAnchors: string[] = [];
+
+  for (const artifactId of artifactIds) {
+    const artifact = artifactIndex.get(artifactId);
+    if (!artifact) continue;
+    if (Array.isArray(artifact.relatedPaths)) relatedPaths.push(...artifact.relatedPaths);
+    if (typeof artifact.payload?.goalId === "string") goalIds.push(artifact.payload.goalId);
+    if (typeof artifact.payload?.episodeId === "string") episodeIds.push(artifact.payload.episodeId);
+    if (typeof artifact.boundHeadSha === "string") snapshotAnchors.push(artifact.boundHeadSha);
+    if (typeof artifact.sourceHeadSha === "string") snapshotAnchors.push(artifact.sourceHeadSha);
+    if (typeof artifact.captureHeadSha === "string") snapshotAnchors.push(artifact.captureHeadSha);
+  }
+
+  return {
+    relatedPaths: uniqueOrderedStrings(relatedPaths),
+    goalIds: uniqueOrderedStrings(goalIds),
+    episodeIds: uniqueOrderedStrings(episodeIds),
+    snapshotAnchors: uniqueOrderedStrings(snapshotAnchors),
+  };
+};
+
+const createHarnessArtifactIndex = async (cwd: string): Promise<HarnessArtifactIndex> => {
+  const records = await listArtifactRecords(cwd);
+  const artifactsById = new Map(records.map((artifact) => [artifact.artifactId, artifact]));
+  const suitesById = new Map<string, ArtifactRecord>();
+  const failuresBySuiteId = new Map<string, ArtifactRecord[]>();
+  for (const artifact of records) {
+    if (artifact.artifactScope !== "harness") continue;
+    if (artifact.kind === "suite") {
+      suitesById.set(artifact.artifactId, artifact);
+      continue;
+    }
+    if (artifact.kind === "failure") {
+      const suiteId = typeof artifact.payload?.suiteId === "string" ? artifact.payload.suiteId : null;
+      if (!suiteId) continue;
+      const bucket = failuresBySuiteId.get(suiteId) ?? [];
+      bucket.push(artifact);
+      failuresBySuiteId.set(suiteId, bucket);
+    }
+  }
+  return { artifactsById, suitesById, failuresBySuiteId };
+};
+
+const candidateAnchors = (item: DriftItem): string[] =>
+  uniqueOrderedStrings([
+    item.sourceRefs.anchorSha,
+    item.sourceRefs.snapshotSha,
+    item.sourceRefs.headSha,
+    item.sourceRefs.boundHeadSha,
+    item.sourceRefs.captureHeadSha,
+  ]);
+
+const contextMatchesRelatedPaths = (context: ValidationContext, item: DriftItem): boolean => {
+  const affectedPaths = new Set(collectDriftAffectedPaths(item));
+  return context.relatedPaths.some((relatedPath) => affectedPaths.has(normalizeRepoPath(relatedPath)));
+};
+
+const contextMatchesGoal = (context: ValidationContext, item: DriftItem): boolean =>
+  item.sourceRefs.goalId ? context.goalIds.includes(item.sourceRefs.goalId) : false;
+
+const contextMatchesEpisode = (context: ValidationContext, item: DriftItem): boolean =>
+  item.sourceRefs.episodeId ? context.episodeIds.includes(item.sourceRefs.episodeId) : false;
+
+const contextMatchesSnapshotAnchor = (context: ValidationContext, item: DriftItem): boolean =>
+  candidateAnchors(item).some((anchor) => context.snapshotAnchors.includes(anchor));
+
+const findValidationCandidate = (
+  context: ValidationContext,
+  items: DriftItem[],
+): DriftItem | null => {
+  const rules: Array<(item: DriftItem) => boolean> = [
+    (item) => contextMatchesRelatedPaths(context, item),
+    (item) => contextMatchesGoal(context, item),
+    (item) => contextMatchesEpisode(context, item),
+    (item) => contextMatchesSnapshotAnchor(context, item),
+  ];
+
+  for (const rule of rules) {
+    const matches = items.filter(rule);
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) return null;
+  }
+  return null;
+};
+
+const buildValidationEvidenceRefs = (
+  candidate: DriftItem,
+  artifactIndex: HarnessArtifactIndex,
+): string[] => {
+  const refs = new Set<string>();
+  if (candidate.sourceRefs.artifactId) {
+    refs.add(`suite:${candidate.sourceRefs.artifactId}`);
+    const suite = artifactIndex.suitesById.get(candidate.sourceRefs.artifactId);
+    if (suite && Array.isArray(suite.payload?.resourceRefs)) {
+      for (const resourceRef of suite.payload.resourceRefs as string[]) {
+        refs.add(`resource:${resourceRef}`);
+      }
+      for (const failure of artifactIndex.failuresBySuiteId.get(candidate.sourceRefs.artifactId) ?? []) {
+        refs.add(`failure:${failure.artifactId}`);
+        for (const evidence of failure.evidenceRefs ?? []) {
+          refs.add(`evidence:${evidence.evidenceId}`);
+        }
+      }
+    }
+  }
+  refs.add(`drift:${candidate.scope}/${candidate.itemType}:${candidate.id}`);
+  return Array.from(refs).sort((left, right) => left.localeCompare(right));
+};
+
+const buildValidationAttachment = (
+  candidate: DriftItem | null,
+  artifactIndex: HarnessArtifactIndex,
+): ValidationAttachment => {
+  if (!candidate) {
+    return {
+      status: "unverified",
+      reasonCodes: [],
+      evidenceRefs: [],
+      recommendedActions: [],
+    };
+  }
+  return {
+    status: candidate.status === "fresh" ? "verified" : "attention",
+    reasonCodes: uniqueOrderedStrings(candidate.reasonCodes),
+    evidenceRefs: buildValidationEvidenceRefs(candidate, artifactIndex),
+    recommendedActions: uniqueOrderedStrings(candidate.recommendedActions),
+  };
+};
+
+const combineValidationStatuses = (statuses: Array<NarrativeValidationStatus | null | undefined>): NarrativeValidationStatus => {
+  const filtered = statuses.filter((status): status is NarrativeValidationStatus => status !== null && status !== undefined);
+  if (filtered.includes("attention")) return "attention";
+  if (filtered.includes("verified")) return "verified";
+  return "unverified";
+};
+
+const mergeValidationAttachments = (attachments: ValidationAttachment[]): ValidationAttachment => ({
+  status: combineValidationStatuses(attachments.map((attachment) => attachment.status)),
+  reasonCodes: uniqueOrderedStrings(attachments.flatMap((attachment) => attachment.reasonCodes)),
+  evidenceRefs: uniqueOrderedStrings(attachments.flatMap((attachment) => attachment.evidenceRefs)),
+  recommendedActions: uniqueOrderedStrings(attachments.flatMap((attachment) => attachment.recommendedActions)),
+});
+
+const applyValidationOverlay = async (cwd: string, viewModel: NarrativeViewModel, drift: DriftResult): Promise<NarrativeViewModel> => {
+  const harnessDriftItems = drift.items.filter((item) => item.scope === "harness" && item.itemType === "harnessSuite");
+  const artifactIndex = await createHarnessArtifactIndex(cwd);
+  const threadContexts = new Map<string, ValidationContext>();
+
+  for (const thread of viewModel.threads) {
+    const relatedArtifactIds = uniqueOrderedStrings([
+      ...viewModel.nodes.filter((node) => node.threadId === thread.threadId).flatMap((node) => (node.sourceArtifactId ? [node.sourceArtifactId] : [])),
+      ...[...viewModel.intentItems, ...viewModel.unassignedIntentItems]
+        .filter((item) => item.threadIds.includes(thread.threadId))
+        .map((item) => item.artifactId),
+    ]);
+    threadContexts.set(thread.threadId, collectValidationContext(relatedArtifactIds, artifactIndex.artifactsById));
+  }
+
+  const resolveEntity = (context: ValidationContext): ValidationAttachment => {
+    const candidate = findValidationCandidate(context, harnessDriftItems);
+    return buildValidationAttachment(candidate, artifactIndex);
+  };
+
+  const validationThreadContextByThreadId = new Map<string, ValidationContext>();
+  for (const thread of viewModel.threads) {
+    const threadContext = threadContexts.get(thread.threadId) ?? EMPTY_VALIDATION_CONTEXT;
+    validationThreadContextByThreadId.set(thread.threadId, {
+      relatedPaths: uniqueOrderedStrings([...thread.docPaths, ...threadContext.relatedPaths]),
+      goalIds: uniqueOrderedStrings([...threadContext.goalIds]),
+      episodeIds: uniqueOrderedStrings([...threadContext.episodeIds]),
+      snapshotAnchors: uniqueOrderedStrings([...thread.snapshotShas, ...threadContext.snapshotAnchors]),
+    });
+  }
+
+  const nodeValidationByNodeId = new Map<string, ValidationAttachment>();
+  const refreshedNodes = viewModel.nodes.map((node) => {
+    const threadContext = validationThreadContextByThreadId.get(node.threadId);
+    const artifact = node.sourceArtifactId ? artifactIndex.artifactsById.get(node.sourceArtifactId) : null;
+    const nodeRelatedPaths = Array.isArray(artifact?.relatedPaths) ? artifact?.relatedPaths : [];
+    const context: ValidationContext = {
+      relatedPaths: uniqueOrderedStrings([
+        node.path,
+        ...node.relatedPaths,
+        ...nodeRelatedPaths,
+        ...(threadContext?.relatedPaths ?? []),
+      ]),
+      goalIds: uniqueOrderedStrings([
+        ...(artifact?.goalId ? [artifact.goalId] : []),
+        ...(threadContext?.goalIds ?? []),
+      ]),
+      episodeIds: uniqueOrderedStrings([
+        ...(artifact?.episodeId ? [artifact.episodeId] : []),
+        ...(threadContext?.episodeIds ?? []),
+      ]),
+      snapshotAnchors: uniqueOrderedStrings([
+        node.commitSha,
+        ...(artifact?.boundHeadSha ? [artifact.boundHeadSha] : []),
+        ...(artifact?.sourceHeadSha ? [artifact.sourceHeadSha] : []),
+        ...(artifact?.captureHeadSha ? [artifact.captureHeadSha] : []),
+        ...(threadContext?.snapshotAnchors ?? []),
+      ]),
+    };
+    const attachment = resolveEntity(context);
+    nodeValidationByNodeId.set(node.nodeId, attachment);
+    return {
+      ...node,
+      validationStatus: attachment.status,
+      validationReasonCodes: attachment.reasonCodes,
+      validationEvidenceRefs: attachment.evidenceRefs,
+      validationRecommendedActions: attachment.recommendedActions,
+    };
+  });
+
+  const intentValidationByItemId = new Map<string, ValidationAttachment>();
+  const buildIntentContext = (item: NarrativeViewModel["intentItems"][number]): ValidationContext => {
+    const artifact = artifactIndex.artifactsById.get(item.artifactId);
+    const threadContextsForItem = item.threadIds
+      .map((threadId) => threadContexts.get(threadId))
+      .filter((entry): entry is ValidationContext => Boolean(entry));
+    const artifactRelatedPaths = Array.isArray(artifact?.relatedPaths) ? artifact.relatedPaths : [];
+    return {
+      relatedPaths: uniqueOrderedStrings([
+        ...item.relatedPaths,
+        ...artifactRelatedPaths,
+        ...threadContextsForItem.flatMap((entry) => entry.relatedPaths),
+      ]),
+      goalIds: uniqueOrderedStrings([
+        ...(artifact?.goalId ? [artifact.goalId] : []),
+        ...threadContextsForItem.flatMap((entry) => entry.goalIds),
+      ]),
+      episodeIds: uniqueOrderedStrings([
+        ...(artifact?.episodeId ? [artifact.episodeId] : []),
+        ...threadContextsForItem.flatMap((entry) => entry.episodeIds),
+      ]),
+      snapshotAnchors: uniqueOrderedStrings([
+        ...(item.anchorSha ? [item.anchorSha] : []),
+        ...(artifact?.boundHeadSha ? [artifact.boundHeadSha] : []),
+        ...(artifact?.sourceHeadSha ? [artifact.sourceHeadSha] : []),
+        ...(artifact?.captureHeadSha ? [artifact.captureHeadSha] : []),
+        ...threadContextsForItem.flatMap((entry) => entry.snapshotAnchors),
+      ]),
+    };
+  };
+
+  const refreshedIntentItems = viewModel.intentItems.map((item) => {
+    const attachment = resolveEntity(buildIntentContext(item));
+    intentValidationByItemId.set(item.itemId, attachment);
+    return {
+      ...item,
+      validationStatus: attachment.status,
+      validationReasonCodes: attachment.reasonCodes,
+      validationEvidenceRefs: attachment.evidenceRefs,
+      validationRecommendedActions: attachment.recommendedActions,
+    };
+  });
+
+  const unassignedValidationByItemId = new Map<string, ValidationAttachment>();
+  const refreshedUnassignedIntentItems = viewModel.unassignedIntentItems.map((item) => {
+    const attachment = resolveEntity(buildIntentContext(item));
+    unassignedValidationByItemId.set(item.itemId, attachment);
+    return {
+      ...item,
+      validationStatus: attachment.status,
+      validationReasonCodes: attachment.reasonCodes,
+      validationEvidenceRefs: attachment.evidenceRefs,
+      validationRecommendedActions: attachment.recommendedActions,
+    };
+  });
+
+  const refreshedThreads = viewModel.threads.map((thread) => {
+    const threadContext = threadContexts.get(thread.threadId) ?? EMPTY_VALIDATION_CONTEXT;
+    const directAttachment = resolveEntity({
+      relatedPaths: uniqueOrderedStrings([
+        ...thread.docPaths,
+        ...viewModel.nodes.filter((node) => node.threadId === thread.threadId).flatMap((node) => node.relatedPaths),
+        ...[...viewModel.intentItems, ...viewModel.unassignedIntentItems]
+          .filter((item) => item.threadIds.includes(thread.threadId))
+          .flatMap((item) => item.relatedPaths),
+        ...threadContext.relatedPaths,
+      ]),
+      goalIds: uniqueOrderedStrings([...threadContext.goalIds]),
+      episodeIds: uniqueOrderedStrings([...threadContext.episodeIds]),
+      snapshotAnchors: uniqueOrderedStrings([
+        ...thread.snapshotShas,
+        ...threadContext.snapshotAnchors,
+      ]),
+    });
+
+    const childAttachments = [
+      ...viewModel.nodes
+        .filter((node) => node.threadId === thread.threadId)
+        .map((node) => nodeValidationByNodeId.get(node.nodeId))
+        .filter((attachment): attachment is ValidationAttachment => Boolean(attachment)),
+      ...viewModel.intentItems
+        .filter((item) => item.threadIds.includes(thread.threadId))
+        .map((item) => intentValidationByItemId.get(item.itemId))
+        .filter((attachment): attachment is ValidationAttachment => Boolean(attachment)),
+      ...viewModel.unassignedIntentItems
+        .filter((item) => item.threadIds.includes(thread.threadId))
+        .map((item) => unassignedValidationByItemId.get(item.itemId))
+        .filter((attachment): attachment is ValidationAttachment => Boolean(attachment)),
+    ];
+
+    const attachment = childAttachments.length > 0 ? mergeValidationAttachments([directAttachment, ...childAttachments]) : directAttachment;
+    return {
+      ...thread,
+      validationStatus: attachment.status,
+      validationReasonCodes: attachment.reasonCodes,
+      validationEvidenceRefs: attachment.evidenceRefs,
+      validationRecommendedActions: attachment.recommendedActions,
+    };
+  });
+
+  const validationCounts = [...refreshedThreads, ...refreshedNodes, ...refreshedIntentItems, ...refreshedUnassignedIntentItems].reduce(
+    (acc, item) => {
+      if (item.validationStatus === "verified") acc.verified += 1;
+      else if (item.validationStatus === "attention") acc.attention += 1;
+      else acc.unverified += 1;
+      return acc;
+    },
+    { verified: 0, attention: 0, unverified: 0 },
+  );
+
+  return {
+    ...viewModel,
+    summary: {
+      ...viewModel.summary,
+      validationCounts,
+    },
+    threads: refreshedThreads,
+    nodes: refreshedNodes,
+    intentItems: refreshedIntentItems,
+    unassignedIntentItems: refreshedUnassignedIntentItems,
   };
 };
 
@@ -1012,7 +1385,8 @@ export const runNarrativeReport = async (cwd: string, options: NarrativeOptions 
   const paths = resolveRagitPaths(cwd);
   const built = await buildNarrativeViewModel(cwd, options);
   const drift = await runDrift(cwd);
-  const viewModel = applyDriftOverlay(built.viewModel, drift);
+  const viewModelWithFreshness = applyDriftOverlay(built.viewModel, drift);
+  const viewModel = await applyValidationOverlay(cwd, viewModelWithFreshness, drift);
   const modelOutput = options.emitModel ? resolveNarrativeModelOutput(cwd, options.emitModel) : null;
   if (!options.dryRun) {
     await mkdir(path.dirname(built.absoluteReportPath), { recursive: true });
