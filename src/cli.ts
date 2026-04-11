@@ -10,6 +10,7 @@ import { runHarnessCaptureCommand, runHarnessPackCommand, runHarnessPromoteComma
 import { HookActionResult, runHooksInstall, runHooksStatus, runHooksUninstall } from "./commands/hooks.js";
 import { formatInitSummaryTable, resolveInitRoot, runInit } from "./commands/init.js";
 import { runMemoryPromoteCommand, runMemoryRecallCommand, runMemoryWrapCommand } from "./commands/memory.js";
+import { runNarrativeCommand } from "./commands/narrative.js";
 import { runSessionMaterializeCommand } from "./commands/session.js";
 import { runSecurityAuditCommand, runSecurityPurgeCommand } from "./commands/security.js";
 import { runTimelineCommand } from "./commands/timeline.js";
@@ -261,6 +262,30 @@ program
       },
       normalizeCliFormat(options.format, "text"),
       normalizeCliView(options.view, "default"),
+    );
+  });
+
+program
+  .command("narrative")
+  .description("snapshot/artifact/event를 합성해 self-contained HTML narrative report를 생성")
+  .argument("[revRange]")
+  .option("-n, --max-commits <n>", "선택할 indexed snapshot commit 개수")
+  .option("--output <path>", "report 출력 경로")
+  .option("--open", "생성 후 기본 브라우저로 열기")
+  .option("--dry-run", "파일을 쓰지 않고 계획만 계산")
+  .option("--format <format>", "text|json|both", "text")
+  .option("--cwd <path>", "대상 저장소 경로")
+  .action(async (revRange, options) => {
+    await runNarrativeCommand(
+      resolveCwd(options.cwd),
+      {
+        revRange: revRange ? String(revRange) : undefined,
+        maxCommits: parseOptionalPositiveNumber(options.maxCommits as string | undefined, "narrative.maxCommits"),
+        output: options.output ? String(options.output) : undefined,
+        open: Boolean(options.open),
+        dryRun: Boolean(options.dryRun),
+      },
+      normalizeCliFormat(options.format, "text"),
     );
   });
 

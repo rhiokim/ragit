@@ -39,7 +39,7 @@ describe("CLI machine contract", () => {
   );
 
   it(
-    "emits JSON envelopes for describe, log, timeline, drift, repair, security, query, context pack, memory recall, and status",
+    "emits JSON envelopes for describe, log, timeline, narrative, drift, repair, security, query, context pack, memory recall, and status",
     async () => {
       const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-contract-"));
       git(temp, ["init"]);
@@ -113,6 +113,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeTimelineOutput.ok).toBe(true);
       expect(describeTimelineOutput.data.spec.path).toBe("timeline");
       expect(describeTimelineOutput.data.spec.options.some((option: { name: string }) => option.name === "--kind")).toBe(true);
+
+      const describeNarrativeOutput = JSON.parse(runCli(["describe", "narrative", "--format", "json"]));
+      expect(describeNarrativeOutput.command).toBe("describe");
+      expect(describeNarrativeOutput.ok).toBe(true);
+      expect(describeNarrativeOutput.data.spec.path).toBe("narrative");
+      expect(describeNarrativeOutput.data.spec.options.some((option: { name: string }) => option.name === "--open")).toBe(true);
 
       const describeDriftOutput = JSON.parse(runCli(["describe", "drift", "--format", "json"]));
       expect(describeDriftOutput.command).toBe("describe");
@@ -188,6 +194,15 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(timelineOutput.data.summary.eventCount).toBeGreaterThan(0);
       expect(timelineOutput.data.events.every((event: { eventType: string }) => event.eventType.startsWith("memory."))).toBe(true);
       expect(timelineOutput.data.events.every((event: { semantic?: unknown }) => event.semantic === undefined)).toBe(true);
+
+      const narrativeOutput = JSON.parse(runCli(["narrative", "--cwd", temp, "--format", "json", "--dry-run", "--open"]));
+      expect(narrativeOutput.command).toBe("narrative");
+      expect(narrativeOutput.ok).toBe(true);
+      expect(narrativeOutput.data.dryRun).toBe(true);
+      expect(narrativeOutput.data.reportPath).toContain(".ragit/reports/narrative/");
+      expect(Array.isArray(narrativeOutput.data.window.selectedSnapshotShas)).toBe(true);
+      expect(narrativeOutput.data.summary).toBeTruthy();
+      expect(narrativeOutput.warnings.some((warning: string) => warning.includes("--open"))).toBe(true);
 
       const driftOutput = JSON.parse(runCli(["drift", "--cwd", temp, "--format", "json", "--scope", "all", "--view", "default"]));
       expect(driftOutput.command).toBe("drift");
