@@ -1,0 +1,85 @@
+---
+title: narrative
+description: Generate a self-contained HTML report from commit-bound project knowledge
+command_path: narrative
+---
+
+## What It Does
+
+`narrative` reads selected snapshot history, commit-bound documents, artifact records, and event data, then writes a self-contained HTML narrative report. The report is designed for a new contributor or agent that needs to understand the project's intent, decisions, and timeline without replaying the entire collaboration history.
+
+## When To Use / When Not To Use
+
+### When to use it
+
+- You want a compact handoff view of how a project decision evolved.
+- You want to explain project knowledge as a narrative instead of as raw logs.
+- You want a standalone HTML artifact that can be opened outside the CLI.
+
+### When not to use it
+
+- You need the current repository summary only. Use <a href="/en/docs/commands/status">`status`</a>.
+- You need snapshot semantic deltas. Use <a href="/en/docs/commands/log">`log`</a>.
+- You need append-only operational events. Use <a href="/en/docs/commands/timeline">`timeline`</a>.
+- You need retrieval hits or live question answering. Use <a href="/en/docs/commands/query">`query`</a>.
+
+## Syntax
+
+```bash
+pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--open] [--dry-run] [--format text|json|both] [--cwd <path>]
+```
+
+## Arguments And Options
+
+- `[revRange]`: Optional git revision range to scan. If omitted, `HEAD` is used.
+- `--max-commits <n>`: Limit the number of selected snapshot commits. The default is `10`.
+- `--output <path>`: Write the HTML report to a specific path instead of the default `.ragit/reports/narrative/<anchorSha>.html`.
+- `--open`: Open the generated report in the default browser after writing it.
+- `--dry-run`: Compute the report plan and summary without writing files.
+- `--format text|json|both`: Choose human text, JSON, or both.
+- `--cwd <path>`: Run against another repository.
+
+## Input And Output Contract
+
+- There is no JSON payload input.
+- JSON output includes `dryRun`, `reportPath`, `headSha`, `window`, `summary`, and `warnings`.
+- `window` includes `revRange`, `maxCommits`, `selectedSnapshotShas`, and `missingSnapshotCommits`.
+- `--dry-run` still returns the planned report path and summary.
+- `--open` is ignored during dry-run and reported as a warning.
+- If no manifest-backed snapshots are found, `narrative` still generates an empty-state report.
+
+## Examples
+
+Generate the default narrative report:
+
+```bash
+pnpm ragit narrative
+```
+
+Limit the report window and open the result:
+
+```bash
+pnpm ragit narrative HEAD~20..HEAD --max-commits 5 --open
+```
+
+Preview the report plan as JSON:
+
+```bash
+pnpm ragit narrative --dry-run --format json
+```
+
+## Failures And Cautions
+
+- `--output` writes a file, so make sure the parent directory is writable.
+- The report is derived from snapshot-backed knowledge, not from raw transcripts.
+- `--open` is best-effort and may be skipped if no opener exists on the current machine.
+- When no snapshot manifests exist in the selected window, the command still succeeds with an empty-state report.
+
+## Related Commands
+
+- <a href="/en/docs/commands/status">`status`</a>
+- <a href="/en/docs/commands/log">`log`</a>
+- <a href="/en/docs/commands/timeline">`timeline`</a>
+- <a href="/en/docs/commands/query">`query`</a>
+- <a href="/en/docs/commands/drift">`drift`</a>
+- <a href="/en/docs/commands/repair">`repair`</a>

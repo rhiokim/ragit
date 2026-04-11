@@ -223,6 +223,7 @@ pnpm ragit init
 pnpm ragit init --yes --output json
 pnpm ragit init --yes --git-init
 pnpm ragit log --max-count 5 --view default --format both
+pnpm ragit narrative --format both
 pnpm ragit drift --scope all --view default --format both
 pnpm ragit repair --scope all --format json
 pnpm ragit security audit --format json

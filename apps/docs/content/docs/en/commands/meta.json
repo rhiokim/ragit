@@ -5,6 +5,7 @@
     "init",
     "log",
     "timeline",
+    "narrative",
     "describe",
     "ingest",
     "query",
