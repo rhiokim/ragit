@@ -167,6 +167,20 @@ Ship the recovery changes in two deliberate phases.
       expect(modelJson.intentItems[0].binding.goalCount).toBeGreaterThan(0);
       expect(modelJson.intentItems[0].badges.sensitivity).toBe("restricted");
       expect(html).not.toMatch(/<(?:script|link|img)[^>]+https?:\/\//i);
+      const freshnessTotal =
+        modelJson.summary.freshnessCounts.fresh +
+        modelJson.summary.freshnessCounts.suspect +
+        modelJson.summary.freshnessCounts.stale;
+      expect(freshnessTotal).toBe(
+        modelJson.threads.length +
+          modelJson.nodes.length +
+          modelJson.intentItems.length +
+          modelJson.unassignedIntentItems.length,
+      );
+      expect(modelJson.summary.freshnessCounts.fresh).toBeGreaterThan(0);
+      expect(modelJson.threads.every((thread: { freshnessStatus: string | null }) => thread.freshnessStatus !== null)).toBe(true);
+      expect(modelJson.nodes.every((node: { freshnessStatus: string | null }) => node.freshnessStatus !== null)).toBe(true);
+      expect(modelJson.intentItems.every((item: { freshnessStatus: string | null }) => item.freshnessStatus !== null)).toBe(true);
       expect(modelJson.summary).toEqual(result.summary);
       expect(modelJson.window).toEqual(result.window);
       expect(JSON.stringify(modelJson)).not.toContain("super-secret-value");

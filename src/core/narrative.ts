@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { runDrift } from "./drift.js";
 import { resolveRagitPaths } from "./project.js";
 import {
   buildNarrativeViewModel,
@@ -12,6 +13,7 @@ import {
   NarrativeResult,
   NarrativeViewModel,
 } from "./narrative-model.js";
+import type { DriftItem, DriftResult, DriftStatus } from "./types.js";
 
 export type {
   NarrativeBuildResult,
@@ -60,6 +62,210 @@ const renderBadge = (label: string, tone: string): string =>
 
 const renderBadgeRow = (badges: string[]): string =>
   badges.length > 0 ? `<div class="badge-row">${badges.join("")}</div>` : "";
+
+const normalizeRepoPath = (value: string): string => value.replaceAll("\\", "/");
+
+const uniqueStrings = (values: Array<string | null | undefined>): string[] =>
+  Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.trim().length > 0)));
+
+const sortedUniqueStrings = (values: Array<string | null | undefined>): string[] =>
+  uniqueStrings(values).sort((left, right) => left.localeCompare(right));
+
+const aggregateFreshness = (statuses: Array<DriftStatus | null>): DriftStatus | null => {
+  const filtered = statuses.filter((status): status is DriftStatus => status !== null);
+  if (filtered.length === 0) return "fresh";
+  if (filtered.includes("stale")) return "stale";
+  if (filtered.includes("suspect")) return "suspect";
+  return "fresh";
+};
+
+const sourceRefStringsForItem = (item: DriftItem): string[] =>
+  sortedUniqueStrings([
+    item.sourceRefs.headSha ? `head:${item.sourceRefs.headSha.slice(0, 7)}` : null,
+    item.sourceRefs.snapshotSha ? `snapshot:${item.sourceRefs.snapshotSha.slice(0, 7)}` : null,
+    item.sourceRefs.anchorSha ? `anchor:${item.sourceRefs.anchorSha.slice(0, 7)}` : null,
+    item.sourceRefs.sourceHeadSha ? `source:${item.sourceRefs.sourceHeadSha.slice(0, 7)}` : null,
+    item.sourceRefs.boundHeadSha ? `bound:${item.sourceRefs.boundHeadSha.slice(0, 7)}` : null,
+    item.sourceRefs.captureHeadSha ? `capture:${item.sourceRefs.captureHeadSha.slice(0, 7)}` : null,
+    item.sourceRefs.artifactId ? `artifact:${item.sourceRefs.artifactId}` : null,
+    item.sourceRefs.goalId ? `goal:${item.sourceRefs.goalId}` : null,
+    item.sourceRefs.episodeId ? `episode:${item.sourceRefs.episodeId}` : null,
+    item.sourceRefs.sourceSessionId ? `session:${item.sourceRefs.sourceSessionId}` : null,
+    `drift:${item.scope}:${item.itemType}:${item.id}`,
+  ]);
+
+const baselineSourceRefStrings = (drift: DriftResult): string[] =>
+  sortedUniqueStrings([
+    drift.baseline.headSha ? `head:${drift.baseline.headSha.slice(0, 7)}` : null,
+    drift.baseline.snapshotSha ? `snapshot:${drift.baseline.snapshotSha.slice(0, 7)}` : null,
+    drift.baseline.snapshotCommitSha ? `anchor:${drift.baseline.snapshotCommitSha.slice(0, 7)}` : null,
+    ...drift.baseline.reasonCodes.map((reason) => `baseline:${reason}`),
+  ]);
+
+const collectDriftAffectedPaths = (item: DriftItem): string[] => sortedUniqueStrings(item.affectedPaths.map(normalizeRepoPath));
+
+const itemMatchesNode = (item: DriftItem, node: NarrativeViewModel["nodes"][number]): boolean => {
+  if (item.itemType !== "document" && item.itemType !== "baseline") return false;
+  if (item.itemType === "baseline") return true;
+  const affectedPaths = new Set(collectDriftAffectedPaths(item));
+  return (
+    affectedPaths.has(normalizeRepoPath(node.path)) ||
+    item.sourceRefs.snapshotSha === node.commitSha ||
+    item.sourceRefs.anchorSha === node.commitSha ||
+    item.sourceRefs.boundHeadSha === node.commitSha ||
+    item.sourceRefs.headSha === node.commitSha
+  );
+};
+
+const itemMatchesIntent = (item: DriftItem, intent: NarrativeViewModel["intentItems"][number]): boolean => {
+  if (item.itemType !== "memoryArtifact" && item.itemType !== "baseline") return false;
+  if (item.itemType === "baseline") return true;
+  const affectedPaths = new Set(collectDriftAffectedPaths(item));
+  const relatedPaths = intent.relatedPaths.map(normalizeRepoPath);
+  return (
+    (item.sourceRefs.artifactId ? item.sourceRefs.artifactId === intent.artifactId : false) ||
+    relatedPaths.some((relatedPath) => affectedPaths.has(relatedPath)) ||
+    relatedPaths.some((relatedPath) => item.affectedPaths.map(normalizeRepoPath).includes(relatedPath)) ||
+    (item.sourceRefs.snapshotSha ? item.sourceRefs.snapshotSha === intent.anchorSha : false) ||
+    (item.sourceRefs.anchorSha ? item.sourceRefs.anchorSha === intent.anchorSha : false)
+  );
+};
+
+const collectAppliedDriftItems = (
+  drift: DriftResult,
+  node: NarrativeViewModel["nodes"][number] | NarrativeViewModel["threads"][number] | NarrativeViewModel["intentItems"][number],
+  kind: "node" | "thread" | "intent",
+  publicNodes: NarrativeViewModel["nodes"],
+  publicIntentItems: NarrativeViewModel["intentItems"],
+  publicUnassignedIntentItems: NarrativeViewModel["unassignedIntentItems"],
+): DriftItem[] => {
+  return drift.items.filter((item) => {
+    if (item.itemType === "baseline") return false;
+    if (kind === "node") return itemMatchesNode(item, node as NarrativeViewModel["nodes"][number]);
+    if (kind === "intent") return itemMatchesIntent(item, node as NarrativeViewModel["intentItems"][number]);
+
+    const thread = node as NarrativeViewModel["threads"][number];
+    const threadNodes = publicNodes.filter((candidate) => candidate.threadId === thread.threadId);
+    const threadIntentItems = [
+      ...publicIntentItems,
+      ...publicUnassignedIntentItems,
+    ].filter((candidate) => candidate.threadIds.includes(thread.threadId));
+    return (
+      threadNodes.some((candidate) => itemMatchesNode(item, candidate)) ||
+      threadIntentItems.some((candidate) => itemMatchesIntent(item, candidate))
+    );
+  });
+};
+
+const applyDriftOverlay = (viewModel: NarrativeViewModel, drift: DriftResult): NarrativeViewModel => {
+  const allNodes = viewModel.nodes;
+  const allThreads = viewModel.threads;
+  const allIntentItems = [...viewModel.intentItems, ...viewModel.unassignedIntentItems];
+
+  const updateOverlay = <T extends { freshnessStatus: NarrativeViewModel["threads"][number]["freshnessStatus"]; driftReasonCodes: string[]; recommendedActions: string[]; driftSourceRefs: string[] }>(
+    current: T,
+    statuses: DriftStatus[],
+    reasonCodes: string[],
+    recommendedActions: string[],
+    sourceRefs: string[],
+  ): T => {
+    const freshnessStatus = aggregateFreshness(statuses);
+    return {
+      ...current,
+      freshnessStatus,
+      driftReasonCodes: sortedUniqueStrings(reasonCodes),
+      recommendedActions: sortedUniqueStrings(recommendedActions),
+      driftSourceRefs: sortedUniqueStrings(sourceRefs),
+    };
+  };
+
+  const baselineReasonCodes = drift.baseline.reasonCodes;
+  const baselineSourceRefs = baselineSourceRefStrings(drift);
+
+  const refreshedNodes = allNodes.map((node) => {
+    const hits = collectAppliedDriftItems(drift, node, "node", allNodes, viewModel.intentItems, viewModel.unassignedIntentItems);
+    const statuses = [
+      ...(baselineReasonCodes.length > 0 ? ["suspect" as const] : []),
+      ...hits.map((item) => item.status),
+    ];
+    return updateOverlay(
+      node,
+      statuses,
+      [...baselineReasonCodes, ...hits.flatMap((item) => item.reasonCodes)],
+      hits.flatMap((item) => item.recommendedActions),
+      [...baselineSourceRefs, ...hits.flatMap((item) => sourceRefStringsForItem(item))],
+    );
+  });
+
+  const refreshedThreads = allThreads.map((thread) => {
+    const threadNodes = refreshedNodes.filter((candidate) => candidate.threadId === thread.threadId);
+    const threadIntentItems = allIntentItems.filter((candidate) => candidate.threadIds.includes(thread.threadId));
+    const hits = drift.items.filter((item) => {
+      if (item.itemType === "baseline") return false;
+      return (
+        threadNodes.some((candidate) => itemMatchesNode(item, candidate)) ||
+        threadIntentItems.some((candidate) => itemMatchesIntent(item, candidate))
+      );
+    });
+    const statuses = [
+      ...(baselineReasonCodes.length > 0 ? ["suspect" as const] : []),
+      ...hits.map((item) => item.status),
+    ];
+    return updateOverlay(
+      thread,
+      statuses,
+      [...baselineReasonCodes, ...hits.flatMap((item) => item.reasonCodes)],
+      hits.flatMap((item) => item.recommendedActions),
+      [...baselineSourceRefs, ...hits.flatMap((item) => sourceRefStringsForItem(item))],
+    );
+  });
+
+  const refreshedIntentItems = allIntentItems.map((item) => {
+    const hits = drift.items.filter((candidate) => {
+      if (candidate.itemType === "baseline") return false;
+      return itemMatchesIntent(candidate, item);
+    });
+    const statuses = [
+      ...(baselineReasonCodes.length > 0 ? ["suspect" as const] : []),
+      ...hits.map((candidate) => candidate.status),
+    ];
+    return updateOverlay(
+      item,
+      statuses,
+      [...baselineReasonCodes, ...hits.flatMap((candidate) => candidate.reasonCodes)],
+      hits.flatMap((candidate) => candidate.recommendedActions),
+      [...baselineSourceRefs, ...hits.flatMap((candidate) => sourceRefStringsForItem(candidate))],
+    );
+  });
+
+  const freshnessCounts = refreshedNodes
+    .flatMap((node) => [node.freshnessStatus])
+    .concat(refreshedThreads.map((thread) => thread.freshnessStatus))
+    .concat(refreshedIntentItems.map((item) => item.freshnessStatus))
+    .reduce(
+      (acc, status) => {
+        if (status === "fresh") acc.fresh += 1;
+        if (status === "suspect") acc.suspect += 1;
+        if (status === "stale") acc.stale += 1;
+        return acc;
+      },
+      { fresh: 0, suspect: 0, stale: 0 },
+    );
+
+  return {
+    ...viewModel,
+    summary: {
+      ...viewModel.summary,
+      freshnessCounts,
+    },
+    threads: refreshedThreads,
+    nodes: refreshedNodes,
+    intentItems: refreshedIntentItems.filter((item) => viewModel.intentItems.some((candidate) => candidate.itemId === item.itemId)),
+    unassignedIntentItems: refreshedIntentItems.filter((item) =>
+      viewModel.unassignedIntentItems.some((candidate) => candidate.itemId === item.itemId),
+    ),
+  };
+};
 
 const buildDetailPayload = (payload: {
   type: "thread" | "decision" | "intent" | "event";
@@ -729,13 +935,15 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
 export const runNarrativeReport = async (cwd: string, options: NarrativeOptions = {}): Promise<NarrativeResult> => {
   const paths = resolveRagitPaths(cwd);
   const built = await buildNarrativeViewModel(cwd, options);
+  const drift = await runDrift(cwd);
+  const viewModel = applyDriftOverlay(built.viewModel, drift);
   const modelOutput = options.emitModel ? resolveNarrativeModelOutput(cwd, options.emitModel) : null;
   if (!options.dryRun) {
     await mkdir(path.dirname(built.absoluteReportPath), { recursive: true });
-    await writeFile(built.absoluteReportPath, renderNarrativeReport(built.viewModel), "utf8");
+    await writeFile(built.absoluteReportPath, renderNarrativeReport(viewModel), "utf8");
     if (modelOutput) {
       await mkdir(path.dirname(modelOutput.absolutePath), { recursive: true });
-      await writeFile(modelOutput.absolutePath, `${JSON.stringify(built.viewModel, null, 2)}\n`, "utf8");
+      await writeFile(modelOutput.absolutePath, `${JSON.stringify(viewModel, null, 2)}\n`, "utf8");
     }
   }
   if (!options.output && built.result.reportPath.startsWith(".ragit/")) {
@@ -743,6 +951,7 @@ export const runNarrativeReport = async (cwd: string, options: NarrativeOptions 
   }
   return {
     ...built.result,
+    summary: viewModel.summary,
     modelPath: modelOutput?.displayPath ?? null,
   };
 };
