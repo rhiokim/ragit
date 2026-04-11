@@ -55,6 +55,12 @@ const escapeHtml = (value: string): string =>
 const serializeForScript = (value: unknown): string =>
   JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 
+const renderBadge = (label: string, tone: string): string =>
+  `<span class="badge badge-${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+
+const renderBadgeRow = (badges: string[]): string =>
+  badges.length > 0 ? `<div class="badge-row">${badges.join("")}</div>` : "";
+
 const buildDetailPayload = (payload: {
   type: "thread" | "decision" | "intent" | "event";
   title: string;
@@ -140,6 +146,11 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
                     >
                       <span class="node-badge">${escapeHtml(node.changeType)}</span>
                       <span class="node-title">${escapeHtml(node.title)}</span>
+                      ${renderBadgeRow([
+                        renderBadge(node.badges.trust, "trust"),
+                        renderBadge(node.badges.lineage, node.badges.lineage.startsWith("heuristic") ? "heuristic" : "lineage"),
+                        renderBadge(node.badges.sensitivity, node.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
+                      ])}
                       <span class="node-meta">${escapeHtml(node.relationKind)}</span>
                     </button>
                   `,
@@ -175,6 +186,13 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
             data-detail='${labelDetail}'
           >
             <span class="thread-title">${escapeHtml(thread.title)}</span>
+            ${renderBadgeRow([
+              renderBadge(thread.badges.trust, "trust"),
+              renderBadge(thread.badges.sensitivity, thread.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
+              ...thread.badges.lineageKinds.map((lineage) =>
+                renderBadge(lineage, lineage.startsWith("heuristic") ? "heuristic" : "lineage"),
+              ),
+            ])}
             <span class="thread-meta">${escapeHtml(thread.docType)} · ${thread.nodeIds.length} node(s)</span>
           </button>
           ${cells}
@@ -229,6 +247,10 @@ const renderIntentSection = (items: NarrativeIntentItem[], title: string): strin
           >
             <span class="intent-kind">${escapeHtml(item.kind)}</span>
             <span class="intent-title">${escapeHtml(item.title)}</span>
+            ${renderBadgeRow([
+              renderBadge(item.badges.trust, "trust"),
+              renderBadge(item.badges.sensitivity, item.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
+            ])}
             <span class="intent-summary">${escapeHtml(item.summary)}</span>
           </button>
         </article>
@@ -269,6 +291,10 @@ const renderTimelineSection = (events: NarrativeEventItem[]): string => {
           >
             <span class="timeline-date">${escapeHtml(event.recordedAt)}</span>
             <span class="timeline-type">${escapeHtml(event.eventType)}</span>
+            ${renderBadgeRow([
+              renderBadge(event.badges.trust, "trust"),
+              renderBadge(event.badges.sensitivity, event.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
+            ])}
             <span class="timeline-summary">${escapeHtml(event.summary)}</span>
           </button>
         </article>
@@ -429,6 +455,47 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
       }
       .thread-title {
         font-weight: 700;
+      }
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+      .badge-trust {
+        background: rgba(14, 107, 80, 0.12);
+        border-color: rgba(14, 107, 80, 0.24);
+        color: #0e6b50;
+      }
+      .badge-lineage {
+        background: rgba(20, 61, 89, 0.08);
+        border-color: rgba(20, 61, 89, 0.18);
+        color: #143d59;
+      }
+      .badge-heuristic {
+        background: rgba(211, 166, 40, 0.16);
+        border-color: rgba(211, 166, 40, 0.28);
+        color: #8b6200;
+      }
+      .badge-sensitivity {
+        background: rgba(196, 93, 74, 0.14);
+        border-color: rgba(196, 93, 74, 0.24);
+        color: #8b2f1f;
+      }
+      .badge-muted {
+        background: rgba(107, 101, 92, 0.08);
+        border-color: rgba(107, 101, 92, 0.18);
+        color: var(--muted);
       }
       .thread-cell {
         padding: 10px;
