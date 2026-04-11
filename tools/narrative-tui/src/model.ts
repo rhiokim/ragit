@@ -2,8 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 export type FilterScope = "all" | "threads" | "decisions" | "intent" | "events";
+export const NARRATIVE_MODEL_SCHEMA_VERSION = 1;
+export const NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION = "legacy-unversioned";
 
 export interface NarrativeModel {
+  schemaVersion: number;
+  producerVersion: string;
   repoName: string;
   headSha: string;
   generatedAt: string;
@@ -179,6 +183,9 @@ export interface ExplorerView {
   empty: boolean;
 }
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
 const normalizeText = (value: string): string =>
   value
     .toLowerCase()
@@ -199,14 +206,55 @@ const uniqueStrings = (values: Array<string | null | undefined>): string[] =>
 
 const asArray = <T>(value: T[] | undefined | null): T[] => (Array.isArray(value) ? value : []);
 
+const hasNarrativeModelCoreShape = (value: Record<string, unknown>): boolean =>
+  typeof value.repoName === "string" &&
+  typeof value.headSha === "string" &&
+  typeof value.generatedAt === "string" &&
+  isPlainObject(value.window) &&
+  isPlainObject(value.summary) &&
+  Array.isArray(value.snapshots) &&
+  Array.isArray(value.threads) &&
+  Array.isArray(value.nodes) &&
+  Array.isArray(value.intentItems) &&
+  Array.isArray(value.unassignedIntentItems) &&
+  Array.isArray(value.timelineEvents) &&
+  Array.isArray(value.warnings) &&
+  typeof value.empty === "boolean";
+
+const normalizeNarrativeModel = (value: unknown): NarrativeModel => {
+  if (!isPlainObject(value) || !hasNarrativeModelCoreShape(value)) {
+    throw new Error("Narrative model file did not contain a valid narrative payload.");
+  }
+
+  if (typeof value.schemaVersion !== "number" || !Number.isInteger(value.schemaVersion)) {
+    return {
+      schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
+      producerVersion: NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
+      ...(value as Omit<NarrativeModel, "schemaVersion" | "producerVersion">),
+    };
+  }
+
+  if (value.schemaVersion !== NARRATIVE_MODEL_SCHEMA_VERSION) {
+    throw new Error(
+      `Unsupported narrative model schemaVersion=${String(value.schemaVersion)}. ` +
+        `This viewer supports only schemaVersion=${NARRATIVE_MODEL_SCHEMA_VERSION}.`,
+    );
+  }
+
+  return {
+    ...(value as NarrativeModel),
+    producerVersion:
+      typeof value.producerVersion === "string" && value.producerVersion.trim().length > 0
+        ? value.producerVersion
+        : "unknown",
+  };
+};
+
 export const loadNarrativeModel = async (modelPath: string): Promise<NarrativeModel> => {
   const absolutePath = path.resolve(process.cwd(), modelPath);
   const content = await readFile(absolutePath, "utf8");
-  const parsed = JSON.parse(content) as NarrativeModel;
-  if (!parsed || typeof parsed !== "object") {
-    throw new Error("Narrative model file did not contain an object.");
-  }
-  return parsed;
+  const parsed = JSON.parse(content) as unknown;
+  return normalizeNarrativeModel(parsed);
 };
 
 export const buildThreadViews = (model: NarrativeModel): ExplorerThreadView[] => {

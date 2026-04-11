@@ -1,10 +1,14 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import {
   buildExplorerView,
   buildThreadViews,
   isEventLinkedToThread,
   isIntentLinkedToThread,
+  NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
+  NARRATIVE_MODEL_SCHEMA_VERSION,
   loadNarrativeModel,
   type ExplorerState,
 } from "../src/model";
@@ -14,6 +18,13 @@ const fixturePath = path.join(import.meta.dir, "..", "fixtures", "sample-model.j
 const loadFixture = async () => loadNarrativeModel(fixturePath);
 
 describe("narrative-tui model explorer", () => {
+  it("loads the current versioned narrative model fixture", async () => {
+    const model = await loadFixture();
+
+    expect(model.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
+    expect(typeof model.producerVersion).toBe("string");
+  });
+
   it("builds a default view with the first visible thread selected", async () => {
     const model = await loadFixture();
     const state: ExplorerState = {
@@ -89,5 +100,84 @@ describe("narrative-tui model explorer", () => {
     expect(threadOne.threadId).toBe("thread_1");
     expect(isIntentLinkedToThread(threadOne, view.assignedIntentItems[0]!)).toBe(true);
     expect(isEventLinkedToThread(threadOne, view.timelineEvents[0]!)).toBe(true);
+  });
+
+  it("coerces a legacy unversioned narrative model through the compatibility path", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-narrative-tui-legacy-"));
+    const legacyPath = path.join(temp, "legacy-model.json");
+    await writeFile(
+      legacyPath,
+      JSON.stringify({
+        repoName: "ragit",
+        headSha: "abc1234",
+        generatedAt: "2026-04-12T00:00:00.000Z",
+        window: {
+          revRange: "HEAD",
+          maxCommits: 10,
+          selectedSnapshotShas: ["abc1234"],
+          missingSnapshotCommits: 0,
+        },
+        summary: {
+          decisionThreads: 0,
+          decisionNodes: 0,
+          intentItems: 0,
+          timelineEvents: 0,
+          heuristicEdges: 0,
+        },
+        snapshots: [],
+        threads: [],
+        nodes: [],
+        intentItems: [],
+        unassignedIntentItems: [],
+        timelineEvents: [],
+        warnings: [],
+        empty: true,
+      }),
+      "utf8",
+    );
+
+    const legacy = await loadNarrativeModel(legacyPath);
+
+    expect(legacy.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
+    expect(legacy.producerVersion).toBe(NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION);
+  });
+
+  it("fails fast on unsupported narrative model major versions", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-narrative-tui-unsupported-"));
+    const unsupportedPath = path.join(temp, "unsupported-model.json");
+    await writeFile(
+      unsupportedPath,
+      JSON.stringify({
+        schemaVersion: 2,
+        producerVersion: "2.0.0",
+        repoName: "ragit",
+        headSha: "abc1234",
+        generatedAt: "2026-04-12T00:00:00.000Z",
+        window: {
+          revRange: "HEAD",
+          maxCommits: 10,
+          selectedSnapshotShas: ["abc1234"],
+          missingSnapshotCommits: 0,
+        },
+        summary: {
+          decisionThreads: 0,
+          decisionNodes: 0,
+          intentItems: 0,
+          timelineEvents: 0,
+          heuristicEdges: 0,
+        },
+        snapshots: [],
+        threads: [],
+        nodes: [],
+        intentItems: [],
+        unassignedIntentItems: [],
+        timelineEvents: [],
+        warnings: [],
+        empty: true,
+      }),
+      "utf8",
+    );
+
+    await expect(loadNarrativeModel(unsupportedPath)).rejects.toThrow(/Unsupported narrative model schemaVersion=2/);
   });
 });

@@ -575,4 +575,10 @@ const main = async (): Promise<void> => {
   await renderModel(modelPath);
 };
 
-await main();
+try {
+  await main();
+} catch (error) {
+  const message = error instanceof Error ? error.message : "Unknown narrative viewer error";
+  console.error(`narrative-tui: ${message}`);
+  process.exitCode = 1;
+}
