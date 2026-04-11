@@ -103,9 +103,10 @@ sequenceDiagram
 RAGit protects `knowledge state`, not just files.
 
 - Write paths sanitize before persistence, so transcripts, memory state, artifacts, harness runs, and durable docs do not keep raw-looking secrets by default.
+- Admission control runs before persistence on knowledge-writing paths. In `security.admission_mode=enforce`, high-risk payloads are blocked or replaced with a sentinel before they can become persisted knowledge state; legacy repos without this key fall back to `report-only`.
 - Retrieval-facing commands re-mask again before printing or JSON projection, so `query`, `context pack`, `memory recall`, `log`, `timeline`, and `harness pack` do not echo raw secret material back to the user.
 - Remote embedding egress is policy-controlled. `security.remote_embedding_policy=allow-sanitized` allows only sanitized query text and durable-doc ingest text to leave the repository; `local-only` blocks remote egress entirely.
-- `ragit security audit` inspects control-plane/store/docs/provider posture, and `ragit security purge` sanitizes or clears local state without rewriting repo-tracked documents.
+- `ragit security audit` inspects control-plane/store/docs/provider posture and admission findings, while `ragit security purge` sanitizes or clears local state without rewriting repo-tracked documents.
 
 ## MVP Document Types (v0.1)
 

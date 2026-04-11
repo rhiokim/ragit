@@ -6,7 +6,7 @@ command_path: security audit
 
 ## 무엇을 하는 명령인가
 
-`security audit`는 RAGit이 소유하는 보안 표면을 스캔하고, 상태를 변경하지 않은 채 finding만 보고합니다. control-plane 파일, 현재 searchable store, repo-tracked durable docs, quarantine 규모, 그리고 활성 embedding provider가 현재 remote egress 정책과 충돌하는지를 함께 검사합니다.
+`security audit`는 RAGit이 소유하는 보안 표면을 스캔하고, 상태를 변경하지 않은 채 finding만 보고합니다. control-plane 파일, 현재 searchable store, repo-tracked durable docs, quarantine 규모, admission ledger 집계, 그리고 활성 embedding provider가 현재 remote egress 정책과 충돌하는지를 함께 검사합니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -33,6 +33,7 @@ pnpm ragit security audit [--format text|json|both] [--cwd <path>]
 - JSON 출력은 `summary`, `providerEgress`, `findings`를 포함합니다.
 - `summary`는 `critical`, `warn`, `info`, `quarantineEntries`, `legacyControlPlaneFiles`, `legacyStoreFindings`, `repoDocsFlagged`를 집계합니다.
 - `providerEgress`는 effective provider, `local|remote` 분류, 현재 `security.remote_embedding_policy`, remote artifact embedding 허용 여부를 보고합니다.
+- `summary.admissionBlocked`와 `summary.admissionQuarantined`는 최근 admission finding을 요약하며, repo-doc finding은 현재 implicit ingest 정책 기준으로 어떤 문서가 block될지를 보여줄 수 있습니다.
 - finding은 repo-tracked 문서를 자동 수정하지 않고 다음 행동만 제안합니다.
 
 ## 예시

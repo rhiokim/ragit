@@ -6,7 +6,7 @@ command_path: timeline
 
 ## What It Does
 
-`timeline`은 `.ragit/log/events/*.jsonl` 아래의 append-only event ledger를 읽어 session materialize, artifact review, memory workflow, harness workflow, ingest 완료의 시간축을 투영합니다. snapshot semantic state를 요약하려고 하지 않는다는 점이 중요하며, 그 역할은 `log`가 맡습니다.
+`timeline`은 `.ragit/log/events/*.jsonl` 아래의 append-only event ledger를 읽어 session materialize, artifact review, memory workflow, harness workflow, ingest 완료, security admission event의 시간축을 투영합니다. snapshot semantic state를 요약하려고 하지 않는다는 점이 중요하며, 그 역할은 `log`가 맡습니다.
 
 ## When To Use / When Not To Use
 
@@ -33,7 +33,7 @@ pnpm ragit timeline [--goal <goalId>] [--episode <episodeId>] [--session <sessio
 - `--goal <goalId>`: 하나의 goal identifier로 필터링합니다.
 - `--episode <episodeId>`: 하나의 episode identifier로 필터링합니다.
 - `--session <sessionId>`: 하나의 source session identifier로 필터링합니다.
-- `--kind <kind>`: `session`, `artifact`, `memory`, `harness`, `ingest` 중 하나로 제한합니다.
+- `--kind <kind>`: `session`, `artifact`, `memory`, `harness`, `ingest`, `security` 중 하나로 제한합니다.
 - `--since <iso>`: `recordedAt` 하한입니다.
 - `--until <iso>`: `recordedAt` 상한입니다.
 - `-n, --max-count <n>`: 최종 event 개수를 제한합니다.

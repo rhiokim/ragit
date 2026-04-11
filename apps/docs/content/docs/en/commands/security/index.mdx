@@ -13,7 +13,9 @@ The `security` command group is the operational layer for protecting RAGit-owned
 ## Operating Model
 
 - Write paths sanitize before persistence.
+- Admission control runs before those writes and records `security.admission` events whenever content is quarantined or blocked.
 - Retrieval and packet outputs re-mask before printing.
+- `security.admission_mode` decides whether high-risk content is only reported (`report-only`) or actively blocked/replaced before persistence (`enforce`).
 - Remote embedding egress is policy-controlled through `security.remote_embedding_policy`.
 - Repo-tracked documents are never auto-rewritten by purge. Fix the document first, then rerun <a href="/en/docs/commands/ingest">`ingest`</a>.
 

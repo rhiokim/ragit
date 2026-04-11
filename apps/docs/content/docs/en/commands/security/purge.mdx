@@ -6,7 +6,7 @@ command_path: security purge
 
 ## What It Does
 
-`security purge` is the remediation companion to `security audit`. It either plans or applies cleanup against local RAGit-owned state such as control-plane files, the searchable store, embedding cache, and quarantine ledgers.
+`security purge` is the remediation companion to `security audit`. It either plans or applies cleanup against local RAGit-owned state such as control-plane files, the searchable store, embedding cache, quarantine ledgers, and admission ledgers.
 
 ## When To Use / When Not To Use
 
@@ -47,6 +47,7 @@ pnpm ragit security purge --target store --format both
 
 - `--dry-run` computes the cleanup plan without mutating files.
 - `store` purge removes searchable state and manifests; you must rerun <a href="/en/docs/commands/ingest">`ingest`</a> afterwards.
+- `control-plane` purge also rewrites or removes `.ragit/security/admission/**`, because admission findings are part of the local operational ledger.
 - Repo-tracked durable docs are intentionally out of scope.
 
 ## Related Commands

@@ -8,6 +8,8 @@ command_path: ingest
 
 `ingest`는 지원되는 문서를 스캔하고 canonical store에 임베딩과 레코드를 기록한 뒤, 현재 커밋에 결속된 snapshot manifest를 생성합니다.
 
+persist 이전에는 admission control이 먼저 실행됩니다. implicit selector(`--all`, `--since`, 관리형 hook 기반 ingest)는 설정된 문서 표면만 따르고, explicit selector(`--files`, `--path`, JSON `paths[]`)는 include 규칙을 우회할 수 있어도 admission 검사는 우회할 수 없습니다.
+
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
 ### 언제 쓰는가
@@ -50,8 +52,9 @@ pnpm ragit ingest [--all | --since <sha> | --files <glob> | --input <path|->] [-
 }
 ```
 
-- JSON 출력에는 `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`가 포함됩니다.
+- JSON 출력에는 `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`, `admission`이 포함됩니다.
 - `--dry-run`은 같은 계획면을 반환하되 실제 변경은 하지 않습니다.
+- `security.admission_mode=enforce`에서는 blocked implicit candidate는 skip되고, blocked explicit candidate는 apply가 실패합니다.
 
 ## 대표 사용 예시
 
@@ -72,6 +75,7 @@ pnpm ragit ingest --input ingest.json --dry-run --format json
 - `--input`과 선택 플래그를 한 호출에 섞으면 안 됩니다.
 - 잘못된 glob나 안전하지 않은 경로 패턴은 인덱싱 전에 거부됩니다.
 - `.ragit/memory/**` control plane 파일은 searchable corpus가 아니므로 `ingest` 대상이 아닙니다.
+- `--all`과 `--since`는 저장소 전체가 아니라 설정된 implicit doc surface(`doc_globs/include/exclude`)만 후보로 사용합니다.
 
 ## 관련 명령
 

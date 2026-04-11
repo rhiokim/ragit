@@ -6,7 +6,7 @@ command_path: security audit
 
 ## What It Does
 
-`security audit` scans the RAGit-owned security surface and reports findings instead of mutating state. The audit covers control-plane files, the current searchable store, repo-tracked durable docs, quarantine volume, and whether the active embedding provider conflicts with the configured remote egress policy.
+`security audit` scans the RAGit-owned security surface and reports findings instead of mutating state. The audit covers control-plane files, the current searchable store, repo-tracked durable docs, quarantine volume, admission ledger counts, and whether the active embedding provider conflicts with the configured remote egress policy.
 
 ## When To Use / When Not To Use
 
@@ -33,6 +33,7 @@ pnpm ragit security audit [--format text|json|both] [--cwd <path>]
 - JSON output includes `summary`, `providerEgress`, and `findings`.
 - `summary` aggregates `critical`, `warn`, `info`, `quarantineEntries`, `legacyControlPlaneFiles`, `legacyStoreFindings`, and `repoDocsFlagged`.
 - `providerEgress` reports the effective provider, whether it is treated as `local` or `remote`, the current `security.remote_embedding_policy`, and whether remote artifact embedding is allowed.
+- `summary.admissionBlocked` and `summary.admissionQuarantined` summarize recent admission findings, and repo-doc findings can report which documents would be blocked by current implicit ingest policy.
 - Findings do not rewrite repo-tracked docs. They only point you to the next action.
 
 ## Examples

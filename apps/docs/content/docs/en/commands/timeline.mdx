@@ -6,7 +6,7 @@ command_path: timeline
 
 ## What It Does
 
-`timeline` reads the append-only event ledger under `.ragit/log/events/*.jsonl` and projects the operational time axis for session materialization, artifact review, memory workflows, harness workflows, and ingest completion. It intentionally does not summarize snapshot semantic state; that is `log`'s job.
+`timeline` reads the append-only event ledger under `.ragit/log/events/*.jsonl` and projects the operational time axis for session materialization, artifact review, memory workflows, harness workflows, ingest completion, and security admission events. It intentionally does not summarize snapshot semantic state; that is `log`'s job.
 
 ## When To Use / When Not To Use
 
@@ -33,7 +33,7 @@ pnpm ragit timeline [--goal <goalId>] [--episode <episodeId>] [--session <sessio
 - `--goal <goalId>`: Filter to one goal identifier.
 - `--episode <episodeId>`: Filter to one episode identifier.
 - `--session <sessionId>`: Filter to one source session identifier.
-- `--kind <kind>`: Limit results to `session`, `artifact`, `memory`, `harness`, or `ingest`.
+- `--kind <kind>`: Limit results to `session`, `artifact`, `memory`, `harness`, `ingest`, or `security`.
 - `--since <iso>`: Lower bound for `recordedAt`.
 - `--until <iso>`: Upper bound for `recordedAt`.
 - `-n, --max-count <n>`: Limit the final number of emitted events.

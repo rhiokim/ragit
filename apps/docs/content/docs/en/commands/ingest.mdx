@@ -8,6 +8,8 @@ command_path: ingest
 
 `ingest` scans supported documents, writes embeddings and records into the canonical store, and produces a snapshot manifest bound to the current commit.
 
+Admission control runs before persistence. Implicit selectors (`--all`, `--since`, managed hook-triggered ingest) follow the configured document surface, while explicit selectors (`--files`, `--path`, JSON `paths[]`) may bypass include rules but never bypass admission checks.
+
 ## When To Use / When Not To Use
 
 ### When to use it
@@ -50,8 +52,9 @@ pnpm ragit ingest [--all | --since <sha> | --files <glob> | --input <path|->] [-
 }
 ```
 
-- JSON output reports `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, and `deletedDocumentIds`.
+- JSON output reports `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`, and `admission`.
 - `--dry-run` returns the same planned surface without mutating the store.
+- In `security.admission_mode=enforce`, blocked implicit candidates are skipped while blocked explicit candidates fail apply.
 
 ## Examples
 
@@ -72,6 +75,7 @@ pnpm ragit ingest --input ingest.json --dry-run --format json
 - Do not mix `--input` with selector flags in the same call.
 - Invalid globs and unsafe path patterns are rejected before indexing begins.
 - `ingest` only sees searchable corpus docs, not `.ragit/memory/**` control-plane files.
+- `--all` and `--since` only consider the configured implicit doc surface (`doc_globs/include/exclude`), not every file in the repository.
 
 ## Related Commands
 

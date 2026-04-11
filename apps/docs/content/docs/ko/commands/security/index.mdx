@@ -13,7 +13,9 @@ description: RAGit 지식 상태 보안 표면을 감사하고 정리합니다
 ## 운영 모델
 
 - write path는 저장 전에 sanitize 됩니다.
+- 그 write path 앞에는 admission control이 먼저 실행되며, quarantine 또는 block이 발생하면 `security.admission` 이벤트가 남습니다.
 - retrieval 및 packet 출력은 표시 전에 다시 마스킹됩니다.
+- `security.admission_mode`는 high-risk content를 보고만 할지(`report-only`), 아니면 persist 전에 실제로 차단/대체할지(`enforce`)를 결정합니다.
 - remote embedding egress는 `security.remote_embedding_policy`로 통제됩니다.
 - repo-tracked 문서는 purge가 자동 수정하지 않습니다. 문서를 먼저 고친 뒤 <a href="/ko/docs/commands/ingest">`ingest`</a>를 다시 실행하십시오.
 

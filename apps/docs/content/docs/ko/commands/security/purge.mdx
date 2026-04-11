@@ -6,7 +6,7 @@ command_path: security purge
 
 ## 무엇을 하는 명령인가
 
-`security purge`는 `security audit`의 remediation 짝입니다. control-plane 파일, searchable store, embedding cache, quarantine ledger 같은 로컬 RAGit 소유 상태를 계획하거나 실제로 정리합니다.
+`security purge`는 `security audit`의 remediation 짝입니다. control-plane 파일, searchable store, embedding cache, quarantine ledger, admission ledger 같은 로컬 RAGit 소유 상태를 계획하거나 실제로 정리합니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -47,6 +47,7 @@ pnpm ragit security purge --target store --format both
 
 - `--dry-run`은 파일을 바꾸지 않고 정리 계획만 계산합니다.
 - `store` purge는 searchable state와 manifest를 제거하므로, 이후 <a href="/ko/docs/commands/ingest">`ingest`</a>를 다시 실행해야 합니다.
+- `control-plane` purge에는 `.ragit/security/admission/**`도 포함됩니다. admission finding 역시 로컬 운영 ledger의 일부이기 때문입니다.
 - repo-tracked durable docs는 의도적으로 범위 밖입니다.
 
 ## 관련 명령
