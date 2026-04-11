@@ -16,6 +16,7 @@ import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
 import {
   classifyEmbeddingEgress,
+  readAdmissionStats,
   countQuarantineEntries,
   readSecurityState,
   runSecurityAudit,
@@ -99,9 +100,13 @@ export interface StatusResult {
   security: {
     maskingConfigured: boolean;
     remoteEmbeddingPolicy: Awaited<ReturnType<typeof loadConfig>>["security"]["remote_embedding_policy"];
+    admissionMode: Awaited<ReturnType<typeof loadConfig>>["security"]["admission_mode"];
     providerEgressClass: "local" | "remote";
     outputRemasking: boolean;
     quarantineEntries: number;
+    lastAdmissionAt: string | null;
+    admissionBlockedEntries: number;
+    admissionQuarantinedEntries: number;
     lastAuditAt: string | null;
     legacyUnsafeState: boolean;
   };
@@ -118,6 +123,7 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   const needsMigration = embeddingNeedsMigration(configuredProfile, storeMeta);
   const securityState = await readSecurityState(cwd);
   const quarantineEntries = await countQuarantineEntries(cwd);
+  const admissionStats = await readAdmissionStats(cwd);
   const manifests = (await readdir(paths.manifestDir)).filter((name) => name.endsWith(".json"));
   const branch = await currentBranch(cwd);
   const sha = await getHeadSha(cwd);
@@ -194,9 +200,13 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
     security: {
       maskingConfigured: config.security.secret_masking,
       remoteEmbeddingPolicy: config.security.remote_embedding_policy,
+      admissionMode: config.security.admission_mode,
       providerEgressClass: classifyEmbeddingEgress(configuredProfile),
       outputRemasking: true,
       quarantineEntries,
+      lastAdmissionAt: admissionStats.lastAdmissionAt,
+      admissionBlockedEntries: admissionStats.blocked,
+      admissionQuarantinedEntries: admissionStats.quarantined,
       lastAuditAt: securityState?.lastAuditAt ?? null,
       legacyUnsafeState: securityState?.legacyUnsafeState ?? false,
     },
@@ -390,10 +400,24 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
         detail: `policy=${config.security.remote_embedding_policy}, class=${egressClass}`,
       });
       const quarantineEntries = await countQuarantineEntries(cwd);
+      const admissionStats = await readAdmissionStats(cwd);
       checks.push({
         name: "security.quarantine-dir",
         ok: true,
         detail: `entries=${quarantineEntries}`,
+      });
+      checks.push({
+        name: "security.admission-mode",
+        ok: config.security.admission_mode === "enforce",
+        detail:
+          config.security.admission_mode === "enforce"
+            ? "enforce"
+            : "report-only (legacy fallback 또는 명시적 완화 모드)",
+      });
+      checks.push({
+        name: "security.admission-recent-blocked",
+        ok: admissionStats.blocked === 0,
+        detail: `blocked=${admissionStats.blocked}, quarantined=${admissionStats.quarantined}, last=${admissionStats.lastAdmissionAt ?? "none"}`,
       });
       const cacheHealth = await checkEmbeddingCacheHealth(cwd, profile);
       checks.push({
@@ -485,6 +509,11 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
         name: "security.legacy-store",
         ok: securityAudit.summary.legacyStoreFindings === 0,
         detail: `flagged=${securityAudit.summary.legacyStoreFindings}`,
+      });
+      checks.push({
+        name: "security.audit-admission",
+        ok: securityAudit.summary.admissionBlocked === 0,
+        detail: `blocked=${securityAudit.summary.admissionBlocked}, quarantined=${securityAudit.summary.admissionQuarantined}`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

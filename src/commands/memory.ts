@@ -26,6 +26,9 @@ export const runMemoryWrapCommand = async (
     `- current_path: ${result.currentPath}`,
     `- open_loops_path: ${result.openLoopsPath}`,
     `- source_head: ${result.sourceHeadSha ?? "none"}`,
+    `- admission_mode: ${result.admission.mode}`,
+    `- admission_quarantined: ${result.admission.quarantined}`,
+    `- admission_blocked: ${result.admission.blocked}`,
     `- dry_run: ${result.dryRun}`,
   ].join("\n");
   emitCliOutput({ envelope, format, text });
@@ -69,7 +72,9 @@ export const runMemoryPromoteCommand = async (
     `- created_files: ${result.createdFiles.length}`,
     `- ingested: ${result.ingested}`,
     `- source_head: ${result.sourceHeadSha ?? "none"}`,
+    `- admission_mode: ${result.admission.mode}`,
+    `- admission_quarantined: ${result.admission.quarantined}`,
+    `- admission_blocked: ${result.admission.blocked}`,
   ].join("\n");
   emitCliOutput({ envelope, format, text });
 };
-

@@ -94,6 +94,7 @@ const isEventType = (value: string): value is RagitEventType =>
   value === "harness.capture" ||
   value === "harness.run" ||
   value === "harness.promote" ||
+  value === "security.admission" ||
   value === "ingest.completed";
 
 const normalizeMetadata = (value: unknown): RagitEventMetadata | undefined => {
@@ -103,7 +104,7 @@ const normalizeMetadata = (value: unknown): RagitEventMetadata | undefined => {
 
 export const timelineKindFromEventType = (eventType: RagitEventType): TimelineKind => {
   const [root] = eventType.split(".");
-  if (root === "session" || root === "artifact" || root === "memory" || root === "harness" || root === "ingest") {
+  if (root === "session" || root === "artifact" || root === "memory" || root === "harness" || root === "ingest" || root === "security") {
     return root;
   }
   return "session";

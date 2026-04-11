@@ -26,6 +26,9 @@ export const runHarnessCaptureCommand = async (
       "# ragit harness capture",
       `- suite_id: ${result.suiteId}`,
       `- artifact_ids: ${result.artifactIds.length}`,
+      `- admission_mode: ${result.admission.mode}`,
+      `- admission_quarantined: ${result.admission.quarantined}`,
+      `- admission_blocked: ${result.admission.blocked}`,
       `- dry_run: ${result.dryRun}`,
     ].join("\n"),
   });
@@ -47,6 +50,9 @@ export const runHarnessPromoteCommand = async (
       `- planned_files: ${result.plannedFiles.length}`,
       `- created_files: ${result.createdFiles.length}`,
       `- ingested: ${result.ingested}`,
+      `- admission_mode: ${result.admission.mode}`,
+      `- admission_quarantined: ${result.admission.quarantined}`,
+      `- admission_blocked: ${result.admission.blocked}`,
       `- dry_run: ${result.dryRun}`,
     ].join("\n"),
   });
@@ -111,6 +117,9 @@ export const runHarnessRunCommand = async (
       `- failed: ${result.summary.failed}`,
       `- errored: ${result.summary.errored}`,
       `- skipped: ${result.summary.skipped}`,
+      `- admission_mode: ${result.admission.mode}`,
+      `- admission_quarantined: ${result.admission.quarantined}`,
+      `- admission_blocked: ${result.admission.blocked}`,
     ].join("\n"),
   });
 };

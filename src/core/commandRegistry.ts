@@ -113,7 +113,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
       { name: "--goal", type: "string", description: "goalId 필터" },
       { name: "--episode", type: "string", description: "episodeId 필터" },
       { name: "--session", type: "string", description: "sessionId 필터" },
-      { name: "--kind", type: "enum", description: "이벤트 계열 필터", enum: ["session", "artifact", "memory", "harness", "ingest"] },
+      { name: "--kind", type: "enum", description: "이벤트 계열 필터", enum: ["session", "artifact", "memory", "harness", "ingest", "security"] },
       { name: "--since", type: "string", description: "ISO-8601 lower bound" },
       { name: "--until", type: "string", description: "ISO-8601 upper bound" },
       { name: "--max-count", type: "number", description: "최종 출력 event 개수 제한" },
@@ -197,7 +197,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["summary", "providerEgress", "findings[]"],
+    outputSchemaSummary: ["summary", "summary.admissionBlocked", "summary.admissionQuarantined", "providerEgress", "findings[]"],
     arguments: [],
     options: [
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
@@ -435,7 +435,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["mode", "processed", "skipped", "masked", "commitSha", "manifestPath", "plannedFiles", "deletedDocumentIds", "docAuthority", "warnings"],
+    outputSchemaSummary: ["mode", "processed", "skipped", "masked", "commitSha", "manifestPath", "plannedFiles", "deletedDocumentIds", "docAuthority", "admission", "warnings"],
     arguments: [],
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
@@ -570,7 +570,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["sessionId", "transcriptPath", "eventPath", "artifactIds", "dryRun", "warnings"],
+    outputSchemaSummary: ["sessionId", "transcriptPath", "eventPath", "artifactIds", "dryRun", "admission", "warnings"],
     arguments: [],
     options: [
       { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
@@ -614,7 +614,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["artifactIds", "suiteId", "dryRun", "warnings"],
+    outputSchemaSummary: ["artifactIds", "suiteId", "dryRun", "admission", "warnings"],
     arguments: [],
     options: [
       { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
@@ -636,7 +636,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["createdFiles", "plannedFiles", "ingested", "dryRun", "warnings"],
+    outputSchemaSummary: ["createdFiles", "plannedFiles", "ingested", "dryRun", "admission", "warnings"],
     arguments: [],
     options: [
       { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
@@ -699,7 +699,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["runId", "suiteId", "runPath", "preflight", "summary", "caseResults[]", "warnings"],
+    outputSchemaSummary: ["runId", "suiteId", "runPath", "preflight", "summary", "caseResults[]", "admission", "warnings"],
     arguments: [],
     options: [
       { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
@@ -721,7 +721,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["sessionId", "sessionPath", "currentPath", "openLoopsPath", "sourceHeadSha", "dryRun"],
+    outputSchemaSummary: ["sessionId", "sessionPath", "currentPath", "openLoopsPath", "sourceHeadSha", "dryRun", "admission"],
     arguments: [],
     options: [
       { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },
@@ -764,7 +764,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["createdFiles", "plannedFiles", "sourceHeadSha", "ingested", "dryRun", "warnings"],
+    outputSchemaSummary: ["createdFiles", "plannedFiles", "sourceHeadSha", "ingested", "dryRun", "admission", "warnings"],
     arguments: [],
     options: [
       { name: "--input", type: "path", required: true, description: "JSON 입력 파일 경로 또는 -" },

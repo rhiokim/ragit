@@ -12,6 +12,8 @@ const formatSecurityAuditText = (result: SecurityAuditResult): string =>
     `- warn: ${result.summary.warn}`,
     `- info: ${result.summary.info}`,
     `- quarantine_entries: ${result.summary.quarantineEntries}`,
+    `- admission_blocked: ${result.summary.admissionBlocked}`,
+    `- admission_quarantined: ${result.summary.admissionQuarantined}`,
     `- legacy_control_plane_files: ${result.summary.legacyControlPlaneFiles}`,
     `- legacy_store_findings: ${result.summary.legacyStoreFindings}`,
     `- repo_docs_flagged: ${result.summary.repoDocsFlagged}`,

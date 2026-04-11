@@ -19,6 +19,9 @@ export const runSessionMaterializeCommand = async (
       `- transcript_path: ${result.transcriptPath}`,
       `- event_path: ${result.eventPath}`,
       `- artifact_ids: ${result.artifactIds.length}`,
+      `- admission_mode: ${result.admission.mode}`,
+      `- admission_quarantined: ${result.admission.quarantined}`,
+      `- admission_blocked: ${result.admission.blocked}`,
       `- dry_run: ${result.dryRun}`,
     ].join("\n"),
   });

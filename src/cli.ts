@@ -69,9 +69,13 @@ const formatStatusText = (status: Awaited<ReturnType<typeof runStatus>>): string
     `- embedding_needs_migration: ${status.embedding.needsMigration}`,
     `- security_masking_configured: ${status.security.maskingConfigured}`,
     `- security_remote_embedding_policy: ${status.security.remoteEmbeddingPolicy}`,
+    `- security_admission_mode: ${status.security.admissionMode}`,
     `- security_provider_egress_class: ${status.security.providerEgressClass}`,
     `- security_output_remasking: ${status.security.outputRemasking}`,
     `- security_quarantine_entries: ${status.security.quarantineEntries}`,
+    `- security_last_admission_at: ${status.security.lastAdmissionAt ?? "none"}`,
+    `- security_admission_blocked_entries: ${status.security.admissionBlockedEntries}`,
+    `- security_admission_quarantined_entries: ${status.security.admissionQuarantinedEntries}`,
     `- security_last_audit_at: ${status.security.lastAuditAt ?? "none"}`,
     `- security_legacy_unsafe_state: ${status.security.legacyUnsafeState}`,
     `- format: ${status.format}`,
@@ -102,6 +106,9 @@ const formatIngestText = (summary: Awaited<ReturnType<typeof runIngest>>): strin
     `- docs_validated: ${summary.docAuthority.validated}`,
     `- doc_contract_violations: ${summary.docAuthority.violations}`,
     `- doc_contract_skipped: ${summary.docAuthority.skipped}`,
+    `- admission_mode: ${summary.admission.mode}`,
+    `- admission_quarantined: ${summary.admission.quarantined}`,
+    `- admission_blocked: ${summary.admission.blocked}`,
   ].join("\n");
 
 const formatDescribeText = (spec: ReturnType<typeof describeCommandPath>): string =>
@@ -228,7 +235,7 @@ program
   .option("--goal <goalId>", "goalId 필터")
   .option("--episode <episodeId>", "episodeId 필터")
   .option("--session <sessionId>", "sessionId 필터")
-  .option("--kind <kind>", "session|artifact|memory|harness|ingest")
+  .option("--kind <kind>", "session|artifact|memory|harness|ingest|security")
   .option("--since <iso>", "ISO-8601 lower bound")
   .option("--until <iso>", "ISO-8601 upper bound")
   .option("-n, --max-count <n>", "최종 출력 event 개수")
@@ -238,7 +245,7 @@ program
   .action(async (options) => {
     const cwd = resolveCwd(options.cwd);
     const kind = options.kind ? String(options.kind).trim().toLowerCase() : undefined;
-    if (kind && !["session", "artifact", "memory", "harness", "ingest"].includes(kind)) {
+    if (kind && !["session", "artifact", "memory", "harness", "ingest", "security"].includes(kind)) {
       throw new Error(`지원하지 않는 timeline kind입니다: ${options.kind}`);
     }
     await runTimelineCommand(
@@ -247,7 +254,7 @@ program
         goalId: options.goal ? String(options.goal) : undefined,
         episodeId: options.episode ? String(options.episode) : undefined,
         sessionId: options.session ? String(options.session) : undefined,
-        kind: kind as "session" | "artifact" | "memory" | "harness" | "ingest" | undefined,
+        kind: kind as "session" | "artifact" | "memory" | "harness" | "ingest" | "security" | undefined,
         since: options.since ? String(options.since) : undefined,
         until: options.until ? String(options.until) : undefined,
         maxCount: parseOptionalPositiveNumber(options.maxCount as string | undefined, "timeline.maxCount"),
