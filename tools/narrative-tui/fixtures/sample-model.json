@@ -1,0 +1,96 @@
+{
+  "repoName": "ragit",
+  "headSha": "abc1234",
+  "generatedAt": "2026-04-11T00:00:00.000Z",
+  "window": {
+    "revRange": "HEAD",
+    "maxCommits": 10,
+    "selectedSnapshotShas": ["abc1234"],
+    "missingSnapshotCommits": 0
+  },
+  "summary": {
+    "decisionThreads": 1,
+    "decisionNodes": 1,
+    "intentItems": 1,
+    "timelineEvents": 1,
+    "heuristicEdges": 0
+  },
+  "snapshots": [
+    {
+      "commitSha": "abc1234",
+      "subject": "Initial narrative snapshot",
+      "authoredAt": "2026-04-11T00:00:00.000Z",
+      "shortSha": "abc1234"
+    }
+  ],
+  "threads": [
+    {
+      "threadId": "thread_1",
+      "title": "Architecture decision thread",
+      "docType": "adr",
+      "docPaths": ["docs/adr/001-architecture.md"],
+      "goalIds": ["goal_1"],
+      "episodeIds": ["episode_1"],
+      "sessionIds": ["session_1"],
+      "snapshotShas": ["abc1234"],
+      "nodeIds": ["node_1"]
+    }
+  ],
+  "nodes": [
+    {
+      "sourceKey": "abc1234:added:docs/adr/001-architecture.md",
+      "snapshotIndex": 0,
+      "commitSha": "abc1234",
+      "authoredAt": "2026-04-11T00:00:00.000Z",
+      "path": "docs/adr/001-architecture.md",
+      "docType": "adr",
+      "title": "Architecture decision",
+      "summary": "Use a layered control plane with explicit binding.",
+      "changeType": "added",
+      "sourceArtifactId": "artifact_1",
+      "goalId": "goal_1",
+      "episodeId": "episode_1",
+      "sourceSessionId": "session_1",
+      "relatedPaths": ["docs/specs/overview.md"],
+      "nodeId": "node_1",
+      "threadId": "thread_1",
+      "predecessorNodeId": null,
+      "relationKind": "root",
+      "confidence": 0
+    }
+  ],
+  "intentItems": [
+    {
+      "itemId": "artifact_2",
+      "artifactId": "artifact_2",
+      "kind": "insight",
+      "status": "reviewed",
+      "title": "Keep binding explicit",
+      "summary": "Avoid implicit coupling between docs and runtime state.",
+      "goalId": "goal_1",
+      "episodeId": "episode_1",
+      "sourceSessionId": "session_1",
+      "anchorSha": "abc1234",
+      "relatedPaths": ["docs/adr/001-architecture.md"],
+      "createdAt": "2026-04-11T00:00:00.000Z",
+      "threadIds": ["thread_1"]
+    }
+  ],
+  "unassignedIntentItems": [],
+  "timelineEvents": [
+    {
+      "eventId": "event_1",
+      "eventType": "session.materialize",
+      "recordedAt": "2026-04-11T00:00:00.000Z",
+      "summary": "Session materialized for architecture review.",
+      "sourceHeadSha": "abc1234",
+      "goalId": "goal_1",
+      "episodeId": "episode_1",
+      "sessionId": "session_1",
+      "relatedPaths": ["docs/adr/001-architecture.md"],
+      "threadIds": ["thread_1"]
+    }
+  ],
+  "warnings": [],
+  "empty": false
+}
