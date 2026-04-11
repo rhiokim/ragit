@@ -16,12 +16,16 @@ import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embe
 import { ensureRagitStructure } from "./project.js";
 import {
   assertKnowledgeWriteSecurity,
+  appendAdmissionRecord,
   canUseRemoteEmbedding,
+  createAdmissionSummary,
+  evaluateRepoDocCandidate,
   persistQuarantineSummary,
+  recordAdmissionDecision,
   sanitizeKnowledgeText,
 } from "./security.js";
 import { bootstrapCanonicalStore, closeCanonicalStore, writeChunksToCanonicalStore, writeDocumentsToCanonicalStore } from "./store.js";
-import { ChunkRecord, DocType, DocumentRecord, isKnownDocType } from "./types.js";
+import { AdmissionSummary, ChunkRecord, DocType, DocumentRecord, isKnownDocType } from "./types.js";
 import { RAGIT_VERSION } from "./version.js";
 
 export interface IngestOptions {
@@ -37,6 +41,7 @@ interface ResolvedIngestTargets {
   files: string[];
   deletedDocumentIds: string[];
   fullSnapshot: boolean;
+  selectorMode: "implicit" | "explicit";
 }
 
 const fileExists = async (target: string): Promise<boolean> => {
@@ -57,20 +62,54 @@ const isDocumentLikePath = (target: string): boolean => {
   return extension === ".md" || extension === ".mdx";
 };
 
-const resolveCandidates = async (cwd: string, options: IngestOptions): Promise<ResolvedIngestTargets> => {
+const matchesAnyGlob = (target: string, patterns: string[]): boolean =>
+  patterns.some((pattern) => path.matchesGlob(target, pattern));
+
+const isImplicitIngestPath = (repoPath: string, config: Awaited<ReturnType<typeof loadConfig>>): boolean => {
+  const normalized = repoPath.replaceAll(path.sep, "/");
+  if (!isDocumentLikePath(normalized)) return false;
+  if (!matchesAnyGlob(normalized, config.ingest.doc_globs)) return false;
+  if (!matchesAnyGlob(normalized, config.ingest.include)) return false;
+  if (config.ingest.exclude.some((pattern) => path.matchesGlob(normalized, pattern))) return false;
+  return true;
+};
+
+const normalizeExplicitRepoPath = (cwd: string, entry: string): string => {
+  const absolute = path.resolve(cwd, entry);
+  const relative = path.relative(cwd, absolute).replaceAll(path.sep, "/");
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`ingest.path 값은 저장소 내부 상대 경로여야 합니다: ${entry}`);
+  }
+  if (!isDocumentLikePath(relative)) {
+    throw new Error(`ingest.path 값은 markdown 문서여야 합니다: ${entry}`);
+  }
+  return relative;
+};
+
+const resolveCandidates = async (
+  cwd: string,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+  options: IngestOptions,
+): Promise<ResolvedIngestTargets> => {
   if (options.paths && options.paths.length > 0) {
-    const files = options.paths.map((entry) => path.resolve(cwd, entry));
+    const files = options.paths.map((entry) => path.resolve(cwd, normalizeExplicitRepoPath(cwd, entry)));
     return {
       files,
       deletedDocumentIds: [],
       fullSnapshot: false,
+      selectorMode: "explicit",
     };
   }
   if (options.files) {
+    const files = await listDocumentFilesByGlob(cwd, options.files);
     return {
-      files: await listDocumentFilesByGlob(cwd, options.files),
+      files: files.filter((file) => {
+        const repoPath = toRepoPath(cwd, file);
+        return isDocumentLikePath(repoPath) && !repoPath.startsWith(".git/") && !repoPath.startsWith(".ragit/");
+      }),
       deletedDocumentIds: [],
       fullSnapshot: false,
+      selectorMode: "explicit",
     };
   }
   if (options.since) {
@@ -80,8 +119,8 @@ const resolveCandidates = async (cwd: string, options: IngestOptions): Promise<R
     const seenFiles = new Set<string>();
     const seenDeleted = new Set<string>();
     for (const relativePath of changed) {
-      if (!isDocumentLikePath(relativePath)) continue;
       const repoPath = relativePath.replaceAll(path.sep, "/");
+      if (!isImplicitIngestPath(repoPath, config)) continue;
       const absolutePath = path.resolve(cwd, relativePath);
       if (await fileExists(absolutePath)) {
         if (!seenFiles.has(absolutePath)) {
@@ -100,12 +139,14 @@ const resolveCandidates = async (cwd: string, options: IngestOptions): Promise<R
       files,
       deletedDocumentIds,
       fullSnapshot: false,
+      selectorMode: "implicit",
     };
   }
   return {
-    files: await listAllDocumentFiles(cwd),
+    files: (await listAllDocumentFiles(cwd)).filter((file) => isImplicitIngestPath(toRepoPath(cwd, file), config)),
     deletedDocumentIds: [],
     fullSnapshot: true,
+    selectorMode: "implicit",
   };
 };
 
@@ -125,6 +166,7 @@ export interface IngestSummary {
   fullSnapshot: boolean;
   scope: "durable" | "all";
   boundArtifactIds: string[];
+  admission: AdmissionSummary;
   docAuthority: {
     validated: boolean;
     violations: number;
@@ -140,6 +182,49 @@ const sortChunkEntries = (chunks: Array<Pick<ChunkRecord, "id" | "documentId" | 
   Pick<ChunkRecord, "id" | "documentId" | "documentVersionId">
 > => [...chunks].sort((left, right) => left.id.localeCompare(right.id));
 
+const appendIngestAdmissionEvent = async (
+  cwd: string,
+  admission: AdmissionSummary,
+  recordedAt: string,
+  sourceHeadSha: string,
+  sourceRefs: string[],
+): Promise<void> => {
+  if (admission.items.length === 0) return;
+  await appendLedgerEvent(cwd, {
+    eventType: "security.admission",
+    recordedAt,
+    goalId: null,
+    episodeId: null,
+    sessionId: null,
+    sourceHeadSha,
+    summary: `Admission control flagged ${admission.blocked} blocked and ${admission.quarantined} quarantined ingest candidate(s)`,
+    relatedPaths: sourceRefs,
+    metadata: {
+      commandPath: "ingest",
+      mode: admission.mode,
+      surface: "ingest.document",
+      decisionCounts: {
+        allowed: admission.allowed,
+        quarantined: admission.quarantined,
+        blocked: admission.blocked,
+      },
+      sourceRefs,
+      contentHashes: admission.items.map((item: AdmissionSummary["items"][number]) => `${item.operation}:${item.sourceRef}`),
+      reasonCodes: Array.from(new Set(admission.items.flatMap((item: AdmissionSummary["items"][number]) => item.reasonCodes))),
+    },
+    provenance: {
+      actor: "assistant",
+      producer: "ragit",
+      producerVersion: RAGIT_VERSION,
+      operation: "security.admission",
+      inputRefs: sourceRefs,
+      outputRefs: [],
+      evidenceRefs: [],
+      contentHash: `${sourceHeadSha}:${admission.blocked}:${admission.quarantined}:${sourceRefs.join(",")}`,
+    },
+  });
+};
+
 export const runIngest = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
@@ -149,22 +234,45 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
     throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
   }
   const cacheMode = options.dryRun ? "readonly" : "readwrite";
-  const candidates = await resolveCandidates(cwd, options);
+  const candidates = await resolveCandidates(cwd, config, options);
   const scope = options.scope ?? "durable";
   const headSha = await getHeadSha(cwd);
   let processed = 0;
   let skipped = 0;
   let masked = 0;
+  const admission = createAdmissionSummary(config.security.admission_mode);
   const changedDocuments = new Map<string, DocumentRecord>();
   const changedChunks = new Map<string, ChunkRecord[]>();
   const plannedFiles = candidates.files.map((file) => toRepoPath(cwd, file));
   const warnings: string[] = [];
+  const blockedExplicitDocs: string[] = [];
   let contractViolations = 0;
   let contractSkipped = 0;
 
   for (const absolutePath of candidates.files) {
     const { content, hash } = await hashFileContent(absolutePath);
     const repoPath = toRepoPath(cwd, absolutePath);
+    const admissionDecision = evaluateRepoDocCandidate(repoPath, candidates.selectorMode, content);
+    if (admissionDecision.action !== "allow") {
+      recordAdmissionDecision(admission, admissionDecision.action, {
+        sourceRef: admissionDecision.sourceRef,
+        surface: admissionDecision.surface,
+        action: admissionDecision.action,
+        reasonCodes: admissionDecision.reasonCodes,
+        operation: "ingest",
+      });
+    } else {
+      recordAdmissionDecision(admission, "allow");
+    }
+    if (admissionDecision.action === "block" && config.security.admission_mode === "enforce") {
+      warnings.push(`admission control이 문서를 차단했습니다: ${repoPath} (${admissionDecision.reasonCodes.join(", ")})`);
+      if (candidates.selectorMode === "explicit") {
+        blockedExplicitDocs.push(repoPath);
+      } else {
+        skipped += 1;
+      }
+      continue;
+    }
     const maskedContent = sanitizeKnowledgeText(content, "ingest.document", repoPath);
     masked += maskedContent.summary.maskedCount;
     if (!options.dryRun) {
@@ -244,6 +352,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       fullSnapshot: candidates.fullSnapshot,
       scope,
       boundArtifactIds: [],
+      admission,
       docAuthority: {
         validated: config.docs_authority.validate_on_ingest,
         violations: contractViolations,
@@ -251,6 +360,15 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       },
       warnings,
     };
+  }
+
+  if (admission.items.length > 0) {
+    const recordedAt = new Date().toISOString();
+    await appendAdmissionRecord(cwd, admission, recordedAt);
+    await appendIngestAdmissionEvent(cwd, admission, recordedAt, headSha, plannedFiles);
+  }
+  if (blockedExplicitDocs.length > 0 && config.security.admission_mode === "enforce") {
+    throw new Error(`admission control이 explicit ingest 문서를 차단했습니다: ${blockedExplicitDocs.join(", ")}`);
   }
 
   const parentSha = await getParentSha(cwd);
@@ -373,6 +491,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       fullSnapshot: candidates.fullSnapshot,
       scope,
       boundArtifactIds,
+      admission,
       docAuthority: {
         validated: config.docs_authority.validate_on_ingest,
         violations: contractViolations,

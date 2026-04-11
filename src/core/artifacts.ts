@@ -13,8 +13,12 @@ import { maskSecrets } from "./mask.js";
 import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
 import {
   assertKnowledgeWriteSecurity,
-  canUseRemoteEmbedding,
+  appendAdmissionRecord,
+  createAdmissionSummary,
+  evaluateAdmissionStructuredValue,
+  mergeAdmissionSummaries,
   mergeRedactionSummaries,
+  canUseRemoteEmbedding,
   persistQuarantineSummary,
   sanitizeStructuredValue,
 } from "./security.js";
@@ -22,6 +26,7 @@ import {
   ArtifactBindingStatus,
   ArtifactEventProvenance,
   ArtifactEvidenceRef,
+  AdmissionSummary,
   ArtifactKind,
   ArtifactManifestEntry,
   ArtifactRecord,
@@ -74,6 +79,7 @@ export interface SessionMaterializeResult {
   eventPath: string;
   artifactIds: string[];
   dryRun: boolean;
+  admission: AdmissionSummary;
   warnings: string[];
 }
 
@@ -560,6 +566,52 @@ const collectSessionArtifacts = (
   return Array.from(records.values());
 };
 
+const appendAdmissionEvent = async (
+  cwd: string,
+  admission: AdmissionSummary,
+  recordedAt: string,
+  sourceHeadSha: string | null,
+  sessionId: string | null,
+  sourceRefs: string[],
+  surface: "session.turn" | "session.toolTrace",
+  commandPath: "session materialize",
+): Promise<void> => {
+  if (admission.items.length === 0) return;
+  await appendLedgerEvent(cwd, {
+    eventType: "security.admission",
+    recordedAt,
+    goalId: null,
+    episodeId: null,
+    sessionId,
+    sourceHeadSha,
+    summary: `Admission control flagged ${admission.blocked} blocked and ${admission.quarantined} quarantined ${commandPath} input(s)`,
+    relatedPaths: sourceRefs,
+    metadata: {
+      commandPath,
+      mode: admission.mode,
+      surface,
+      decisionCounts: {
+        allowed: admission.allowed,
+        quarantined: admission.quarantined,
+        blocked: admission.blocked,
+      },
+      sourceRefs,
+      contentHashes: admission.items.map((item: AdmissionSummary["items"][number]) => `${item.operation}:${item.sourceRef}`),
+      reasonCodes: Array.from(new Set(admission.items.flatMap((item: AdmissionSummary["items"][number]) => item.reasonCodes))),
+    },
+    provenance: {
+      actor: "assistant",
+      producer: "ragit",
+      producerVersion: RAGIT_VERSION,
+      operation: "security.admission",
+      inputRefs: sourceRefs,
+      outputRefs: [],
+      evidenceRefs: [],
+      contentHash: sha1(commandPath, recordedAt, sourceRefs.join(",")),
+    },
+  });
+};
+
 export const sessionMaterialize = async (cwd: string, input: SessionMaterializeInput, dryRun = false): Promise<SessionMaterializeResult> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
@@ -570,18 +622,43 @@ export const sessionMaterialize = async (cwd: string, input: SessionMaterializeI
   const goalId = createGoalId(input.goal);
   const episodeId = input.episode?.id ?? null;
   const transcriptFile = transcriptPath(cwd, sessionId);
+  const transcriptRepoPath = toRepoPath(cwd, transcriptFile);
 
-  const redactedTurns = input.turns.map((turn) => ({
-    ...turn,
-    content: config.security.secret_masking ? maskSecrets(turn.content).text : turn.content,
-  }));
-  const redactedTraces = (input.toolTraces ?? []).map((trace) => ({
-    ...trace,
-    title: trace.title ? (config.security.secret_masking ? maskSecrets(trace.title).text : trace.title) : undefined,
-    command: trace.command ? (config.security.secret_masking ? maskSecrets(trace.command).text : trace.command) : undefined,
-    output: trace.output ? (config.security.secret_masking ? maskSecrets(trace.output).text : trace.output) : undefined,
-    error: trace.error ? (config.security.secret_masking ? maskSecrets(trace.error).text : trace.error) : undefined,
-  }));
+  const turnAdmission = input.turns.map((turn, index) =>
+    evaluateAdmissionStructuredValue(
+      {
+        ...turn,
+        content: config.security.secret_masking ? maskSecrets(turn.content).text : turn.content,
+      },
+      "session.turn",
+      `${transcriptRepoPath}#turns[${index}]`,
+      "session.materialize",
+      config.security.admission_mode,
+    ),
+  );
+  const traceAdmission = (input.toolTraces ?? []).map((trace, index) =>
+    evaluateAdmissionStructuredValue(
+      {
+        ...trace,
+        title: trace.title ? (config.security.secret_masking ? maskSecrets(trace.title).text : trace.title) : undefined,
+        command: trace.command ? (config.security.secret_masking ? maskSecrets(trace.command).text : trace.command) : undefined,
+        output: trace.output ? (config.security.secret_masking ? maskSecrets(trace.output).text : trace.output) : undefined,
+        error: trace.error ? (config.security.secret_masking ? maskSecrets(trace.error).text : trace.error) : undefined,
+      },
+      "session.toolTrace",
+      `${transcriptRepoPath}#toolTraces[${index}]`,
+      "session.materialize",
+      config.security.admission_mode,
+    ),
+  );
+
+  const redactedTurns = turnAdmission.map((entry) => entry.value);
+  const redactedTraces = traceAdmission.map((entry) => entry.value);
+  const admission = mergeAdmissionSummaries(
+    createAdmissionSummary(config.security.admission_mode),
+    ...turnAdmission.map((entry) => entry.admission),
+    ...traceAdmission.map((entry) => entry.admission),
+  );
 
   const artifacts = collectSessionArtifacts(
     sessionId,
@@ -595,6 +672,17 @@ export const sessionMaterialize = async (cwd: string, input: SessionMaterializeI
   );
 
   if (!dryRun) {
+    await appendAdmissionRecord(cwd, admission, createdAt);
+    await appendAdmissionEvent(
+      cwd,
+      admission,
+      createdAt,
+      currentHeadSha,
+      sessionId,
+      [transcriptRepoPath],
+      "session.turn",
+      "session materialize",
+    );
     for (const turn of redactedTurns) {
       await appendJsonLine(transcriptFile, turn);
     }
@@ -644,10 +732,11 @@ export const sessionMaterialize = async (cwd: string, input: SessionMaterializeI
 
   return {
     sessionId,
-    transcriptPath: toRepoPath(cwd, transcriptFile),
+    transcriptPath: transcriptRepoPath,
     eventPath: eventLedgerRepoPath(cwd, createdAt),
     artifactIds: artifacts.map((artifact) => artifact.artifactId),
     dryRun,
+    admission,
     warnings: artifacts.length === 0 ? ["추출 조건을 만족한 artifact가 없습니다."] : [],
   };
 };

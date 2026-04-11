@@ -1,4 +1,4 @@
-import { RedactionSummary, RetrievalHit } from "./types.js";
+import { AdmissionSummary, RedactionSummary, RetrievalHit } from "./types.js";
 
 export type MemoryOpenLoopStatus = "open" | "blocked" | "in_progress" | "closed";
 
@@ -137,6 +137,7 @@ export interface MemoryWrapResult {
   openLoopsPath: string;
   sourceHeadSha: string | null;
   dryRun: boolean;
+  admission: AdmissionSummary;
   warnings: string[];
 }
 
@@ -153,5 +154,6 @@ export interface MemoryPromoteResult {
   sourceHeadSha: string | null;
   ingested: boolean;
   dryRun: boolean;
+  admission: AdmissionSummary;
   warnings: string[];
 }

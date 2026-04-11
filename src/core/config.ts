@@ -68,6 +68,7 @@ export const defaultConfig = (): RagitConfig => ({
     secret_masking: true,
     remote_embedding_policy: "allow-sanitized",
     quarantine_on_redaction: true,
+    admission_mode: "enforce",
   },
   output: {
     format: "both",
@@ -134,6 +135,11 @@ const normalizeQuarantineOnRedaction = (value: unknown): boolean => {
   return true;
 };
 
+const normalizeAdmissionMode = (value: unknown): RagitConfig["security"]["admission_mode"] => {
+  if (value === "report-only" || value === "enforce") return value;
+  return "enforce";
+};
+
 const normalizeOutputFormat = (value: unknown): RagitConfig["output"]["format"] => {
   if (value === "json" || value === "both" || value === "text") return value;
   if (value === "markdown" || value === "table") return "text";
@@ -158,6 +164,7 @@ const parseValue = (raw: string): string | number | boolean | string[] => {
 
 export const parseToml = (source: string): RagitConfig => {
   const result = defaultConfig() as unknown as Record<string, Record<string, unknown>>;
+  const assignedKeys = new Set<string>();
   let currentSection: string | null = null;
   for (const line of source.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -173,6 +180,7 @@ export const parseToml = (source: string): RagitConfig => {
     if (!assignmentMatch) continue;
     const [, key, rawValue] = assignmentMatch;
     result[currentSection][key] = parseValue(rawValue);
+    assignedKeys.add(`${currentSection}.${key}`);
   }
   const output = result.output ?? {};
   output.format = normalizeOutputFormat(output.format);
@@ -190,6 +198,9 @@ export const parseToml = (source: string): RagitConfig => {
   security.secret_masking = typeof security.secret_masking === "boolean" ? security.secret_masking : true;
   security.remote_embedding_policy = normalizeRemoteEmbeddingPolicy(security.remote_embedding_policy);
   security.quarantine_on_redaction = normalizeQuarantineOnRedaction(security.quarantine_on_redaction);
+  security.admission_mode = assignedKeys.has("security.admission_mode")
+    ? normalizeAdmissionMode(security.admission_mode)
+    : "report-only";
   return result as unknown as RagitConfig;
 };
 
@@ -273,6 +284,8 @@ export const setConfigValue = (config: RagitConfig, dottedKey: string, value: st
         throw new Error(`boolean 값은 true/false만 허용됩니다: ${dottedKey}`);
       }
       container[key] = normalizeQuarantineOnRedaction(value === "true");
+    } else if (section === "security" && key === "admission_mode") {
+      container[key] = normalizeAdmissionMode(value);
     } else {
       container[key] = value;
     }

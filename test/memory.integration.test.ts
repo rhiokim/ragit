@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { access, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,6 +8,14 @@ import { promoteMemory } from "../src/core/memory.js";
 import { searchKnowledge } from "../src/core/retrieval.js";
 
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+const fileExists = async (target: string): Promise<boolean> => {
+  try {
+    await access(target);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 describe("memory integration", () => {
   it(
@@ -77,4 +85,39 @@ describe("memory integration", () => {
     expect(result.ingested).toBe(false);
     expect(result.warnings[0]).toContain("HEAD commit");
   });
+
+  it(
+    "fails memory promote atomically when rendered durable docs are blocked by admission control",
+    async () => {
+      const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-memory-admission-"));
+      git(temp, ["init"]);
+      git(temp, ["config", "user.email", "ragit@example.com"]);
+      git(temp, ["config", "user.name", "ragit-test"]);
+      await writeFile(path.join(temp, "README.md"), "# temp\n", "utf8");
+      git(temp, ["add", "."]);
+      git(temp, ["commit", "-m", "init"]);
+
+      await runInit(temp, { nonInteractive: true });
+
+      await expect(
+        promoteMemory(temp, {
+          sourceSessionId: "session-blocked",
+          promotionCandidates: [
+            {
+              kind: "decision",
+              title: "blocked durable doc",
+              summary: "This summary embeds a credential dump.",
+              consequences: [
+                "-----BEGIN PRIVATE KEY-----",
+                "AWS_SECRET_ACCESS_KEY=super-secret-value",
+              ],
+            },
+          ],
+        }),
+      ).rejects.toThrow(/memory promote 문서를 차단/);
+
+      expect(await fileExists(path.join(temp, "docs", "adr", "blocked-durable-doc.md"))).toBe(false);
+    },
+    15_000,
+  );
 });

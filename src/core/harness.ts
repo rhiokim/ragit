@@ -5,6 +5,7 @@ import path from "node:path";
 import { assertAllowedKeys } from "./cliInput.js";
 import { appendLedgerEvent } from "./event-ledger.js";
 import {
+  AdmissionSummary,
   ArtifactRecord,
   HarnessCaseCheckResult,
   HarnessCaseResult,
@@ -30,7 +31,12 @@ import { toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
 import {
   assertKnowledgeWriteSecurity,
+  appendAdmissionRecord,
+  applyAdmissionText,
   attachRedactionSummary,
+  createAdmissionSummary,
+  evaluateAdmissionStructuredValue,
+  mergeAdmissionSummaries,
   persistQuarantineSummary,
   sanitizeStructuredValue,
 } from "./security.js";
@@ -58,6 +64,7 @@ export interface HarnessCaptureResult {
   artifactIds: string[];
   suiteId: string;
   dryRun: boolean;
+  admission: AdmissionSummary;
   warnings: string[];
 }
 
@@ -70,6 +77,7 @@ export interface HarnessPromoteResult {
   plannedFiles: string[];
   ingested: boolean;
   dryRun: boolean;
+  admission: AdmissionSummary;
   warnings: string[];
 }
 
@@ -706,6 +714,53 @@ const renderHarnessText = (resource: HarnessCaptureResourceInput): string => {
   return fragments.join("\n");
 };
 
+const appendHarnessAdmissionEvent = async (
+  cwd: string,
+  commandPath: "harness capture" | "harness promote" | "harness run",
+  admission: AdmissionSummary,
+  recordedAt: string,
+  sourceHeadSha: string | null,
+  sourceSessionId: string | null,
+  relatedPaths: string[],
+  surface: "harness.capture" | "harness.promote" | "harness.run",
+): Promise<void> => {
+  if (admission.items.length === 0) return;
+  const sourceRefs = Array.from(new Set(admission.items.map((item) => item.sourceRef)));
+  await appendLedgerEvent(cwd, {
+    eventType: "security.admission",
+    recordedAt,
+    goalId: null,
+    episodeId: null,
+    sessionId: sourceSessionId,
+    sourceHeadSha,
+    summary: `Admission control flagged ${admission.blocked} blocked and ${admission.quarantined} quarantined ${commandPath} input(s)`,
+    relatedPaths,
+    metadata: {
+      commandPath,
+      mode: admission.mode,
+      surface,
+      decisionCounts: {
+        allowed: admission.allowed,
+        quarantined: admission.quarantined,
+        blocked: admission.blocked,
+      },
+      sourceRefs,
+      contentHashes: admission.items.map((item) => `${item.operation}:${item.sourceRef}`),
+      reasonCodes: Array.from(new Set(admission.items.flatMap((item) => item.reasonCodes))),
+    },
+    provenance: {
+      actor: "assistant",
+      producer: "ragit",
+      producerVersion: RAGIT_VERSION,
+      operation: "security.admission",
+      inputRefs: sourceRefs,
+      outputRefs: relatedPaths,
+      evidenceRefs: [],
+      contentHash: `${sourceHeadSha ?? "none"}:${admission.blocked}:${admission.quarantined}:${sourceRefs.join(",")}`,
+    },
+  });
+};
+
 const docTargetForKind = (artifact: ArtifactRecord): { docType: "spec" | "plan" | "glossary" | "pbd"; path: string } => {
   const titleSlug = artifact.title
     .toLowerCase()
@@ -808,22 +863,48 @@ ${artifact.summary}
 
 export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dryRun = false): Promise<HarnessCaptureResult> => {
   await ensureRagitStructure(cwd);
+  const config = await loadConfig(cwd);
+  assertKnowledgeWriteSecurity(config, "harness.capture", dryRun);
   const createdAt = new Date().toISOString();
+  const admittedGoal = evaluateAdmissionStructuredValue(
+    { goal: input.goal },
+    "harness.capture",
+    `harness.capture:${input.goal}`,
+    "harness.capture",
+    config.security.admission_mode,
+  );
+  const sanitizedGoal = sanitizeStructuredValue(admittedGoal.value, "harness.capture", "goal");
+  const goal = sanitizedGoal.value.goal;
+  const admission = mergeAdmissionSummaries(createAdmissionSummary(config.security.admission_mode), admittedGoal.admission);
   const goalId = createGoalId(input.goal);
   const headSha = await safeHeadSha(cwd);
   const artifactIds: string[] = [];
   const createdResources: ArtifactRecord[] = [];
   for (const resource of input.resources) {
+    const admittedResource = evaluateAdmissionStructuredValue(
+      resource,
+      "harness.capture",
+      `harness.capture:${resource.kind}:${resource.title}`,
+      "harness.capture",
+      config.security.admission_mode,
+    );
+    const mergedAdmission = mergeAdmissionSummaries(admission, admittedResource.admission);
+    admission.allowed = mergedAdmission.allowed;
+    admission.quarantined = mergedAdmission.quarantined;
+    admission.blocked = mergedAdmission.blocked;
+    admission.items = mergedAdmission.items;
+    const sanitizedResource = sanitizeStructuredValue(admittedResource.value, "harness.capture");
+    const nextResource = sanitizedResource.value as HarnessCaptureResourceInput;
     const artifactId = createArtifactId(resource.kind, input.goal, resource.title);
     const record: ArtifactRecord = {
       artifactId,
       artifactScope: "harness",
-      kind: resource.kind,
+      kind: nextResource.kind,
       tier: "candidate",
       status: "captured",
-      title: resource.title,
-      summary: resource.summary ?? compactText(renderHarnessText(resource), 180),
-      text: renderHarnessText(resource),
+      title: nextResource.title,
+      summary: nextResource.summary ?? compactText(renderHarnessText(nextResource), 180),
+      text: renderHarnessText(nextResource),
       goalId,
       episodeId: input.episodeId ?? null,
       sourceSessionId: input.sourceSessionId ?? null,
@@ -833,9 +914,9 @@ export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dr
       bindingStatus: headSha ? "bound" : "pending",
       authority: "assistant_inferred",
       confidence: 0.8,
-      searchPolicy: searchPolicyForKind(resource.kind),
+      searchPolicy: searchPolicyForKind(nextResource.kind),
       relatedPaths: [],
-      tags: [resource.kind, "harness"],
+      tags: [nextResource.kind, "harness"],
       supersedes: [],
       evidenceRefs: [],
       provenance: {
@@ -845,18 +926,18 @@ export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dr
         operation: "harness.capture",
         inputRefs: [...(input.artifactRefs ?? [])],
         outputRefs: [artifactId],
-        evidenceRefs: resource.evidenceRefs ?? [],
+        evidenceRefs: nextResource.evidenceRefs ?? [],
         contentHash: sha1(artifactId, createdAt),
       },
       createdAt,
       updatedAt: createdAt,
       payload: {
-        goal: input.goal,
-        input: resource.input,
-        expected: resource.expected,
-        oracleRefs: resource.oracleRefs ?? [],
-        evidenceRefs: resource.evidenceRefs ?? [],
-        resourceRefs: resource.resourceRefs ?? [],
+        goal,
+        input: nextResource.input,
+        expected: nextResource.expected,
+        oracleRefs: nextResource.oracleRefs ?? [],
+        evidenceRefs: nextResource.evidenceRefs ?? [],
+        resourceRefs: nextResource.resourceRefs ?? [],
       },
     };
     if (!dryRun) {
@@ -875,9 +956,9 @@ export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dr
       kind: "suite",
       tier: "candidate",
       status: "captured",
-      title: `${input.goal} suite`,
-      summary: `Harness suite for ${input.goal}`,
-      text: `# ${input.goal} suite\n\n${createdResources.map((resource) => `- ${resource.kind}: ${resource.title}`).join("\n")}`,
+      title: `${goal} suite`,
+      summary: `Harness suite for ${goal}`,
+      text: `# ${goal} suite\n\n${createdResources.map((resource) => `- ${resource.kind}: ${resource.title}`).join("\n")}`,
       goalId,
       episodeId: input.episodeId ?? null,
       sourceSessionId: input.sourceSessionId ?? null,
@@ -905,7 +986,7 @@ export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dr
       createdAt,
       updatedAt: createdAt,
       payload: {
-        goal: input.goal,
+        goal,
         resourceRefs: createdResources.map((resource) => resource.artifactId),
       },
     };
@@ -915,6 +996,19 @@ export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dr
     artifactIds.push(suite.artifactId);
   }
 
+  if (!dryRun) {
+    await appendAdmissionRecord(cwd, admission, createdAt);
+    await appendHarnessAdmissionEvent(
+      cwd,
+      "harness capture",
+      admission,
+      createdAt,
+      headSha,
+      input.sourceSessionId ?? null,
+      [],
+      "harness.capture",
+    );
+  }
   if (!dryRun && artifactIds.length > 0) {
     await appendLedgerEvent(cwd, {
       eventType: "harness.capture",
@@ -942,6 +1036,7 @@ export const captureHarness = async (cwd: string, input: HarnessCaptureInput, dr
     artifactIds,
     suiteId: suite.artifactId,
     dryRun,
+    admission,
     warnings: createdResources.length === 0 ? ["생성된 harness resource가 없습니다."] : [],
   };
 };
@@ -953,6 +1048,13 @@ export const promoteHarness = async (cwd: string, input: HarnessPromoteInput, dr
   const plannedFiles: string[] = [];
   const createdFiles: string[] = [];
   const warnings: string[] = [];
+  const admission = createAdmissionSummary(config.security.admission_mode);
+  const promotedAt = new Date().toISOString();
+  const prepared: Array<{
+    artifact: ArtifactRecord;
+    target: ReturnType<typeof docTargetForKind>;
+    content: string;
+  }> = [];
   for (const artifactId of input.artifactRefs) {
     const artifact = await loadArtifactRecord(cwd, artifactId);
     if (!artifact) {
@@ -968,39 +1070,78 @@ export const promoteHarness = async (cwd: string, input: HarnessPromoteInput, dr
       continue;
     }
     const target = docTargetForKind(artifact);
-    const sanitizedDoc = sanitizeStructuredValue({ content: renderHarnessDoc(artifact) }, "memory.promote");
+    const admittedDoc = evaluateAdmissionStructuredValue(
+      { content: renderHarnessDoc(artifact) },
+      "harness.promote",
+      `harness.promote:${artifact.artifactId}`,
+      "harness.promote",
+      config.security.admission_mode,
+    );
+    const mergedAdmission = mergeAdmissionSummaries(admission, admittedDoc.admission);
+    admission.allowed = mergedAdmission.allowed;
+    admission.quarantined = mergedAdmission.quarantined;
+    admission.blocked = mergedAdmission.blocked;
+    admission.items = mergedAdmission.items;
+    if (config.security.admission_mode === "enforce" && admittedDoc.admission.blocked > 0) {
+      throw new Error(`admission control이 harness promote 문서를 차단했습니다: ${artifact.artifactId}`);
+    }
+    const sanitizedDoc = sanitizeStructuredValue(admittedDoc.value, "harness.promote");
+    prepared.push({
+      artifact,
+      target,
+      content: sanitizedDoc.value.content,
+    });
+  }
+
+  for (const item of prepared) {
     const doc = await createDoc(
       cwd,
       {
-        docType: target.docType,
-        title: artifact.title,
-        path: target.path,
-        content: sanitizedDoc.value.content,
+        docType: item.target.docType,
+        title: item.artifact.title,
+        path: item.target.path,
+        content: item.content,
       },
       dryRun,
     );
     plannedFiles.push(doc.path);
     if (!dryRun) {
       createdFiles.push(doc.path);
+      const sanitizedDoc = sanitizeStructuredValue({ content: item.content }, "harness.promote");
       await persistQuarantineSummary(cwd, config, {
-        surface: "memory.promote",
+        surface: "harness.promote",
         sourceRef: doc.path,
         summary: sanitizedDoc.summary,
         previewBySource: sanitizedDoc.previewBySource,
         operation: "harness.promote",
+        recordedAt: promotedAt,
       });
       await persistArtifactRecord(
         cwd,
         {
-          ...artifact,
+          ...item.artifact,
           status: "promoted",
           tier: "durable",
           authority: "promoted_durable",
-          updatedAt: new Date().toISOString(),
+          updatedAt: promotedAt,
         },
         false,
       );
     }
+  }
+
+  if (!dryRun) {
+    await appendAdmissionRecord(cwd, admission, promotedAt);
+    await appendHarnessAdmissionEvent(
+      cwd,
+      "harness promote",
+      admission,
+      promotedAt,
+      await safeHeadSha(cwd),
+      null,
+      plannedFiles,
+      "harness.promote",
+    );
   }
 
   if (!dryRun && createdFiles.length > 0) {
@@ -1039,6 +1180,7 @@ export const promoteHarness = async (cwd: string, input: HarnessPromoteInput, dr
     plannedFiles,
     ingested,
     dryRun,
+    admission,
     warnings,
   };
 };
@@ -1172,6 +1314,7 @@ export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = f
   const runId = createRunId(suite.artifactId, startedAt, resolvedCases.map((item) => item.caseArtifact.artifactId));
   const runPath = toRepoPath(cwd, harnessRunPath(cwd, runId));
   const caseResults: HarnessCaseResult[] = [];
+  const admission = createAdmissionSummary(config.security.admission_mode);
 
   for (const resolved of resolvedCases) {
     if (dryRun) {
@@ -1193,6 +1336,41 @@ export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = f
     }
 
     const execution = await executeHarnessCommand(cwd, executor, resolved.executorPayload);
+    const stdoutAdmission = applyAdmissionText(
+      execution.stdout,
+      "harness.run",
+      `${runPath}#${resolved.caseArtifact.artifactId}.stdout`,
+      "harness.run",
+      config.security.admission_mode,
+    );
+    const stderrAdmission = applyAdmissionText(
+      execution.stderr,
+      "harness.run",
+      `${runPath}#${resolved.caseArtifact.artifactId}.stderr`,
+      "harness.run",
+      config.security.admission_mode,
+    );
+    const structuredAdmission =
+      execution.structuredOutput === undefined
+        ? null
+        : evaluateAdmissionStructuredValue(
+            execution.structuredOutput,
+            "harness.run",
+            `${runPath}#${resolved.caseArtifact.artifactId}.structuredOutput`,
+            "harness.run",
+            config.security.admission_mode,
+            "structuredOutput",
+          );
+    const mergedAdmission = mergeAdmissionSummaries(
+      admission,
+      stdoutAdmission.admission,
+      stderrAdmission.admission,
+      structuredAdmission?.admission ?? createAdmissionSummary(config.security.admission_mode),
+    );
+    admission.allowed = mergedAdmission.allowed;
+    admission.quarantined = mergedAdmission.quarantined;
+    admission.blocked = mergedAdmission.blocked;
+    admission.items = mergedAdmission.items;
     const checkResults: HarnessCaseCheckResult[] = [];
     const hasExplicitExitCode = resolved.ruleSources.some((source) => source.rules.exitCode !== undefined);
     if (execution.runtimeError) {
@@ -1238,14 +1416,22 @@ export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = f
       exitCode: execution.exitCode,
       durationMs: execution.durationMs,
       timedOut: execution.timedOut,
-      stdoutExcerpt: toMaskedExcerpt(execution.stdout, config.security.secret_masking),
-      stderrExcerpt: toMaskedExcerpt(execution.stderr, config.security.secret_masking),
+      stdoutExcerpt:
+        config.security.admission_mode === "enforce" && stdoutAdmission.evaluation.action === "block"
+          ? null
+          : toMaskedExcerpt(stdoutAdmission.text, false),
+      stderrExcerpt:
+        config.security.admission_mode === "enforce" && stderrAdmission.evaluation.action === "block"
+          ? null
+          : toMaskedExcerpt(stderrAdmission.text, false),
       stdoutHash: hashIfPresent(execution.stdout || null),
       stderrHash: hashIfPresent(execution.stderr || null),
       structuredOutputSummary:
-        execution.structuredOutput === undefined
+        structuredAdmission === null
           ? undefined
-          : sanitizeStructuredValue(execution.structuredOutput, "harness.run", "structuredOutput").value,
+          : config.security.admission_mode === "enforce" && structuredAdmission.admission.blocked > 0
+            ? undefined
+            : sanitizeStructuredValue(structuredAdmission.value, "harness.run", "structuredOutput").value,
       checkResults,
       failureArtifactIds: [],
     });
@@ -1309,6 +1495,17 @@ export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = f
 
   await writeHarnessRunRecord(cwd, runId, runRecord, dryRun);
   if (!dryRun) {
+    await appendAdmissionRecord(cwd, admission, finishedAt);
+    await appendHarnessAdmissionEvent(
+      cwd,
+      "harness run",
+      admission,
+      finishedAt,
+      headSha,
+      suite.sourceSessionId,
+      [runPath],
+      "harness.run",
+    );
     const sanitizedRunRecord = sanitizeStructuredValue(runRecord, "harness.run");
     await persistQuarantineSummary(cwd, config, {
       surface: "harness.run",
@@ -1349,6 +1546,7 @@ export const runHarness = async (cwd: string, input: HarnessRunInput, dryRun = f
     hasFailure,
     summary,
     caseResults,
+    admission,
     warnings,
   };
 };

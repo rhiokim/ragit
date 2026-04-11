@@ -26,7 +26,7 @@ export type DriftReasonCode =
   | "failure_evidence_present"
   | "dependency_stale";
 export type EmbeddingProvider = "local-placeholder" | "openai" | "ollama";
-export type TimelineKind = "session" | "artifact" | "memory" | "harness" | "ingest";
+export type TimelineKind = "session" | "artifact" | "memory" | "harness" | "ingest" | "security";
 export type ArtifactStatus = "captured" | "reviewed" | "promoted" | "superseded" | "retracted" | "archived";
 export type ArtifactBindingStatus = "pending" | "bound" | "local_only";
 export type ArtifactTier = "candidate" | "durable";
@@ -55,6 +55,7 @@ export type RagitEventType =
   | "harness.capture"
   | "harness.run"
   | "harness.promote"
+  | "security.admission"
   | "ingest.completed";
 
 export interface HarnessExpectedRules {
@@ -148,6 +149,7 @@ export interface HarnessRunResult {
   hasFailure: boolean;
   summary: HarnessRunSummary;
   caseResults: HarnessCaseResult[];
+  admission: AdmissionSummary;
   warnings: string[];
 }
 
@@ -257,6 +259,7 @@ export interface RagitConfig {
     secret_masking: boolean;
     remote_embedding_policy: "allow-sanitized" | "local-only";
     quarantine_on_redaction: boolean;
+    admission_mode: "report-only" | "enforce";
   };
   output: {
     format: "text" | "json" | "both";
@@ -265,6 +268,7 @@ export interface RagitConfig {
 }
 
 export type RemoteEmbeddingPolicy = RagitConfig["security"]["remote_embedding_policy"];
+export type AdmissionMode = RagitConfig["security"]["admission_mode"];
 export type EmbeddingEgressClass = "local" | "remote";
 
 export interface RedactionSummary {
@@ -280,8 +284,10 @@ export type SecuritySurface =
   | "memory.wrap"
   | "memory.recall"
   | "memory.promote"
+  | "harness.capture"
   | "harness.run"
   | "harness.pack"
+  | "harness.promote"
   | "event.ledger"
   | "retrieval.query"
   | "retrieval.hit"
@@ -291,6 +297,33 @@ export type SecuritySurface =
   | "log.output"
   | "audit"
   | "purge";
+
+export type AdmissionAction = "allow" | "quarantine" | "block";
+
+export type AdmissionReasonCode =
+  | "private_key_block"
+  | "credential_dump"
+  | "env_dump"
+  | "header_or_cookie_dump"
+  | "multi_secret_payload"
+  | "high_risk_path"
+  | "secret_pattern";
+
+export interface AdmissionItem {
+  sourceRef: string;
+  surface: SecuritySurface;
+  action: Exclude<AdmissionAction, "allow">;
+  reasonCodes: AdmissionReasonCode[];
+  operation: string;
+}
+
+export interface AdmissionSummary {
+  mode: AdmissionMode;
+  allowed: number;
+  quarantined: number;
+  blocked: number;
+  items: AdmissionItem[];
+}
 
 export interface SecurityAuditFinding {
   findingId: string;
@@ -308,6 +341,8 @@ export interface SecurityAuditResult {
     warn: number;
     info: number;
     quarantineEntries: number;
+    admissionBlocked: number;
+    admissionQuarantined: number;
     legacyControlPlaneFiles: number;
     legacyStoreFindings: number;
     repoDocsFlagged: number;

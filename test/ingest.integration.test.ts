@@ -67,4 +67,68 @@ phase and binding documents`,
     },
     15_000,
   );
+
+  it(
+    "skips blocked implicit docs, keeps include-based candidate resolution, and fails blocked explicit docs",
+    async () => {
+      const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-admission-ingest-"));
+      git(temp, ["init"]);
+      git(temp, ["config", "user.email", "ragit@example.com"]);
+      git(temp, ["config", "user.name", "ragit-test"]);
+
+      await mkdir(path.join(temp, "docs"), { recursive: true });
+      await mkdir(path.join(temp, "notes"), { recursive: true });
+      await mkdir(path.join(temp, "docs", "secrets"), { recursive: true });
+      await writeFile(
+        path.join(temp, "docs", "safe.spec.md"),
+        `---
+type: spec
+---
+# Safe
+Only this document should be indexed.
+`,
+        "utf8",
+      );
+      await writeFile(
+        path.join(temp, "docs", "secrets", "auth.md"),
+        `---
+type: spec
+---
+# Blocked
+API_TOKEN=super-secret-value
+PRIVATE_KEY=-----BEGIN PRIVATE KEY-----
+`,
+        "utf8",
+      );
+      await writeFile(
+        path.join(temp, "notes", ".env.md"),
+        `---
+type: spec
+---
+# Outside include
+Should not become an implicit ingest candidate.
+`,
+        "utf8",
+      );
+      git(temp, ["add", "."]);
+      git(temp, ["commit", "-m", "seed admission fixtures"]);
+
+      const implicit = await runIngest(temp, { all: true });
+      expect(implicit.processed).toBe(1);
+      expect(implicit.admission.blocked).toBe(1);
+      expect(implicit.admission.items.some((item: (typeof implicit.admission.items)[number]) => item.sourceRef === "docs/secrets/auth.md")).toBe(true);
+      expect(implicit.admission.items.some((item: (typeof implicit.admission.items)[number]) => item.sourceRef === "notes/.env.md")).toBe(false);
+
+      const manifest = await loadSnapshotManifest(temp, implicit.commitSha);
+      expect(manifest.docs.some((doc) => doc.path === "docs/safe.spec.md")).toBe(true);
+      expect(manifest.docs.some((doc) => doc.path === "docs/secrets/auth.md")).toBe(false);
+      expect(manifest.docs.some((doc) => doc.path === "notes/.env.md")).toBe(false);
+
+      const explicitDryRun = await runIngest(temp, { paths: ["docs/secrets/auth.md"], dryRun: true });
+      expect(explicitDryRun.admission.blocked).toBe(1);
+
+      await expect(runIngest(temp, { paths: ["docs/secrets/auth.md"] })).rejects.toThrow(/explicit ingest 문서를 차단/);
+    },
+    15_000,
+  );
 });

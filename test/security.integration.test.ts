@@ -4,11 +4,13 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { sessionMaterialize } from "../src/core/artifacts.js";
-import { defaultConfig, writeConfig } from "../src/core/config.js";
-import { captureHarness, runHarness } from "../src/core/harness.js";
+import { reviewArtifacts, sessionMaterialize } from "../src/core/artifacts.js";
+import { defaultConfig, loadConfig, writeConfig } from "../src/core/config.js";
+import { runDoctor, runStatus } from "../src/commands/bootstrap.js";
+import { queryTimeline } from "../src/core/event-ledger.js";
+import { captureHarness, promoteHarness, runHarness } from "../src/core/harness.js";
 import { runIngest } from "../src/core/ingest.js";
-import { runMemoryWrap } from "../src/core/memory.js";
+import { promoteMemory, runMemoryWrap } from "../src/core/memory.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../src/core/project.js";
 import { runSecurityAudit, runSecurityPurge } from "../src/core/security.js";
 import { runInit } from "../src/commands/init.js";
@@ -67,6 +69,8 @@ process.exit(0);
       git(temp, ["commit", "-m", "seed security fixtures"]);
 
       await runInit(temp, { nonInteractive: true });
+      const initializedConfig = await loadConfig(temp);
+      expect(initializedConfig.security.admission_mode).toBe("enforce");
 
       const materialized = await sessionMaterialize(temp, {
         goal: "resume auth hardening",
@@ -91,12 +95,14 @@ process.exit(0);
         relatedPaths: ["docs/auth.spec.md"],
         createdAt: "2026-04-10T10:00:02.000Z",
       });
+      expect(materialized.admission.blocked).toBeGreaterThan(0);
 
       const transcript = await readFile(path.join(temp, materialized.transcriptPath), "utf8");
       expect(transcript).not.toContain("supersecret@example.com");
       expect(transcript).not.toContain("super-secret-value");
       expect(transcript).not.toContain("abcdefghijklmnopqrstuvwxyz123456");
       expect(transcript).toContain("***");
+      expect(transcript).toContain("[BLOCKED BY RAGIT ADMISSION CONTROL]");
 
       const wrap = await runMemoryWrap(temp, {
         goal: "resume auth hardening",
@@ -120,6 +126,7 @@ process.exit(0);
         nextActions: ["Review audit output"],
         promotionCandidates: [],
       });
+      expect(wrap.admission.quarantined).toBeGreaterThan(0);
 
       const currentMemory = await readFile(path.join(temp, wrap.currentPath), "utf8");
       expect(currentMemory).not.toContain("super-secret-value");
@@ -149,6 +156,7 @@ process.exit(0);
           },
         ],
       });
+      expect(captured.admission.allowed).toBeGreaterThan(0);
 
       const harnessRun = await runHarness(temp, {
         suiteRef: captured.suiteId,
@@ -160,16 +168,73 @@ process.exit(0);
           },
         },
       });
+      expect(harnessRun.admission.quarantined).toBeGreaterThan(0);
 
       const runRecord = await readFile(path.join(temp, harnessRun.runPath!), "utf8");
       expect(runRecord).not.toContain("super-secret-value");
       expect(runRecord).not.toContain("ABCDEFGHIJKLMNOPQRSTUVWXYZ12");
       expect(runRecord).toContain("API_TOKEN");
       expect(runRecord).not.toContain("\"env\":");
+      expect(runRecord).not.toContain("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.segment");
+      expect(runRecord).not.toContain("\"stdoutExcerpt\": \"[BLOCKED BY RAGIT ADMISSION CONTROL]\"");
+
+      await expect(
+        promoteMemory(temp, {
+          sourceSessionId: materialized.sessionId,
+          promotionCandidates: [
+            {
+              kind: "decision",
+              title: "blocked promotion candidate",
+              summary: "Promotion should refuse raw high-risk content.",
+              consequences: ["-----BEGIN PRIVATE KEY-----"],
+            },
+          ],
+        }),
+      ).rejects.toThrow(/memory promote 문서를 차단/);
+
+      const harnessGoal = "blocked harness promote";
+      const blockedCaptured = await captureHarness(temp, {
+        goal: harnessGoal,
+        sourceSessionId: "session-blocked-harness",
+        resources: [
+          {
+            kind: "oracle",
+            title: "blocked oracle",
+            summary: "-----BEGIN PRIVATE KEY-----",
+            expected: { jsonSubset: { status: "ok" } },
+          },
+        ],
+      });
+      expect(blockedCaptured.admission.blocked).toBeGreaterThan(0);
+      await reviewArtifacts(temp, {
+        updates: blockedCaptured.artifactIds.map((artifactId) => ({
+          artifactId,
+          nextStatus: "reviewed" as const,
+        })),
+      });
+      const promotedHarness = await promoteHarness(temp, {
+        artifactRefs: blockedCaptured.artifactIds,
+      });
+      expect(promotedHarness.admission.blocked).toBe(0);
+      expect(promotedHarness.createdFiles.length).toBeGreaterThan(0);
 
       const audit = await runSecurityAudit(temp);
       expect(audit.findings.filter((finding) => finding.surface === "control-plane")).toHaveLength(0);
       expect(audit.findings.filter((finding) => finding.surface === "store")).toHaveLength(0);
+      expect(audit.summary.admissionBlocked).toBeGreaterThan(0);
+
+      const timeline = await queryTimeline(temp, { kind: "security" });
+      expect(timeline.events.some((event) => event.eventType === "security.admission")).toBe(true);
+
+      const status = await runStatus(temp);
+      expect(status.security.admissionMode).toBe("enforce");
+      expect(status.security.admissionBlockedEntries).toBeGreaterThan(0);
+
+      const doctor = await runDoctor(temp);
+      const admissionModeCheck = doctor.checks.find((check) => check.name === "security.admission-mode");
+      const admissionRecentBlockedCheck = doctor.checks.find((check) => check.name === "security.admission-recent-blocked");
+      expect(admissionModeCheck?.ok).toBe(true);
+      expect(admissionRecentBlockedCheck?.ok).toBe(false);
     },
     25_000,
   );

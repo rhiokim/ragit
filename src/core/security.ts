@@ -10,6 +10,11 @@ import { maskSecrets } from "./mask.js";
 import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
 import { bootstrapCanonicalStore, closeCanonicalStore, readCanonicalStoreMeta } from "./store.js";
 import {
+  AdmissionAction,
+  AdmissionItem,
+  AdmissionMode,
+  AdmissionReasonCode,
+  AdmissionSummary,
   EmbeddingEgressClass,
   EmbeddingProfile,
   RagitConfig,
@@ -44,6 +49,20 @@ type AuditBuckets = {
   repoDocs: Set<string>;
 };
 
+interface AdmissionEvaluation {
+  action: AdmissionAction;
+  reasonCodes: AdmissionReasonCode[];
+  maskedCount: number;
+  sanitizedText: string;
+  contentHash: string;
+}
+
+interface AdmissionStats {
+  blocked: number;
+  quarantined: number;
+  lastAdmissionAt: string | null;
+}
+
 const LOCAL_OLLAMA_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const CONTROL_PLANE_PATTERNS = [
   "log/transcripts/**/*.jsonl",
@@ -51,7 +70,22 @@ const CONTROL_PLANE_PATTERNS = [
   "log/harness-runs/**/*.json",
   "artifacts/**/*.json",
   "memory/**/*.json",
+  "security/admission/**/*.jsonl",
 ];
+const ADMISSION_SENTINEL = "[BLOCKED BY RAGIT ADMISSION CONTROL]";
+const HIGH_RISK_PATH_PATTERNS = [
+  /^\.env(?:\..+)?$/i,
+  /(^|\/)\.env(?:\.[^/]+)?$/i,
+  /(^|\/)\.npmrc$/i,
+  /(^|\/)kubeconfig$/i,
+  /(^|\/)config\.json$/i,
+  /(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/i,
+  /(^|\/).+\.(pem|key|p12|pfx)$/i,
+  /(^|\/)(?:secrets?|credentials?|ssh|gcloud|aws)(\/|$)/i,
+];
+const PRIVATE_KEY_BLOCK_REGEX = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/m;
+const HEADER_OR_COOKIE_DUMP_REGEX = /(^|\n)\s*(authorization|cookie|set-cookie|x-api-key)\s*:/i;
+const ENV_DUMP_LINE_REGEX = /^[A-Z][A-Z0-9_]{1,63}=(?!\s*$).+/;
 
 const normalizeWhitespace = (value: string): string => value.replace(/\s+/g, " ").trim();
 const compactText = (value: string, max = 120): string => {
@@ -61,6 +95,22 @@ const compactText = (value: string, max = 120): string => {
 };
 const sha1 = (...parts: string[]): string => createHash("sha1").update(parts.join(":")).digest("hex");
 const uniqueSources = (sources: string[]): string[] => Array.from(new Set(sources.filter(Boolean)));
+const normalizeRepoSourceRef = (sourceRef: string): string => sourceRef.replaceAll("\\", "/");
+const admissionLogPath = (cwd: string, recordedAt: string): string =>
+  path.join(resolveRagitPaths(cwd).admissionDir, `${recordedAt.slice(0, 10)}.jsonl`);
+const isHighRiskPath = (sourceRef: string): boolean => {
+  const normalized = normalizeRepoSourceRef(sourceRef);
+  return HIGH_RISK_PATH_PATTERNS.some((pattern) => pattern.test(normalized));
+};
+const countEnvDumpLines = (source: string): number =>
+  source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => ENV_DUMP_LINE_REGEX.test(line)).length;
+const appendAdmissionLine = async (target: string, payload: unknown): Promise<void> => {
+  await mkdir(path.dirname(target), { recursive: true });
+  await appendFile(target, `${JSON.stringify(payload)}\n`, "utf8");
+};
 
 const emptyRedactionSummary = (): RedactionSummary => ({
   applied: false,
@@ -84,6 +134,178 @@ export const mergeRedactionSummaries = (...summaries: Array<RedactionSummary | n
     maskedCount,
     sources,
   };
+};
+
+export const createAdmissionSummary = (mode: AdmissionMode): AdmissionSummary => ({
+  mode,
+  allowed: 0,
+  quarantined: 0,
+  blocked: 0,
+  items: [],
+});
+
+export const recordAdmissionDecision = (
+  summary: AdmissionSummary,
+  action: AdmissionAction,
+  item?: AdmissionItem,
+): AdmissionSummary => {
+  if (action === "allow") {
+    summary.allowed += 1;
+    return summary;
+  }
+  if (action === "quarantine") {
+    summary.quarantined += 1;
+  } else if (action === "block") {
+    summary.blocked += 1;
+  }
+  if (item) summary.items.push(item);
+  return summary;
+};
+
+export const mergeAdmissionSummaries = (...summaries: Array<AdmissionSummary | null | undefined>): AdmissionSummary => {
+  const mode = summaries.find((entry) => entry)?.mode ?? "report-only";
+  const merged = createAdmissionSummary(mode);
+  for (const summary of summaries) {
+    if (!summary) continue;
+    merged.allowed += summary.allowed;
+    merged.quarantined += summary.quarantined;
+    merged.blocked += summary.blocked;
+    merged.items.push(...summary.items);
+  }
+  return merged;
+};
+
+const evaluateAdmissionDecision = (
+  source: string,
+  sourceRef: string,
+): AdmissionEvaluation => {
+  const normalizedSourceRef = normalizeRepoSourceRef(sourceRef);
+  const masked = maskSecrets(source);
+  const reasonCodes: AdmissionReasonCode[] = [];
+  if (isHighRiskPath(normalizedSourceRef)) {
+    reasonCodes.push("high_risk_path");
+  }
+  if (PRIVATE_KEY_BLOCK_REGEX.test(source)) {
+    reasonCodes.push("private_key_block");
+  }
+  if (HEADER_OR_COOKIE_DUMP_REGEX.test(source)) {
+    reasonCodes.push("header_or_cookie_dump");
+    reasonCodes.push("credential_dump");
+  }
+  if (countEnvDumpLines(source) >= 3) {
+    reasonCodes.push("env_dump");
+    reasonCodes.push("credential_dump");
+  }
+  if (masked.maskedCount >= 3) {
+    reasonCodes.push("multi_secret_payload");
+  }
+  if (masked.maskedCount > 0) {
+    reasonCodes.push("secret_pattern");
+  }
+  const uniqueReasonCodes = Array.from(new Set(reasonCodes));
+  const action: AdmissionAction =
+    uniqueReasonCodes.some((code) =>
+      code === "high_risk_path" ||
+      code === "private_key_block" ||
+      code === "credential_dump" ||
+      code === "env_dump" ||
+      code === "header_or_cookie_dump" ||
+      code === "multi_secret_payload",
+    )
+      ? "block"
+      : masked.maskedCount > 0
+        ? "quarantine"
+        : "allow";
+  return {
+    action,
+    reasonCodes: uniqueReasonCodes,
+    maskedCount: masked.maskedCount,
+    sanitizedText: masked.text,
+    contentHash: sha1(normalizedSourceRef, source),
+  };
+};
+
+export const evaluateAdmissionText = (
+  source: string,
+  surface: SecuritySurface,
+  sourceRef: string,
+): AdmissionEvaluation & { surface: SecuritySurface; sourceRef: string } => ({
+  ...evaluateAdmissionDecision(source, sourceRef),
+  surface,
+  sourceRef: normalizeRepoSourceRef(sourceRef),
+});
+
+export const applyAdmissionText = (
+  source: string,
+  surface: SecuritySurface,
+  sourceRef: string,
+  operation: string,
+  mode: AdmissionMode,
+): { text: string; admission: AdmissionSummary; evaluation: AdmissionEvaluation } => {
+  const evaluation = evaluateAdmissionText(source, surface, sourceRef);
+  const summary = createAdmissionSummary(mode);
+  recordAdmissionDecision(
+    summary,
+    evaluation.action,
+    evaluation.action === "allow"
+      ? undefined
+      : {
+          sourceRef: evaluation.sourceRef,
+          surface,
+          action: evaluation.action,
+          reasonCodes: evaluation.reasonCodes,
+          operation,
+        },
+  );
+  return {
+    text: evaluation.action === "block" && mode === "enforce" ? ADMISSION_SENTINEL : evaluation.sanitizedText,
+    admission: summary,
+    evaluation,
+  };
+};
+
+export const evaluateAdmissionStructuredValue = <T>(
+  value: T,
+  surface: SecuritySurface,
+  sourceRef: string,
+  operation: string,
+  mode: AdmissionMode,
+  rootPath = "",
+): { value: T; admission: AdmissionSummary } => {
+  if (typeof value === "string") {
+    const effectiveSourceRef = rootPath ? `${normalizeRepoSourceRef(sourceRef)}#${rootPath}` : normalizeRepoSourceRef(sourceRef);
+    const applied = applyAdmissionText(value, surface, effectiveSourceRef, operation, mode);
+    return {
+      value: applied.text as T,
+      admission: applied.admission,
+    };
+  }
+  if (Array.isArray(value)) {
+    const items = value.map((entry, index) =>
+      evaluateAdmissionStructuredValue(entry, surface, sourceRef, operation, mode, `${rootPath}[${index}]`),
+    );
+    return {
+      value: items.map((entry) => entry.value) as T,
+      admission: mergeAdmissionSummaries(...items.map((entry) => entry.admission)),
+    };
+  }
+  if (isPlainObject(value)) {
+    const output: Record<string, unknown> = {};
+    const summaries: AdmissionSummary[] = [];
+    for (const [key, entry] of Object.entries(value)) {
+      const nextPath = buildFieldPath(rootPath, key);
+      const resolved = evaluateAdmissionStructuredValue(entry, surface, sourceRef, operation, mode, nextPath);
+      output[key] = resolved.value;
+      summaries.push(resolved.admission);
+    }
+    return {
+      value: output as T,
+      admission: mergeAdmissionSummaries(...summaries),
+    };
+  }
+  const summary = createAdmissionSummary(mode);
+  recordAdmissionDecision(summary, "allow");
+  return { value, admission: summary };
 };
 
 export const sanitizeKnowledgeText = (
@@ -192,6 +414,31 @@ export const canUseRemoteEmbedding = (
   return payloadClass === "durable-doc" || payloadClass === "query";
 };
 
+export const evaluateRepoDocCandidate = (
+  repoPath: string,
+  selectorMode: "implicit" | "explicit",
+  content?: string,
+): AdmissionEvaluation & { selectorMode: "implicit" | "explicit"; sourceRef: string; surface: "ingest.document" } => {
+  const sourceRef = normalizeRepoSourceRef(repoPath);
+  const evaluation = evaluateAdmissionDecision(content ?? "", sourceRef);
+  if (evaluation.action === "allow" && isHighRiskPath(sourceRef)) {
+    return {
+      ...evaluation,
+      action: "block",
+      reasonCodes: Array.from(new Set([...evaluation.reasonCodes, "high_risk_path"])),
+      selectorMode,
+      sourceRef,
+      surface: "ingest.document",
+    };
+  }
+  return {
+    ...evaluation,
+    selectorMode,
+    sourceRef,
+    surface: "ingest.document",
+  };
+};
+
 const readJsonIfExists = async <T>(target: string): Promise<T | null> => {
   try {
     const content = await readFile(target, "utf8");
@@ -295,6 +542,58 @@ export const countQuarantineEntries = async (cwd: string): Promise<number> => {
     count += content.split(/\r?\n/).filter((line) => line.trim()).length;
   }
   return count;
+};
+
+export const appendAdmissionRecord = async (
+  cwd: string,
+  summary: AdmissionSummary,
+  recordedAt: string,
+): Promise<void> => {
+  if (summary.items.length === 0) return;
+  const target = admissionLogPath(cwd, recordedAt);
+  for (const item of summary.items) {
+    await appendAdmissionLine(target, {
+      recordedAt,
+      operation: item.operation,
+      surface: item.surface,
+      sourceRef: item.sourceRef,
+      action: item.action,
+      reasonCodes: item.reasonCodes,
+      maskedCount: 0,
+      contentHash: sha1(item.operation, item.surface, item.sourceRef, item.reasonCodes.join(",")),
+    });
+  }
+};
+
+export const readAdmissionStats = async (cwd: string): Promise<AdmissionStats> => {
+  await ensureRagitStructure(cwd);
+  const files = await listFiles(resolveRagitPaths(cwd).admissionDir);
+  let blocked = 0;
+  let quarantined = 0;
+  let lastAdmissionAt: string | null = null;
+  for (const file of files) {
+    const content = await readFile(file, "utf8");
+    for (const line of content.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        const action = typeof parsed.action === "string" ? parsed.action : "";
+        const recordedAt = typeof parsed.recordedAt === "string" ? parsed.recordedAt : null;
+        if (action === "block") blocked += 1;
+        if (action === "quarantine") quarantined += 1;
+        if (recordedAt && (!lastAdmissionAt || recordedAt > lastAdmissionAt)) {
+          lastAdmissionAt = recordedAt;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return {
+    blocked,
+    quarantined,
+    lastAdmissionAt,
+  };
 };
 
 export const readSecurityState = async (cwd: string): Promise<SecurityState | null> =>
@@ -430,25 +729,36 @@ const auditRepoDocs = async (
   const files = await repoDocumentFiles(cwd, config);
   for (const file of files) {
     const content = await readFile(file, "utf8");
-    const summary = sanitizeKnowledgeText(content, "audit", toRepoPath(cwd, file)).summary;
-    if (!summary.applied) continue;
+    const repoPath = toRepoPath(cwd, file);
+    const admission = evaluateRepoDocCandidate(repoPath, "implicit", content);
+    if (admission.action === "allow") continue;
     addFinding(findings, buckets, {
-      findingId: `finding_${sha1("repo-doc", file).slice(0, 12)}`,
-      severity: "warn",
+      findingId: `finding_${sha1("repo-doc", file, admission.action).slice(0, 12)}`,
+      severity: admission.action === "block" ? "critical" : "warn",
       surface: "repo-doc",
-      path: toRepoPath(cwd, file),
+      path: repoPath,
       field: "content",
-      reason: "repo-tracked document contains secret-like content",
+      reason:
+        admission.action === "block"
+          ? "repo-tracked document would be blocked by admission control"
+          : "repo-tracked document contains secret-like content",
       suggestedAction: "remove or mask the secret in the document, then run ragit ingest",
     });
   }
 };
 
-const buildAuditSummary = (findings: SecurityAuditFinding[], buckets: AuditBuckets, quarantineEntries: number): SecurityAuditResult["summary"] => ({
+const buildAuditSummary = (
+  findings: SecurityAuditFinding[],
+  buckets: AuditBuckets,
+  quarantineEntries: number,
+  admission: AdmissionStats,
+): SecurityAuditResult["summary"] => ({
   critical: findings.filter((finding) => finding.severity === "critical").length,
   warn: findings.filter((finding) => finding.severity === "warn").length,
   info: findings.filter((finding) => finding.severity === "info").length,
   quarantineEntries,
+  admissionBlocked: admission.blocked,
+  admissionQuarantined: admission.quarantined,
   legacyControlPlaneFiles: buckets.controlPlane.size,
   legacyStoreFindings: buckets.store.size,
   repoDocsFlagged: buckets.repoDocs.size,
@@ -482,8 +792,8 @@ export const runSecurityAudit = async (cwd: string): Promise<SecurityAuditResult
     });
   }
 
-  const quarantineEntries = await countQuarantineEntries(cwd);
-  const summary = buildAuditSummary(findings, buckets, quarantineEntries);
+  const [quarantineEntries, admission] = await Promise.all([countQuarantineEntries(cwd), readAdmissionStats(cwd)]);
+  const summary = buildAuditSummary(findings, buckets, quarantineEntries, admission);
   const result: SecurityAuditResult = {
     summary,
     providerEgress: {

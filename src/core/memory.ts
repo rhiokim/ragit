@@ -32,6 +32,10 @@ import { RAGIT_VERSION } from "./version.js";
 import { getHeadSha } from "./git.js";
 import {
   assertKnowledgeWriteSecurity,
+  appendAdmissionRecord,
+  createAdmissionSummary,
+  evaluateAdmissionStructuredValue,
+  mergeAdmissionSummaries,
   mergeRedactionSummaries,
   persistQuarantineSummary,
   sanitizeKnowledgeText,
@@ -87,6 +91,52 @@ const asStringArray = (value: unknown): string[] => {
 
 const stableId = (...parts: string[]): string => createHash("sha1").update(parts.join(":")).digest("hex");
 const createGoalId = (goal: string): string => `goal_${stableId(goal).slice(0, 12)}`;
+
+const appendMemoryAdmissionEvent = async (
+  cwd: string,
+  commandPath: "memory wrap" | "memory promote",
+  admission: MemoryWrapResult["admission"] | MemoryPromoteResult["admission"],
+  recordedAt: string,
+  sourceHeadSha: string | null,
+  sessionId: string | null,
+  sourceRefs: string[],
+  surface: "memory.wrap" | "memory.promote",
+): Promise<void> => {
+  if (admission.items.length === 0) return;
+  await appendLedgerEvent(cwd, {
+    eventType: "security.admission",
+    recordedAt,
+    goalId: null,
+    episodeId: null,
+    sessionId,
+    sourceHeadSha,
+    summary: `Admission control flagged ${admission.blocked} blocked and ${admission.quarantined} quarantined ${commandPath} input(s)`,
+    relatedPaths: sourceRefs,
+    metadata: {
+      commandPath,
+      mode: admission.mode,
+      surface,
+      decisionCounts: {
+        allowed: admission.allowed,
+        quarantined: admission.quarantined,
+        blocked: admission.blocked,
+      },
+      sourceRefs,
+      contentHashes: admission.items.map((item) => `${item.operation}:${item.sourceRef}`),
+      reasonCodes: Array.from(new Set(admission.items.flatMap((item) => item.reasonCodes))),
+    },
+    provenance: {
+      actor: "assistant",
+      producer: "ragit",
+      producerVersion: RAGIT_VERSION,
+      operation: "security.admission",
+      inputRefs: sourceRefs,
+      outputRefs: [],
+      evidenceRefs: [],
+      contentHash: stableId(commandPath, recordedAt, sourceRefs.join(",")),
+    },
+  });
+};
 
 const normalizeDecision = (value: unknown): MemoryDecision => {
   if (!value || typeof value !== "object") {
@@ -503,7 +553,14 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
     createdAt,
   };
 
-  const sanitizedRecord = sanitizeStructuredValue(rawRecord, "memory.wrap");
+  const admittedRecord = evaluateAdmissionStructuredValue(
+    rawRecord,
+    "memory.wrap",
+    toRepoPath(cwd, sessionPath),
+    "memory.wrap",
+    config.security.admission_mode,
+  );
+  const sanitizedRecord = sanitizeStructuredValue(admittedRecord.value, "memory.wrap");
   const working = toWorkingState(sanitizedRecord.value);
   const sanitizedWorking = sanitizeStructuredValue(working, "memory.wrap");
   const registry: OpenLoopRegistry = {
@@ -514,6 +571,17 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
   const sanitizedRegistry = sanitizeStructuredValue(registry, "memory.wrap");
 
   if (!dryRun) {
+    await appendAdmissionRecord(cwd, admittedRecord.admission, createdAt);
+    await appendMemoryAdmissionEvent(
+      cwd,
+      "memory wrap",
+      admittedRecord.admission,
+      createdAt,
+      sourceHeadSha,
+      sessionId,
+      [toRepoPath(cwd, sessionPath)],
+      "memory.wrap",
+    );
     await writeJson(sessionPath, sanitizedRecord.value);
     await writeJson(paths.currentPath, sanitizedWorking.value);
     await writeJson(paths.openLoopsPath, sanitizedRegistry.value);
@@ -573,6 +641,7 @@ export const runMemoryWrap = async (cwd: string, payload: SessionWrapInput, dryR
     openLoopsPath: toRepoPath(cwd, paths.openLoopsPath),
     sourceHeadSha,
     dryRun,
+    admission: admittedRecord.admission,
     warnings,
   };
 };
@@ -766,6 +835,7 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
   const promotedAt = new Date().toISOString();
   const plannedFiles: string[] = [];
   const createdFiles: string[] = [];
+  const admission = createAdmissionSummary(config.security.admission_mode);
   const candidates: PromotionCandidate[] = [...input.promotionCandidates];
   for (const artifactRef of input.artifactRefs ?? []) {
     const artifact = await loadArtifactRecord(cwd, artifactRef);
@@ -775,10 +845,23 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
     }
   }
   for (const candidate of candidates) {
-    const sanitizedDoc = sanitizeStructuredValue(
-      { content: renderPromotionDocument(candidate, promotedAt, input.sourceSessionId) },
+    const targetDoc = renderPromotionDocument(candidate, promotedAt, input.sourceSessionId);
+    const admittedDoc = evaluateAdmissionStructuredValue(
+      { content: targetDoc },
       "memory.promote",
+      `memory.promote:${candidate.title}`,
+      "memory.promote",
+      config.security.admission_mode,
     );
+    const sanitizedDoc = sanitizeStructuredValue(admittedDoc.value, "memory.promote");
+    const mergedAdmission = mergeAdmissionSummaries(admission, admittedDoc.admission);
+    admission.allowed = mergedAdmission.allowed;
+    admission.quarantined = mergedAdmission.quarantined;
+    admission.blocked = mergedAdmission.blocked;
+    admission.items = mergedAdmission.items;
+    if (config.security.admission_mode === "enforce" && admittedDoc.admission.blocked > 0) {
+      throw new Error(`admission control이 memory promote 문서를 차단했습니다: ${candidate.title}`);
+    }
     const docType =
       candidate.kind === "decision"
         ? "adr"
@@ -817,10 +900,6 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
   if (plannedFiles.length === 0) {
     warnings.push("promotionCandidates가 비어 있어 생성된 문서가 없습니다.");
   }
-  if (!dryRun && (plannedFiles.length > 0 || createdFiles.length > 0)) {
-    await reconcileDocs(cwd, { dryRun: false, config, ensureStructure: false });
-  }
-
   let ingested = false;
   if (!dryRun && createdFiles.length > 0 && config.memory.auto_ingest_promotions) {
     if (currentHeadSha) {
@@ -832,6 +911,23 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
   }
   if (dryRun && plannedFiles.length > 0 && config.memory.auto_ingest_promotions && !currentHeadSha) {
     warnings.push("HEAD commit이 없어 dry-run 이후 실제 promote 시 인덱싱이 건너뛰어집니다.");
+  }
+
+  if (!dryRun) {
+    await appendAdmissionRecord(cwd, admission, promotedAt);
+    await appendMemoryAdmissionEvent(
+      cwd,
+      "memory promote",
+      admission,
+      promotedAt,
+      sourceHeadSha,
+      input.sourceSessionId ?? null,
+      plannedFiles,
+      "memory.promote",
+    );
+  }
+  if (!dryRun && (plannedFiles.length > 0 || createdFiles.length > 0)) {
+    await reconcileDocs(cwd, { dryRun: false, config, ensureStructure: false });
   }
 
   if (!dryRun && createdFiles.length > 0) {
@@ -864,6 +960,7 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
     sourceHeadSha,
     ingested,
     dryRun,
+    admission,
     warnings,
   };
 };
