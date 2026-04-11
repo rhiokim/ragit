@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildExplorerView,
+  buildIntentOptionDescription,
+  buildThreadOptionDescription,
   buildThreadViews,
   isEventLinkedToThread,
   isIntentLinkedToThread,
@@ -27,6 +29,11 @@ describe("narrative-tui model explorer", () => {
     expect(typeof model.producerVersion).toBe("string");
     expect(model.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
     expect(model.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
+    expect(model.summary.freshnessCounts).toEqual({
+      fresh: 4,
+      suspect: 4,
+      stale: 2,
+    });
   });
 
   it("builds a default view with the first visible thread selected", async () => {
@@ -45,6 +52,11 @@ describe("narrative-tui model explorer", () => {
     expect(view.visibleThreads.length).toBe(2);
     expect(view.selectedThread?.threadId).toBe("thread_1");
     expect(view.detail.kind).toBe("thread");
+    expect(view.selectedThread?.freshnessStatus).toBe("suspect");
+    expect(buildThreadOptionDescription(view.selectedThread!, true)).toContain("freshness:suspect");
+    expect(view.detail.extra.join("\n")).toContain("freshness: suspect");
+    expect(view.detail.extra.join("\n")).not.toContain("nodeIds:");
+    expect(view.detail.extra.join("\n")).not.toContain("threadIds:");
   });
 
   it("filters threads by query when the scope targets decision threads", async () => {
@@ -76,6 +88,9 @@ describe("narrative-tui model explorer", () => {
     const intentView = buildExplorerView(model, intentState);
     expect(intentView.detail.kind).toBe("intent");
     expect(intentView.detail.title).toContain("Viewer must read sanitized JSON only");
+    expect(intentView.detail.freshnessStatus).toBe("suspect");
+    expect(buildIntentOptionDescription(intentView.assignedIntentItems[0]!, true)).toContain("freshness:fresh");
+    expect(intentView.detail.extra.join("\n")).toContain("freshness: suspect");
 
     const eventState: ExplorerState = {
       query: "",
@@ -146,6 +161,11 @@ describe("narrative-tui model explorer", () => {
     expect(legacy.producerVersion).toBe(NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION);
     expect(legacy.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
     expect(legacy.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
+    expect(legacy.summary.freshnessCounts).toEqual({
+      fresh: 0,
+      suspect: 0,
+      stale: 0,
+    });
   });
 
   it("fails fast on unsupported narrative model major versions", async () => {

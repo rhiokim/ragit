@@ -17,7 +17,12 @@
     "decisionNodes": 4,
     "intentItems": 3,
     "timelineEvents": 3,
-    "heuristicEdges": 1
+    "heuristicEdges": 1,
+    "freshnessCounts": {
+      "fresh": 4,
+      "suspect": 4,
+      "stale": 2
+    }
   },
   "snapshots": [
     {
@@ -42,6 +47,10 @@
       "snapshotShas": ["fedcba9", "abc1234"],
       "nodeIds": ["node_1", "node_2", "node_3"],
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 3 },
+      "freshnessStatus": "suspect",
+      "driftReasonCodes": ["tracked_path_changed"],
+      "recommendedActions": ["doc refresh"],
+      "driftSourceRefs": ["docs/adr/001-narrative-report.md"],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineageKinds": ["root", "path-continuity", "heuristic-high"] }
     },
     {
@@ -52,6 +61,10 @@
       "snapshotShas": ["abc1234"],
       "nodeIds": ["node_4"],
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "freshnessStatus": "fresh",
+      "driftReasonCodes": [],
+      "recommendedActions": [],
+      "driftSourceRefs": [],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineageKinds": ["explicit"] }
     }
   ],
@@ -77,6 +90,10 @@
       "relationKind": "root",
       "confidence": 1,
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "freshnessStatus": "fresh",
+      "driftReasonCodes": [],
+      "recommendedActions": [],
+      "driftSourceRefs": [],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "root" }
     },
     {
@@ -100,6 +117,10 @@
       "relationKind": "path-continuity",
       "confidence": 0.95,
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "freshnessStatus": "suspect",
+      "driftReasonCodes": ["source_head_behind"],
+      "recommendedActions": ["doc refresh"],
+      "driftSourceRefs": ["src/core/narrative-model.ts"],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "path-continuity" }
     },
     {
@@ -123,6 +144,10 @@
       "relationKind": "heuristic-high",
       "confidence": 0.72,
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "freshnessStatus": "stale",
+      "driftReasonCodes": ["tracked_path_changed", "dependency_stale"],
+      "recommendedActions": ["ingest", "harness verify"],
+      "driftSourceRefs": ["tools/narrative-tui/package.json"],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "heuristic-high" }
     },
     {
@@ -146,6 +171,10 @@
       "relationKind": "explicit",
       "confidence": 1,
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "freshnessStatus": "fresh",
+      "driftReasonCodes": [],
+      "recommendedActions": [],
+      "driftSourceRefs": [],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "explicit" }
     }
   ],
@@ -165,6 +194,10 @@
       "createdAt": "2026-04-10T09:45:00.000Z",
       "threadIds": ["thread_1"],
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "freshnessStatus": "fresh",
+      "driftReasonCodes": [],
+      "recommendedActions": [],
+      "driftSourceRefs": [],
       "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     },
     {
@@ -182,6 +215,10 @@
       "createdAt": "2026-04-11T00:05:00.000Z",
       "threadIds": ["thread_1", "thread_2"],
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "freshnessStatus": "suspect",
+      "driftReasonCodes": ["related_path_changed"],
+      "recommendedActions": ["artifact review"],
+      "driftSourceRefs": ["tools/narrative-tui/src/index.ts"],
       "badges": { "trust": "promoted-artifact", "sensitivity": "restricted" }
     },
     {
@@ -199,6 +236,10 @@
       "createdAt": "2026-04-11T00:07:00.000Z",
       "threadIds": ["thread_2"],
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "freshnessStatus": "stale",
+      "driftReasonCodes": ["failure_evidence_present", "dependency_stale"],
+      "recommendedActions": ["harness verify", "doc refresh"],
+      "driftSourceRefs": ["pnpm-workspace.yaml", "tools/narrative-tui/package.json"],
       "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     }
   ],
@@ -218,6 +259,10 @@
       "createdAt": "2026-04-11T00:20:00.000Z",
       "threadIds": [],
       "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "freshnessStatus": "suspect",
+      "driftReasonCodes": ["missing_binding"],
+      "recommendedActions": ["artifact review"],
+      "driftSourceRefs": ["src/cli.ts"],
       "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     }
   ],

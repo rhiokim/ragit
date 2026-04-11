@@ -13,6 +13,9 @@ import {
 import {
   buildEventOptionDescription,
   buildEventOptionName,
+  buildFreshnessBadgeLabel,
+  buildFreshnessDetailLines,
+  buildFreshnessSummary,
   buildExplorerView,
   buildIntentOptionDescription,
   buildIntentOptionName,
@@ -112,6 +115,7 @@ const formatSummary = (
     `schema=${model.schemaVersion} · projection=${model.projectionMode} · policy=${model.projectionPolicyVersion}`,
     `window: ${model.window.selectedSnapshotShas.length} snapshot(s), ${model.window.missingSnapshotCommits} missing manifest commit(s)`,
     `threads=${model.summary.decisionThreads} · nodes=${model.summary.decisionNodes} · intent=${model.summary.intentItems} · events=${model.summary.timelineEvents}`,
+    `freshness: fresh=${model.summary.freshnessCounts.fresh} · suspect=${model.summary.freshnessCounts.suspect} · stale=${model.summary.freshnessCounts.stale}`,
     `filter: ${formatScopeLabel(state.scope)} · query=${state.query.trim().length > 0 ? state.query : "(none)"}`,
     `selected: ${selectedThread ? `${selectedThread.title} [${selectedThread.docType}]` : "(none)"}`,
     "",
@@ -136,6 +140,7 @@ const formatDecisionEvolution = (thread: ExplorerThreadView | null): string => {
     `${thread.docType} thread · ${thread.nodes.length} node(s) · ${thread.snapshotShas.length} snapshot(s)`,
     `paths: ${thread.docPaths.join(", ")}`,
     `trust: ${thread.badges.trust} · sensitivity: ${thread.badges.sensitivity}`,
+    `freshness: ${buildFreshnessSummary(thread.freshnessStatus, thread.driftReasonCodes, thread.recommendedActions)}`,
     `bindings: goals=${thread.binding.goalCount}, episodes=${thread.binding.episodeCount}, sessions=${thread.binding.sessionCount}, relatedPaths=${thread.binding.relatedPathCount}`,
     "",
   ];
@@ -149,12 +154,13 @@ const formatDecisionEvolution = (thread: ExplorerThreadView | null): string => {
   orderedNodes.forEach((node, index) => {
     const badge = node.relationKind === "root" ? "root" : node.relationKind;
     lines.push(
-      `${index + 1}. ${node.commitSha.slice(0, 7)} · ${node.changeType} · [${badge}]`,
+      `${index + 1}. ${node.commitSha.slice(0, 7)} · ${node.changeType} · [${badge}] · ${buildFreshnessBadgeLabel(node.freshnessStatus)}`,
       `   ${node.title}`,
       `   ${node.path}`,
       `   ${node.summary}`,
       `   artifact=${node.sourceArtifactId ?? "none"} · confidence=${node.confidence.toFixed(2)}`,
       `   trust=${node.badges.trust} · sensitivity=${node.badges.sensitivity}`,
+      `   freshness: ${buildFreshnessSummary(node.freshnessStatus, node.driftReasonCodes, node.recommendedActions)}`,
       `   bindings=goals=${node.binding.goalCount}, episodes=${node.binding.episodeCount}, sessions=${node.binding.sessionCount}, relatedPaths=${node.binding.relatedPathCount}`,
     );
     if (node.predecessorNodeId) {
@@ -181,6 +187,8 @@ const formatDetail = (detail: ExplorerDetail): string => {
     `relation: ${detail.relationKind}`,
     `confidence: ${detail.confidence}`,
   ];
+
+  lines.push("", ...buildFreshnessDetailLines(detail.freshnessStatus, detail.driftReasonCodes, detail.recommendedActions, detail.driftSourceRefs));
 
   if (detail.extra.length > 0) {
     lines.push("", "extra:");
