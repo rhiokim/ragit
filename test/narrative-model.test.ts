@@ -8,6 +8,8 @@ import { reviewArtifacts, sessionMaterialize } from "../src/core/artifacts.js";
 import { runIngest } from "../src/core/ingest.js";
 import {
   buildNarrativeViewModel,
+  NARRATIVE_PROJECTION_MODE,
+  NARRATIVE_PROJECTION_POLICY_VERSION,
   NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
   NARRATIVE_MODEL_SCHEMA_VERSION,
   normalizeNarrativeViewModel,
@@ -86,9 +88,17 @@ Keep report synthesis separate from viewer rendering.
       expect(built.viewModel.window).toEqual(built.result.window);
       expect(built.viewModel.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
       expect(built.viewModel.producerVersion).toBe(RAGIT_VERSION);
+      expect(built.viewModel.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
+      expect(built.viewModel.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
       expect(built.viewModel.snapshots).toHaveLength(1);
       expect(built.viewModel.threads.length).toBeGreaterThan(0);
       expect(built.viewModel.intentItems.length).toBeGreaterThan(0);
+      expect("goalIds" in built.viewModel.threads[0]).toBe(false);
+      expect("goalId" in built.viewModel.intentItems[0]).toBe(false);
+      expect("sourceSessionId" in built.viewModel.intentItems[0]).toBe(false);
+      expect(built.viewModel.intentItems[0].binding.goalCount).toBeGreaterThan(0);
+      expect(built.viewModel.intentItems[0].badges.trust).toBe("reviewed-artifact");
+      expect(built.viewModel.intentItems[0].badges.sensitivity).toBe("restricted");
 
       const serialized = JSON.stringify(built.viewModel);
       expect(serialized).not.toContain("very-secret-model-value");
@@ -130,6 +140,8 @@ Keep report synthesis separate from viewer rendering.
     expect(normalized.compatibility).toBe("legacy-unversioned");
     expect(normalized.value?.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
     expect(normalized.value?.producerVersion).toBe(NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION);
+    expect(normalized.value?.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
+    expect(normalized.value?.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
     expect(normalized.warnings[0]).toContain("legacy-unversioned");
   });
 });

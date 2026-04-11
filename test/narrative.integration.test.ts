@@ -8,7 +8,11 @@ import { reviewArtifacts, sessionMaterialize } from "../src/core/artifacts.js";
 import { runIngest } from "../src/core/ingest.js";
 import { runMemoryWrap } from "../src/core/memory.js";
 import { runNarrativeReport } from "../src/core/narrative.js";
-import { NARRATIVE_MODEL_SCHEMA_VERSION } from "../src/core/narrative-model.js";
+import {
+  NARRATIVE_MODEL_SCHEMA_VERSION,
+  NARRATIVE_PROJECTION_MODE,
+  NARRATIVE_PROJECTION_POLICY_VERSION,
+} from "../src/core/narrative-model.js";
 import { RAGIT_VERSION } from "../src/core/version.js";
 
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -147,6 +151,8 @@ Ship the recovery changes in two deliberate phases.
       const modelJson = JSON.parse(await readFile(path.join(temp, result.modelPath as string), "utf8"));
       expect(modelJson.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
       expect(modelJson.producerVersion).toBe(RAGIT_VERSION);
+      expect(modelJson.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
+      expect(modelJson.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
       expect(html).toContain('id="report-summary"');
       expect(html).toContain('id="decision-evolution"');
       expect(html).toContain('id="intent-panel"');
@@ -154,6 +160,9 @@ Ship the recovery changes in two deliberate phases.
       expect(html).toContain("Auth Boundary");
       expect(html).toContain("Auth Rollout");
       expect(html).not.toContain("super-secret-value");
+      expect("goalId" in modelJson.intentItems[0]).toBe(false);
+      expect(modelJson.intentItems[0].binding.goalCount).toBeGreaterThan(0);
+      expect(modelJson.intentItems[0].badges.sensitivity).toBe("restricted");
       expect(html).not.toMatch(/<(?:script|link|img)[^>]+https?:\/\//i);
       expect(modelJson.summary).toEqual(result.summary);
       expect(modelJson.window).toEqual(result.window);

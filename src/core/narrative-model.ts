@@ -31,6 +31,12 @@ const TIMELINE_EVENT_TYPES = new Set<RagitEventType>([
 
 export const NARRATIVE_MODEL_SCHEMA_VERSION = 1;
 export const NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION = "legacy-unversioned";
+export const NARRATIVE_PROJECTION_POLICY_VERSION = 1;
+export const NARRATIVE_PROJECTION_MODE = "viewer-safe";
+
+export type NarrativeProjectionMode = typeof NARRATIVE_PROJECTION_MODE;
+export type NarrativeTrustBadge = "durable-doc" | "reviewed-artifact" | "promoted-artifact" | "operational-event";
+export type NarrativeSensitivityBadge = "standard" | "redacted" | "restricted";
 
 export interface NarrativeOptions {
   revRange?: string;
@@ -94,7 +100,7 @@ interface RawNarrativeDecisionNode {
   relatedPaths: string[];
 }
 
-export interface NarrativeDecisionNode extends RawNarrativeDecisionNode {
+interface NarrativeSynthesisDecisionNode extends RawNarrativeDecisionNode {
   nodeId: string;
   threadId: string;
   predecessorNodeId: string | null;
@@ -102,7 +108,7 @@ export interface NarrativeDecisionNode extends RawNarrativeDecisionNode {
   confidence: number;
 }
 
-export interface NarrativeDecisionThread {
+interface NarrativeSynthesisDecisionThread {
   threadId: string;
   title: string;
   docType: DocType;
@@ -114,7 +120,7 @@ export interface NarrativeDecisionThread {
   nodeIds: string[];
 }
 
-export interface NarrativeIntentItem {
+interface NarrativeSynthesisIntentItem {
   itemId: string;
   artifactId: string;
   kind: ArtifactRecord["kind"];
@@ -130,7 +136,7 @@ export interface NarrativeIntentItem {
   threadIds: string[];
 }
 
-export interface NarrativeEventItem {
+interface NarrativeSynthesisEventItem {
   eventId: string;
   eventType: RagitEventType;
   recordedAt: string;
@@ -143,20 +149,102 @@ export interface NarrativeEventItem {
   threadIds: string[];
 }
 
+export interface NarrativeBindingSummary {
+  goalCount: number;
+  episodeCount: number;
+  sessionCount: number;
+  relatedPathCount: number;
+}
+
+export interface NarrativeSnapshotItem {
+  commitSha: string;
+  subject: string;
+  authoredAt: string;
+  shortSha: string;
+}
+
+export interface NarrativeDecisionThread {
+  threadId: string;
+  title: string;
+  docType: DocType;
+  docPaths: string[];
+  snapshotShas: string[];
+  nodeIds: string[];
+  binding: NarrativeBindingSummary;
+  badges: {
+    trust: "durable-doc";
+    sensitivity: NarrativeSensitivityBadge;
+    lineageKinds: NarrativeRelationKind[];
+  };
+}
+
+export interface NarrativeDecisionNode {
+  nodeId: string;
+  threadId: string;
+  commitSha: string;
+  authoredAt: string;
+  path: string;
+  docType: DocType;
+  title: string;
+  summary: string;
+  changeType: NarrativeChangeType;
+  sourceArtifactId: string | null;
+  relatedPaths: string[];
+  predecessorNodeId: string | null;
+  relationKind: NarrativeRelationKind;
+  confidence: number;
+  binding: NarrativeBindingSummary;
+  badges: {
+    trust: "durable-doc";
+    sensitivity: NarrativeSensitivityBadge;
+    lineage: NarrativeRelationKind;
+  };
+}
+
+export interface NarrativeIntentItem {
+  itemId: string;
+  artifactId: string;
+  kind: ArtifactRecord["kind"];
+  status: ArtifactStatus;
+  title: string;
+  summary: string;
+  anchorSha: string | null;
+  relatedPaths: string[];
+  createdAt: string;
+  threadIds: string[];
+  binding: NarrativeBindingSummary;
+  badges: {
+    trust: "reviewed-artifact" | "promoted-artifact";
+    sensitivity: NarrativeSensitivityBadge;
+  };
+}
+
+export interface NarrativeEventItem {
+  eventId: string;
+  eventType: RagitEventType;
+  recordedAt: string;
+  summary: string;
+  sourceHeadSha: string | null;
+  relatedPaths: string[];
+  threadIds: string[];
+  binding: NarrativeBindingSummary;
+  badges: {
+    trust: "operational-event";
+    sensitivity: NarrativeSensitivityBadge;
+  };
+}
+
 export interface NarrativeViewModel {
   schemaVersion: number;
   producerVersion: string;
+  projectionPolicyVersion: number;
+  projectionMode: NarrativeProjectionMode;
   repoName: string;
   headSha: string;
   generatedAt: string;
   window: NarrativeWindowSummary;
   summary: NarrativeSummary;
-  snapshots: Array<{
-    commitSha: string;
-    subject: string;
-    authoredAt: string;
-    shortSha: string;
-  }>;
+  snapshots: NarrativeSnapshotItem[];
   threads: NarrativeDecisionThread[];
   nodes: NarrativeDecisionNode[];
   intentItems: NarrativeIntentItem[];
@@ -176,6 +264,22 @@ export interface NarrativeBuildResult {
   result: NarrativeResult;
   viewModel: NarrativeViewModel;
   absoluteReportPath: string;
+}
+
+interface NarrativeSynthesisViewModel {
+  repoName: string;
+  headSha: string;
+  generatedAt: string;
+  window: NarrativeWindowSummary;
+  summary: NarrativeSummary;
+  snapshots: NarrativeSnapshotItem[];
+  threads: NarrativeSynthesisDecisionThread[];
+  nodes: NarrativeSynthesisDecisionNode[];
+  intentItems: NarrativeSynthesisIntentItem[];
+  unassignedIntentItems: NarrativeSynthesisIntentItem[];
+  timelineEvents: NarrativeSynthesisEventItem[];
+  warnings: string[];
+  empty: boolean;
 }
 
 const shortSha = (value: string): string => value.slice(0, 7);
@@ -233,11 +337,24 @@ export const normalizeNarrativeViewModel = (
       value: {
         schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
         producerVersion: NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
-        ...(value as Omit<NarrativeViewModel, "schemaVersion" | "producerVersion">),
+        projectionPolicyVersion: NARRATIVE_PROJECTION_POLICY_VERSION,
+        projectionMode: NARRATIVE_PROJECTION_MODE,
+        ...(value as Omit<
+          NarrativeViewModel,
+          "schemaVersion" | "producerVersion" | "projectionPolicyVersion" | "projectionMode"
+        >),
       },
       compatibility: "legacy-unversioned",
       warnings: ["narrative model payload had no schemaVersion and was coerced as legacy-unversioned"],
     };
+  }
+
+  const warnings: string[] = [];
+  if (typeof value.projectionPolicyVersion !== "number" || !Number.isInteger(value.projectionPolicyVersion)) {
+    warnings.push("narrative model payload had no projectionPolicyVersion and was coerced to the current viewer-safe policy");
+  }
+  if (value.projectionMode !== NARRATIVE_PROJECTION_MODE) {
+    warnings.push("narrative model payload had no supported projectionMode and was coerced to viewer-safe");
   }
 
   return {
@@ -247,9 +364,14 @@ export const normalizeNarrativeViewModel = (
         typeof value.producerVersion === "string" && value.producerVersion.trim().length > 0
           ? value.producerVersion
           : "unknown",
+      projectionPolicyVersion:
+        typeof value.projectionPolicyVersion === "number" && Number.isInteger(value.projectionPolicyVersion)
+          ? value.projectionPolicyVersion
+          : NARRATIVE_PROJECTION_POLICY_VERSION,
+      projectionMode: value.projectionMode === NARRATIVE_PROJECTION_MODE ? value.projectionMode : NARRATIVE_PROJECTION_MODE,
     },
     compatibility: "versioned",
-    warnings: [],
+    warnings,
   };
 };
 
@@ -421,7 +543,7 @@ const collectCandidateIntentItems = async (
   cwd: string,
   snapshots: SelectedSnapshot[],
   rawNodes: RawNarrativeDecisionNode[],
-): Promise<NarrativeIntentItem[]> => {
+): Promise<NarrativeSynthesisIntentItem[]> => {
   const selectedSnapshotSet = new Set(snapshots.map((snapshot) => snapshot.commitSha));
   const earliestAuthoredAt = snapshots.length > 0 ? [...snapshots].reverse()[0].authoredAt : null;
   const latestAuthoredAt = snapshots.length > 0 ? snapshots[0].authoredAt : null;
@@ -460,7 +582,7 @@ const addSupportNodes = async (
   cwd: string,
   snapshots: SelectedSnapshot[],
   rawNodes: RawNarrativeDecisionNode[],
-  intentItems: NarrativeIntentItem[],
+  intentItems: NarrativeSynthesisIntentItem[],
 ): Promise<RawNarrativeDecisionNode[]> => {
   const existingPaths = new Set(rawNodes.map((node) => node.path));
   const supportNodes: RawNarrativeDecisionNode[] = [];
@@ -481,15 +603,15 @@ const addSupportNodes = async (
 
 const buildPathContinuityPredecessor = (
   current: RawNarrativeDecisionNode,
-  olderNodes: NarrativeDecisionNode[],
-): NarrativeDecisionNode | null =>
+  olderNodes: NarrativeSynthesisDecisionNode[],
+): NarrativeSynthesisDecisionNode | null =>
   [...olderNodes].reverse().find((candidate) => candidate.path === current.path) ?? null;
 
 const buildExplicitPredecessor = async (
   cwd: string,
   current: RawNarrativeDecisionNode,
-  olderNodes: NarrativeDecisionNode[],
-): Promise<NarrativeDecisionNode | null> => {
+  olderNodes: NarrativeSynthesisDecisionNode[],
+): Promise<NarrativeSynthesisDecisionNode | null> => {
   if (!current.sourceArtifactId) return null;
   const artifact = await loadArtifactRecord(cwd, current.sourceArtifactId);
   if (!artifact || artifact.supersedes.length === 0) return null;
@@ -498,8 +620,8 @@ const buildExplicitPredecessor = async (
 
 const buildHeuristicPredecessor = (
   current: RawNarrativeDecisionNode,
-  olderNodes: NarrativeDecisionNode[],
-): { predecessor: NarrativeDecisionNode | null; relationKind: NarrativeRelationKind } => {
+  olderNodes: NarrativeSynthesisDecisionNode[],
+): { predecessor: NarrativeSynthesisDecisionNode | null; relationKind: NarrativeRelationKind } => {
   const previousSnapshotIndex = current.snapshotIndex - 1;
   if (previousSnapshotIndex < 0) return { predecessor: null, relationKind: "root" };
   const normalizedCurrentTitle = normalizeTitle(current.title);
@@ -546,12 +668,15 @@ const relationConfidence = (relationKind: NarrativeRelationKind): number => {
   }
 };
 
-const assignNarrativeThreads = async (cwd: string, rawNodes: RawNarrativeDecisionNode[]): Promise<NarrativeDecisionNode[]> => {
+const assignNarrativeThreads = async (
+  cwd: string,
+  rawNodes: RawNarrativeDecisionNode[],
+): Promise<NarrativeSynthesisDecisionNode[]> => {
   const ordered = [...rawNodes].sort((left, right) => {
     if (left.snapshotIndex !== right.snapshotIndex) return left.snapshotIndex - right.snapshotIndex;
     return left.path.localeCompare(right.path);
   });
-  const nodes: NarrativeDecisionNode[] = [];
+  const nodes: NarrativeSynthesisDecisionNode[] = [];
 
   for (const rawNode of ordered) {
     const explicitPredecessor = await buildExplicitPredecessor(cwd, rawNode, nodes);
@@ -578,8 +703,8 @@ const assignNarrativeThreads = async (cwd: string, rawNodes: RawNarrativeDecisio
   return nodes;
 };
 
-const buildThreads = (nodes: NarrativeDecisionNode[]): NarrativeDecisionThread[] => {
-  const byThread = new Map<string, NarrativeDecisionNode[]>();
+const buildThreads = (nodes: NarrativeSynthesisDecisionNode[]): NarrativeSynthesisDecisionThread[] => {
+  const byThread = new Map<string, NarrativeSynthesisDecisionNode[]>();
   for (const node of nodes) {
     const bucket = byThread.get(node.threadId) ?? [];
     bucket.push(node);
@@ -607,9 +732,12 @@ const buildThreads = (nodes: NarrativeDecisionNode[]): NarrativeDecisionThread[]
     .sort((left, right) => left.title.localeCompare(right.title));
 };
 
-const attachIntentItems = (threads: NarrativeDecisionThread[], intentItems: NarrativeIntentItem[]): {
-  assigned: NarrativeIntentItem[];
-  unassigned: NarrativeIntentItem[];
+const attachIntentItems = (
+  threads: NarrativeSynthesisDecisionThread[],
+  intentItems: NarrativeSynthesisIntentItem[],
+): {
+  assigned: NarrativeSynthesisIntentItem[];
+  unassigned: NarrativeSynthesisIntentItem[];
 } => {
   const attached = intentItems.map((item) => {
     const byPath = threads.filter((thread) => arraysIntersect(thread.docPaths, item.relatedPaths));
@@ -632,9 +760,9 @@ const attachIntentItems = (threads: NarrativeDecisionThread[], intentItems: Narr
 };
 
 const attachTimelineEvents = (
-  threads: NarrativeDecisionThread[],
+  threads: NarrativeSynthesisDecisionThread[],
   events: RagitEventRecord[],
-): NarrativeEventItem[] =>
+): NarrativeSynthesisEventItem[] =>
   events.map((event) => {
     const matched = threads.filter(
       (thread) =>
@@ -766,10 +894,10 @@ const readNarrativeLedgerEvents = async (cwd: string): Promise<RagitEventRecord[
 };
 
 const toSummary = (
-  nodes: NarrativeDecisionNode[],
-  threads: NarrativeDecisionThread[],
-  intentItems: NarrativeIntentItem[],
-  timelineEvents: NarrativeEventItem[],
+  nodes: NarrativeSynthesisDecisionNode[],
+  threads: NarrativeSynthesisDecisionThread[],
+  intentItems: NarrativeSynthesisIntentItem[],
+  timelineEvents: NarrativeSynthesisEventItem[],
 ): NarrativeSummary => ({
   decisionThreads: threads.length,
   decisionNodes: nodes.length,
@@ -777,6 +905,184 @@ const toSummary = (
   timelineEvents: timelineEvents.length,
   heuristicEdges: nodes.filter((node) => node.relationKind === "heuristic-high" || node.relationKind === "heuristic-medium").length,
 });
+
+const toBindingSummary = (input: {
+  goalCount: number;
+  episodeCount: number;
+  sessionCount: number;
+  relatedPathCount: number;
+}): NarrativeBindingSummary => ({
+  goalCount: input.goalCount,
+  episodeCount: input.episodeCount,
+  sessionCount: input.sessionCount,
+  relatedPathCount: input.relatedPathCount,
+});
+
+const toSensitivityBadge = (restricted: boolean, applied: boolean): NarrativeSensitivityBadge =>
+  restricted ? "restricted" : applied ? "redacted" : "standard";
+
+const projectSnapshotForViewerSafe = (snapshot: NarrativeSnapshotItem): NarrativeSnapshotItem =>
+  sanitizeStructuredValue(snapshot, "narrative.output", `narrative.snapshot:${snapshot.commitSha}`).value as NarrativeSnapshotItem;
+
+const projectDecisionNodeForViewerSafe = (node: NarrativeSynthesisDecisionNode): NarrativeDecisionNode => {
+  const binding = toBindingSummary({
+    goalCount: node.goalId ? 1 : 0,
+    episodeCount: node.episodeId ? 1 : 0,
+    sessionCount: node.sourceSessionId ? 1 : 0,
+    relatedPathCount: node.relatedPaths.length,
+  });
+  const projected = {
+    nodeId: node.nodeId,
+    threadId: node.threadId,
+    commitSha: node.commitSha,
+    authoredAt: node.authoredAt,
+    path: node.path,
+    docType: node.docType,
+    title: node.title,
+    summary: node.summary,
+    changeType: node.changeType,
+    sourceArtifactId: node.sourceArtifactId,
+    relatedPaths: node.relatedPaths,
+    predecessorNodeId: node.predecessorNodeId,
+    relationKind: node.relationKind,
+    confidence: node.confidence,
+  };
+  const sanitized = sanitizeStructuredValue(projected, "narrative.output", `narrative.node:${node.nodeId}`);
+  return {
+    ...(sanitized.value as typeof projected),
+    binding,
+    badges: {
+      trust: "durable-doc",
+      sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
+      lineage: node.relationKind,
+    },
+  };
+};
+
+const projectThreadForViewerSafe = (
+  thread: NarrativeSynthesisDecisionThread,
+  nodes: NarrativeSynthesisDecisionNode[],
+): NarrativeDecisionThread => {
+  const binding = toBindingSummary({
+    goalCount: thread.goalIds.length,
+    episodeCount: thread.episodeIds.length,
+    sessionCount: thread.sessionIds.length,
+    relatedPathCount: uniqueStrings(
+      nodes.filter((node) => node.threadId === thread.threadId).flatMap((node) => node.relatedPaths),
+    ).length,
+  });
+  const projected = {
+    threadId: thread.threadId,
+    title: thread.title,
+    docType: thread.docType,
+    docPaths: thread.docPaths,
+    snapshotShas: thread.snapshotShas,
+    nodeIds: thread.nodeIds,
+  };
+  const sanitized = sanitizeStructuredValue(projected, "narrative.output", `narrative.thread:${thread.threadId}`);
+  return {
+    ...(sanitized.value as typeof projected),
+    binding,
+    badges: {
+      trust: "durable-doc",
+      sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
+      lineageKinds: uniqueStrings(nodes.filter((node) => node.threadId === thread.threadId).map((node) => node.relationKind)) as NarrativeRelationKind[],
+    },
+  };
+};
+
+const projectIntentItemForViewerSafe = (item: NarrativeSynthesisIntentItem): NarrativeIntentItem => {
+  const binding = toBindingSummary({
+    goalCount: item.goalId ? 1 : 0,
+    episodeCount: item.episodeId ? 1 : 0,
+    sessionCount: item.sourceSessionId ? 1 : 0,
+    relatedPathCount: item.relatedPaths.length,
+  });
+  const projected = {
+    itemId: item.itemId,
+    artifactId: item.artifactId,
+    kind: item.kind,
+    status: item.status,
+    title: item.title,
+    summary: item.summary,
+    anchorSha: item.anchorSha,
+    relatedPaths: item.relatedPaths,
+    createdAt: item.createdAt,
+    threadIds: item.threadIds,
+  };
+  const sanitized = sanitizeStructuredValue(projected, "narrative.output", `narrative.intent:${item.itemId}`);
+  return {
+    ...(sanitized.value as typeof projected),
+    binding,
+    badges: {
+      trust: item.status === "promoted" ? "promoted-artifact" : "reviewed-artifact",
+      sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
+    },
+  };
+};
+
+const projectEventItemForViewerSafe = (event: NarrativeSynthesisEventItem): NarrativeEventItem => {
+  const binding = toBindingSummary({
+    goalCount: event.goalId ? 1 : 0,
+    episodeCount: event.episodeId ? 1 : 0,
+    sessionCount: event.sessionId ? 1 : 0,
+    relatedPathCount: event.relatedPaths.length,
+  });
+  const projected = {
+    eventId: event.eventId,
+    eventType: event.eventType,
+    recordedAt: event.recordedAt,
+    summary: event.summary,
+    sourceHeadSha: event.sourceHeadSha,
+    relatedPaths: event.relatedPaths,
+    threadIds: event.threadIds,
+  };
+  const sanitized = sanitizeStructuredValue(projected, "narrative.output", `narrative.event:${event.eventId}`);
+  return {
+    ...(sanitized.value as typeof projected),
+    binding,
+    badges: {
+      trust: "operational-event",
+      sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
+    },
+  };
+};
+
+export const projectNarrativeViewModelForViewerSafe = (
+  synthesis: NarrativeSynthesisViewModel,
+): NarrativeViewModel => {
+  const snapshots = synthesis.snapshots.map(projectSnapshotForViewerSafe);
+  const nodes = synthesis.nodes.map(projectDecisionNodeForViewerSafe);
+  const threads = synthesis.threads.map((thread) => projectThreadForViewerSafe(thread, synthesis.nodes));
+  const intentItems = synthesis.intentItems.map(projectIntentItemForViewerSafe);
+  const unassignedIntentItems = synthesis.unassignedIntentItems.map(projectIntentItemForViewerSafe);
+  const timelineEvents = synthesis.timelineEvents.map(projectEventItemForViewerSafe);
+  const warnings = (sanitizeStructuredValue(
+    synthesis.warnings,
+    "narrative.output",
+    "narrative.warnings",
+  ).value ?? []) as string[];
+
+  return {
+    schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
+    producerVersion: RAGIT_VERSION,
+    projectionPolicyVersion: NARRATIVE_PROJECTION_POLICY_VERSION,
+    projectionMode: NARRATIVE_PROJECTION_MODE,
+    repoName: synthesis.repoName,
+    headSha: synthesis.headSha,
+    generatedAt: synthesis.generatedAt,
+    window: synthesis.window,
+    summary: synthesis.summary,
+    snapshots,
+    threads,
+    nodes,
+    intentItems,
+    unassignedIntentItems,
+    timelineEvents,
+    warnings,
+    empty: synthesis.empty,
+  };
+};
 
 export const buildNarrativeViewModel = async (
   cwd: string,
@@ -799,9 +1105,7 @@ export const buildNarrativeViewModel = async (
   if (snapshots.length === 0) {
     warnings.push("selected window에 snapshot manifest가 없어 empty-state report를 생성합니다.");
   }
-  const rawViewModel: NarrativeViewModel = {
-    schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
-    producerVersion: RAGIT_VERSION,
+  const synthesis: NarrativeSynthesisViewModel = {
     repoName: path.basename(cwd),
     headSha,
     generatedAt: new Date().toISOString(),
@@ -828,8 +1132,7 @@ export const buildNarrativeViewModel = async (
     warnings,
     empty: snapshots.length === 0 || threads.length === 0,
   };
-  const sanitized = sanitizeStructuredValue(rawViewModel, "narrative.output", "narrative");
-  const viewModel = sanitized.value as NarrativeViewModel;
+  const viewModel = projectNarrativeViewModelForViewerSafe(synthesis);
   const result: NarrativeResult = {
     dryRun: Boolean(options.dryRun),
     reportPath: outputTarget.displayPath,
