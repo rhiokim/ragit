@@ -126,6 +126,9 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.freshnessCounts.fresh");
       expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.freshnessCounts.suspect");
       expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.freshnessCounts.stale");
+      expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.validationCounts.verified");
+      expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.validationCounts.attention");
+      expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.validationCounts.unverified");
 
       const describeDriftOutput = JSON.parse(runCli(["describe", "drift", "--format", "json"]));
       expect(describeDriftOutput.command).toBe("describe");
@@ -226,11 +229,19 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(Array.isArray(narrativeOutput.data.window.selectedSnapshotShas)).toBe(true);
       expect(narrativeOutput.data.summary).toBeTruthy();
       expect(narrativeOutput.data.summary.freshnessCounts).toBeTruthy();
+      expect(narrativeOutput.data.summary.validationCounts).toBeTruthy();
       expect(
         narrativeOutput.data.summary.freshnessCounts.fresh +
           narrativeOutput.data.summary.freshnessCounts.suspect +
           narrativeOutput.data.summary.freshnessCounts.stale,
       ).toBeGreaterThan(0);
+      expect(
+        narrativeOutput.data.summary.validationCounts.verified +
+          narrativeOutput.data.summary.validationCounts.attention +
+          narrativeOutput.data.summary.validationCounts.unverified,
+      ).toBeGreaterThan(0);
+      const narrativeTextOutput = runCli(["narrative", "--cwd", temp, "--dry-run", "--format", "text"]);
+      expect(narrativeTextOutput).toContain("validation_counts: verified=");
       expect(narrativeOutput.warnings.some((warning: string) => warning.includes("--open"))).toBe(true);
 
       const driftOutput = JSON.parse(runCli(["drift", "--cwd", temp, "--format", "json", "--scope", "all", "--view", "default"]));

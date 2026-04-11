@@ -75,6 +75,23 @@ const renderDriftSummary = (status: NarrativeFreshnessStatus | null, reasons: st
   return parts.length > 0 ? `<span class="drift-summary">${escapeHtml(parts.join(" · "))}</span>` : "";
 };
 
+const renderValidationBadge = (status: NarrativeValidationStatus | null): string =>
+  status ? renderBadge(status, `validation-${status}`) : "";
+
+const renderValidationSummary = (
+  status: NarrativeValidationStatus | null,
+  reasons: string[],
+  evidenceRefs: string[],
+  actions: string[],
+): string => {
+  const parts: string[] = [];
+  if (status) parts.push(`validation: ${status}`);
+  if (reasons.length > 0) parts.push(`reason: ${reasons[0]}`);
+  if (evidenceRefs.length > 0) parts.push(`evidence: ${evidenceRefs[0]}`);
+  if (actions.length > 0) parts.push(`action: ${actions[0]}`);
+  return parts.length > 0 ? `<span class="validation-summary">${escapeHtml(parts.join(" · "))}</span>` : "";
+};
+
 const normalizeRepoPath = (value: string): string => value.replaceAll("\\", "/");
 
 const uniqueStrings = (values: Array<string | null | undefined>): string[] =>
@@ -664,6 +681,10 @@ const buildDetailPayload = (payload: {
   changeType: string | null;
   trust: string;
   sensitivity: string;
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
   freshnessStatus: NarrativeFreshnessStatus | null;
   driftReasonCodes: string[];
   recommendedActions: string[];
@@ -736,6 +757,10 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
                           changeType: node.changeType,
                           trust: node.badges.trust,
                           sensitivity: node.badges.sensitivity,
+                          validationStatus: node.validationStatus,
+                          validationReasonCodes: node.validationReasonCodes,
+                          validationEvidenceRefs: node.validationEvidenceRefs,
+                          validationRecommendedActions: node.validationRecommendedActions,
                           freshnessStatus: node.freshnessStatus,
                           driftReasonCodes: node.driftReasonCodes,
                           recommendedActions: node.recommendedActions,
@@ -748,12 +773,19 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
                       <span class="node-title">${escapeHtml(node.title)}</span>
                       ${renderBadgeRow([
                         renderFreshnessBadge(node.freshnessStatus),
+                        renderValidationBadge(node.validationStatus),
                         renderBadge(node.badges.trust, "trust"),
                         renderBadge(node.badges.lineage, node.badges.lineage.startsWith("heuristic") ? "heuristic" : "lineage"),
                         renderBadge(node.badges.sensitivity, node.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
                       ])}
                       <span class="node-meta">${escapeHtml(node.relationKind)}</span>
                       ${renderDriftSummary(node.freshnessStatus, node.driftReasonCodes, node.recommendedActions)}
+                      ${renderValidationSummary(
+                        node.validationStatus,
+                        node.validationReasonCodes,
+                        node.validationEvidenceRefs,
+                        node.validationRecommendedActions,
+                      )}
                     </button>
                   `,
                 )
@@ -775,6 +807,10 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
           changeType: null,
           trust: thread.badges.trust,
           sensitivity: thread.badges.sensitivity,
+          validationStatus: thread.validationStatus,
+          validationReasonCodes: thread.validationReasonCodes,
+          validationEvidenceRefs: thread.validationEvidenceRefs,
+          validationRecommendedActions: thread.validationRecommendedActions,
           freshnessStatus: thread.freshnessStatus,
           driftReasonCodes: thread.driftReasonCodes,
           recommendedActions: thread.recommendedActions,
@@ -795,6 +831,7 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
             <span class="thread-title">${escapeHtml(thread.title)}</span>
             ${renderBadgeRow([
               renderFreshnessBadge(thread.freshnessStatus),
+              renderValidationBadge(thread.validationStatus),
               renderBadge(thread.badges.trust, "trust"),
               renderBadge(thread.badges.sensitivity, thread.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
               ...thread.badges.lineageKinds.map((lineage) =>
@@ -803,6 +840,12 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
             ])}
             <span class="thread-meta">${escapeHtml(thread.docType)} · ${thread.nodeIds.length} node(s)</span>
             ${renderDriftSummary(thread.freshnessStatus, thread.driftReasonCodes, thread.recommendedActions)}
+            ${renderValidationSummary(
+              thread.validationStatus,
+              thread.validationReasonCodes,
+              thread.validationEvidenceRefs,
+              thread.validationRecommendedActions,
+            )}
           </button>
           ${cells}
         </div>
@@ -840,6 +883,10 @@ const renderIntentSection = (items: NarrativeIntentItem[], title: string): strin
           changeType: item.status,
           trust: item.badges.trust,
           sensitivity: item.badges.sensitivity,
+          validationStatus: item.validationStatus,
+          validationReasonCodes: item.validationReasonCodes,
+          validationEvidenceRefs: item.validationEvidenceRefs,
+          validationRecommendedActions: item.validationRecommendedActions,
           freshnessStatus: item.freshnessStatus,
           driftReasonCodes: item.driftReasonCodes,
           recommendedActions: item.recommendedActions,
@@ -863,11 +910,18 @@ const renderIntentSection = (items: NarrativeIntentItem[], title: string): strin
             <span class="intent-title">${escapeHtml(item.title)}</span>
             ${renderBadgeRow([
               renderFreshnessBadge(item.freshnessStatus),
+              renderValidationBadge(item.validationStatus),
               renderBadge(item.badges.trust, "trust"),
               renderBadge(item.badges.sensitivity, item.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
             ])}
             <span class="intent-summary">${escapeHtml(item.summary)}</span>
             ${renderDriftSummary(item.freshnessStatus, item.driftReasonCodes, item.recommendedActions)}
+            ${renderValidationSummary(
+              item.validationStatus,
+              item.validationReasonCodes,
+              item.validationEvidenceRefs,
+              item.validationRecommendedActions,
+            )}
           </button>
         </article>
       `;
@@ -894,6 +948,10 @@ const renderTimelineSection = (events: NarrativeEventItem[]): string => {
           changeType: null,
           trust: event.badges.trust,
           sensitivity: event.badges.sensitivity,
+          validationStatus: null,
+          validationReasonCodes: [],
+          validationEvidenceRefs: [],
+          validationRecommendedActions: [],
           freshnessStatus: null,
           driftReasonCodes: [],
           recommendedActions: [],
@@ -921,6 +979,165 @@ const renderTimelineSection = (events: NarrativeEventItem[]): string => {
       `;
     })
     .join("");
+};
+
+const renderValidationSection = (viewModel: NarrativeViewModel): string => {
+  const renderGroup = (
+    title: string,
+    items: Array<{
+      label: string;
+      summary: string;
+      status: NarrativeValidationStatus | null;
+      reasonCodes: string[];
+      evidenceRefs: string[];
+      recommendedActions: string[];
+      threadId: string;
+      detail: string;
+    }>,
+  ): string => {
+    if (items.length === 0) {
+      return `<div class="empty-state"><p>No ${escapeHtml(title.toLowerCase())} validation in the selected window.</p></div>`;
+    }
+    return items
+      .map(
+        (item) => `
+          <article class="validation-item">
+            <button
+              type="button"
+              class="validation-button"
+              data-thread-focus="${escapeHtml(item.threadId)}"
+              data-detail='${escapeHtml(item.detail)}'
+            >
+              <span class="validation-kind">${escapeHtml(title)}</span>
+              <span class="validation-title">${escapeHtml(item.label)}</span>
+              ${renderBadgeRow([renderValidationBadge(item.status)])}
+              <span class="validation-summary-text">${escapeHtml(item.summary)}</span>
+              ${renderValidationSummary(item.status, item.reasonCodes, item.evidenceRefs, item.recommendedActions)}
+            </button>
+          </article>
+        `,
+      )
+      .join("");
+  };
+
+  const threadItems = viewModel.threads.map((thread) => ({
+    label: thread.title,
+    summary: `${thread.docType} thread · ${thread.nodeIds.length} node(s)`,
+    status: thread.validationStatus,
+    reasonCodes: thread.validationReasonCodes,
+    evidenceRefs: thread.validationEvidenceRefs,
+    recommendedActions: thread.validationRecommendedActions,
+    threadId: thread.threadId,
+    detail: buildDetailPayload({
+      type: "thread",
+      title: thread.title,
+      summary: `${thread.docType} thread across ${thread.snapshotShas.length} snapshot(s)`,
+      path: thread.docPaths.join(", "),
+      artifactId: null,
+      snapshotSha: thread.snapshotShas.at(-1) ?? null,
+      relationKind: thread.badges.lineageKinds.join(", "),
+      confidence: null,
+      changeType: null,
+      trust: thread.badges.trust,
+      sensitivity: thread.badges.sensitivity,
+      validationStatus: thread.validationStatus,
+      validationReasonCodes: thread.validationReasonCodes,
+      validationEvidenceRefs: thread.validationEvidenceRefs,
+      validationRecommendedActions: thread.validationRecommendedActions,
+      freshnessStatus: thread.freshnessStatus,
+      driftReasonCodes: thread.driftReasonCodes,
+      recommendedActions: thread.recommendedActions,
+      driftSourceRefs: thread.driftSourceRefs,
+      binding: thread.binding,
+    }),
+  }));
+
+  const nodeItems = viewModel.nodes.map((node) => ({
+    label: node.title,
+    summary: `${node.docType} · ${node.changeType} · ${normalizeRepoPath(node.path)}`,
+    status: node.validationStatus,
+    reasonCodes: node.validationReasonCodes,
+    evidenceRefs: node.validationEvidenceRefs,
+    recommendedActions: node.validationRecommendedActions,
+    threadId: node.threadId,
+    detail: buildDetailPayload({
+      type: "decision",
+      title: node.title,
+      summary: node.summary,
+      path: node.path,
+      artifactId: node.sourceArtifactId,
+      snapshotSha: node.commitSha,
+      relationKind: node.relationKind,
+      confidence: node.confidence,
+      changeType: node.changeType,
+      trust: node.badges.trust,
+      sensitivity: node.badges.sensitivity,
+      validationStatus: node.validationStatus,
+      validationReasonCodes: node.validationReasonCodes,
+      validationEvidenceRefs: node.validationEvidenceRefs,
+      validationRecommendedActions: node.validationRecommendedActions,
+      freshnessStatus: node.freshnessStatus,
+      driftReasonCodes: node.driftReasonCodes,
+      recommendedActions: node.recommendedActions,
+      driftSourceRefs: node.driftSourceRefs,
+      binding: node.binding,
+    }),
+  }));
+
+  const intentItems = [...viewModel.intentItems, ...viewModel.unassignedIntentItems].map((item) => ({
+    label: item.title,
+    summary: `${item.kind} · ${item.status} · ${item.relatedPaths.length} related path(s)`,
+    status: item.validationStatus,
+    reasonCodes: item.validationReasonCodes,
+    evidenceRefs: item.validationEvidenceRefs,
+    recommendedActions: item.validationRecommendedActions,
+    threadId: item.threadIds[0] ?? "",
+    detail: buildDetailPayload({
+      type: "intent",
+      title: item.title,
+      summary: item.summary,
+      path: item.relatedPaths.join(", "),
+      artifactId: item.artifactId,
+      snapshotSha: item.anchorSha,
+      relationKind: item.kind,
+      confidence: null,
+      changeType: item.status,
+      trust: item.badges.trust,
+      sensitivity: item.badges.sensitivity,
+      validationStatus: item.validationStatus,
+      validationReasonCodes: item.validationReasonCodes,
+      validationEvidenceRefs: item.validationEvidenceRefs,
+      validationRecommendedActions: item.validationRecommendedActions,
+      freshnessStatus: item.freshnessStatus,
+      driftReasonCodes: item.driftReasonCodes,
+      recommendedActions: item.recommendedActions,
+      driftSourceRefs: item.driftSourceRefs,
+      binding: item.binding,
+    }),
+  }));
+
+  return `
+    <section id="validation-panel">
+      <h2>Validation Panel</h2>
+      <div class="summary-grid validation-summary-grid">
+        <div class="summary-card validation-card validation-verified"><div class="summary-label">Verified</div><div class="summary-value">${viewModel.summary.validationCounts.verified}</div></div>
+        <div class="summary-card validation-card validation-attention"><div class="summary-label">Attention</div><div class="summary-value">${viewModel.summary.validationCounts.attention}</div></div>
+        <div class="summary-card validation-card validation-unverified"><div class="summary-label">Unverified</div><div class="summary-value">${viewModel.summary.validationCounts.unverified}</div></div>
+      </div>
+      <div class="intent-group">
+        <h3>Threads</h3>
+        <div class="validation-list">${renderGroup("Thread", threadItems)}</div>
+      </div>
+      <div class="intent-group">
+        <h3>Decision Nodes</h3>
+        <div class="validation-list">${renderGroup("Node", nodeItems)}</div>
+      </div>
+      <div class="intent-group">
+        <h3>Intent Items</h3>
+        <div class="validation-list">${renderGroup("Intent", intentItems)}</div>
+      </div>
+    </section>
+  `;
 };
 
 export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => `<!DOCTYPE html>
@@ -1132,6 +1349,26 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
         border-color: rgba(196, 93, 74, 0.24);
         color: #8b2f1f;
       }
+      .badge-validation {
+        background: rgba(15, 92, 142, 0.12);
+        border-color: rgba(15, 92, 142, 0.24);
+        color: #0f5c8e;
+      }
+      .badge-validation-verified {
+        background: rgba(84, 182, 125, 0.12);
+        border-color: rgba(84, 182, 125, 0.24);
+        color: #2f7f51;
+      }
+      .badge-validation-attention {
+        background: rgba(211, 166, 40, 0.16);
+        border-color: rgba(211, 166, 40, 0.28);
+        color: #8b6200;
+      }
+      .badge-validation-unverified {
+        background: rgba(107, 101, 92, 0.08);
+        border-color: rgba(107, 101, 92, 0.18);
+        color: var(--muted);
+      }
       .badge-muted {
         background: rgba(107, 101, 92, 0.08);
         border-color: rgba(107, 101, 92, 0.18);
@@ -1173,6 +1410,11 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
         line-height: 1.45;
         color: var(--muted);
       }
+      .validation-summary {
+        font-size: 12px;
+        line-height: 1.45;
+        color: #325d85;
+      }
       .intent-group + .intent-group {
         margin-top: 16px;
       }
@@ -1190,6 +1432,42 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
         padding: 14px;
         display: grid;
         gap: 6px;
+      }
+      .validation-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .validation-item {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255,255,255,0.72);
+      }
+      .validation-button {
+        width: 100%;
+        appearance: none;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+        color: inherit;
+        padding: 14px;
+        display: grid;
+        gap: 6px;
+      }
+      .validation-kind {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+      .validation-title {
+        font-weight: 700;
+      }
+      .validation-summary-text {
+        font-size: 13px;
+        line-height: 1.45;
+        color: #3f392f;
       }
       .detail-card {
         margin-top: 16px;
@@ -1272,6 +1550,9 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
           <div class="summary-card freshness-card freshness-fresh"><div class="summary-label">Fresh</div><div class="summary-value">${viewModel.summary.freshnessCounts.fresh}</div></div>
           <div class="summary-card freshness-card freshness-suspect"><div class="summary-label">Suspect</div><div class="summary-value">${viewModel.summary.freshnessCounts.suspect}</div></div>
           <div class="summary-card freshness-card freshness-stale"><div class="summary-label">Stale</div><div class="summary-value">${viewModel.summary.freshnessCounts.stale}</div></div>
+          <div class="summary-card validation-card validation-verified"><div class="summary-label">Verified</div><div class="summary-value">${viewModel.summary.validationCounts.verified}</div></div>
+          <div class="summary-card validation-card validation-attention"><div class="summary-label">Attention</div><div class="summary-value">${viewModel.summary.validationCounts.attention}</div></div>
+          <div class="summary-card validation-card validation-unverified"><div class="summary-label">Unverified</div><div class="summary-value">${viewModel.summary.validationCounts.unverified}</div></div>
         </div>
         <div class="detail-list">
           <div><strong>Window</strong>: ${escapeHtml(viewModel.window.revRange ?? "HEAD")} · max ${viewModel.window.maxCommits} selected snapshot commit(s)</div>
@@ -1304,6 +1585,8 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
             </div>
           </section>
 
+          ${renderValidationSection(viewModel)}
+
           <section id="operational-timeline">
             <h2>Operational Timeline</h2>
             <div class="timeline-list">${renderTimelineSection(viewModel.timelineEvents)}</div>
@@ -1329,6 +1612,25 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
           ["Relation", payload.relationKind || "none"],
           ["Confidence", payload.confidence === null || payload.confidence === undefined ? "none" : String(payload.confidence)],
           ["Freshness", payload.freshnessStatus || "none"],
+          ["Validation", payload.validationStatus || "none"],
+          [
+            "Validation Reasons",
+            Array.isArray(payload.validationReasonCodes) && payload.validationReasonCodes.length > 0
+              ? payload.validationReasonCodes.join(", ")
+              : "none",
+          ],
+          [
+            "Validation Evidence",
+            Array.isArray(payload.validationEvidenceRefs) && payload.validationEvidenceRefs.length > 0
+              ? payload.validationEvidenceRefs.join(", ")
+              : "none",
+          ],
+          [
+            "Validation Recommended Action",
+            Array.isArray(payload.validationRecommendedActions) && payload.validationRecommendedActions.length > 0
+              ? payload.validationRecommendedActions.join(", ")
+              : "none",
+          ],
           ["Reasons", Array.isArray(payload.driftReasonCodes) && payload.driftReasonCodes.length > 0 ? payload.driftReasonCodes.join(", ") : "none"],
           [
             "Recommended Action",
@@ -1427,5 +1729,6 @@ export const formatNarrativeText = (
     `- timeline_events: ${result.summary.timelineEvents}`,
     `- heuristic_edges: ${result.summary.heuristicEdges}`,
     `- freshness_counts: fresh=${result.summary.freshnessCounts.fresh} suspect=${result.summary.freshnessCounts.suspect} stale=${result.summary.freshnessCounts.stale}`,
+    `- validation_counts: verified=${result.summary.validationCounts.verified} attention=${result.summary.validationCounts.attention} unverified=${result.summary.validationCounts.unverified}`,
     ...(result.warnings.length === 0 ? [] : ["", ...result.warnings.map((warning) => `- warning ${warning}`)]),
   ].join("\n");

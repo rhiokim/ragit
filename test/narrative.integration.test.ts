@@ -235,10 +235,16 @@ Ship the recovery changes in two deliberate phases.
       expect(html).toContain("Auth Rollout");
       expect(html).toContain("badge-trust");
       expect(html).toContain("badge-freshness-fresh");
+      expect(html).toContain("badge-validation-verified");
+      expect(html).toContain("badge-validation-attention");
+      expect(html).toContain("badge-validation-unverified");
       expect(html).toContain("freshness-card");
+      expect(html).toContain('id="validation-panel"');
+      expect(html).toContain("validation-summary");
       expect(html).toContain("drift-summary");
       expect(html).toContain("durable-doc");
       expect(html).toContain("restricted");
+      expect(html).toContain("Validation Recommended Action");
       expect(html).not.toContain("super-secret-value");
       expect("goalId" in modelJson.intentItems[0]).toBe(false);
       expect(modelJson.intentItems[0].binding.goalCount).toBeGreaterThan(0);
