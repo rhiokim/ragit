@@ -295,6 +295,7 @@ export type SecuritySurface =
   | "context.pack"
   | "timeline.output"
   | "log.output"
+  | "narrative.output"
   | "audit"
   | "purge";
 
