@@ -249,6 +249,8 @@ pnpm ragit doctor --format json
 - Optional viewer input: viewer-safe model export at `.ragit/reports/narrative/current.model.json`
 - Experimental local explorer: isolated OpenTUI viewer under `tools/narrative-tui/`
 - Freshness axis: the narrative model and report also carry `fresh|suspect|stale` freshness state derived from `ragit drift`; this is a separate axis from `trust`, `sensitivity`, and `lineage`
+- Validation axis: the narrative model and report also carry `verified|attention|unverified` validation posture derived from harness/drift assets; this is a separate axis from `freshness`, `trust`, `sensitivity`, and `lineage`
+- User-facing IA: the HTML report includes a dedicated Validation Panel, and the OpenTUI right rail is `Intent | Validation | Timeline`
 
 ```bash
 pnpm ragit narrative --emit-model .ragit/reports/narrative/current.model.json

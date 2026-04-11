@@ -90,6 +90,17 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-mo
 - `stale`은 경로, 결속, 의존성이 drift된 상태를 뜻합니다.
 - freshness는 projected narrative model과 HTML report에 반영되며, OpenTUI viewer는 이 상태를 소비만 하고 drift를 다시 계산하지 않습니다.
 
+## Validation Overlay
+
+- narrative report는 `freshness`, `trust`, `sensitivity`, `lineage`와 별도의 `validation` 축도 가집니다.
+- validation은 harness/drift assets에서 파생되며 `verified`, `attention`, `unverified`로 현재 검증 자세를 표현합니다.
+- `verified`는 하네스/증거 맥락이 있고 현재 검증 우려가 없는 상태입니다.
+- `attention`은 drift 또는 failure evidence에서 온 검증 경고가 있는 상태입니다.
+- `unverified`는 아직 충분한 검증 맥락이 없어 확정 분류를 하지 않은 상태입니다.
+- validation은 전체 검증 연대기가 아니라 현재 posture를 설명합니다.
+- validation은 projected narrative model과 HTML report에 반영되며, OpenTUI viewer는 이 상태를 소비만 하고 다시 계산하지 않습니다.
+- HTML report에는 별도의 Validation Panel이 있고, OpenTUI 오른쪽 rail은 `Intent | Validation | Timeline`입니다.
+
 ## Projection Governance
 
 - emitted model에는 viewer-safe projected field만 포함됩니다.

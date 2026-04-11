@@ -90,6 +90,17 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-mo
 - `stale` means the item is anchored to paths, bindings, or dependencies that have drifted.
 - Freshness applies to the projected narrative model and to the HTML report; the OpenTUI viewer only consumes the exported freshness state and does not recompute drift.
 
+## Validation Overlay
+
+- The narrative report also carries a separate validation axis in addition to `freshness`, `trust`, `sensitivity`, and `lineage`.
+- Validation is derived from harness/drift assets and uses `verified`, `attention`, and `unverified` to describe current validation posture.
+- `verified` means the item has supporting harness/evidence context and no current validation concern.
+- `attention` means the item has a validation warning, usually from drift or failure evidence.
+- `unverified` means the item does not yet have enough validation context to classify confidently.
+- Validation describes current posture, not the full verification chronology.
+- Validation applies to the projected narrative model and to the HTML report; the OpenTUI viewer only consumes the exported validation state and does not recompute it.
+- The HTML report includes a dedicated Validation Panel, and the OpenTUI right rail is `Intent | Validation | Timeline`.
+
 ## Projection Governance
 
 - The emitted model includes only viewer-safe projected fields.

@@ -56,6 +56,8 @@ bun run start -- --model fixtures/sample-model.json
 - `trust` badges identify whether an item came from durable docs, reviewed/promoted artifacts, or operational events.
 - `sensitivity` badges identify whether a value is `standard`, `redacted`, or `restricted`.
 - `freshness` badges identify whether an item is `fresh`, `suspect`, or `stale` based on the exported drift overlay from `ragit narrative`; the viewer does not recompute drift itself.
+- `validation` badges identify whether an item is `verified`, `attention`, or `unverified` based on harness/drift assets; this is current validation posture, not the full verification chronology.
+- The TUI right rail follows `Intent | Validation | Timeline`, while the HTML canonical report adds a dedicated Validation Panel.
 - `restricted` means the producer intentionally hid raw binding values and exported only a safe summary.
 
 ## Smoke And Test
