@@ -4,6 +4,8 @@ import { resolveRagitPaths } from "./project.js";
 import {
   buildNarrativeViewModel,
   NARRATIVE_MODEL_SCHEMA_VERSION,
+  NARRATIVE_PROJECTION_MODE,
+  NARRATIVE_PROJECTION_POLICY_VERSION,
   NarrativeEventItem,
   NarrativeIntentItem,
   NarrativeOptions,
@@ -53,6 +55,35 @@ const escapeHtml = (value: string): string =>
 const serializeForScript = (value: unknown): string =>
   JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 
+const buildDetailPayload = (payload: {
+  type: "thread" | "decision" | "intent" | "event";
+  title: string;
+  summary: string;
+  path: string;
+  artifactId: string | null;
+  snapshotSha: string | null;
+  relationKind: string | null;
+  confidence: number | null;
+  changeType: string | null;
+  trust: string;
+  sensitivity: string;
+  binding: {
+    goalCount: number;
+    episodeCount: number;
+    sessionCount: number;
+    relatedPathCount: number;
+  };
+}) =>
+  JSON.stringify({
+    ...payload,
+    bindingSummary: [
+      `goals=${payload.binding.goalCount}`,
+      `episodes=${payload.binding.episodeCount}`,
+      `sessions=${payload.binding.sessionCount}`,
+      `relatedPaths=${payload.binding.relatedPathCount}`,
+    ].join(" · "),
+  });
+
 const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
   if (viewModel.empty || viewModel.threads.length === 0 || viewModel.snapshots.length === 0) {
     return `
@@ -91,7 +122,7 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
                       data-thread-focus="${escapeHtml(thread.threadId)}"
                       data-thread-ref="${escapeHtml(thread.threadId)}"
                       data-detail='${escapeHtml(
-                        JSON.stringify({
+                        buildDetailPayload({
                           type: "decision",
                           title: node.title,
                           summary: node.summary,
@@ -101,6 +132,9 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
                           relationKind: node.relationKind,
                           confidence: node.confidence,
                           changeType: node.changeType,
+                          trust: node.badges.trust,
+                          sensitivity: node.badges.sensitivity,
+                          binding: node.binding,
                         }),
                       )}'
                     >
@@ -116,16 +150,19 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
         })
         .join("");
       const labelDetail = escapeHtml(
-        JSON.stringify({
+        buildDetailPayload({
           type: "thread",
           title: thread.title,
           summary: `${thread.docType} thread across ${thread.snapshotShas.length} snapshot(s)`,
           path: thread.docPaths.join(", "),
           artifactId: null,
           snapshotSha: thread.snapshotShas.at(-1) ?? null,
-          relationKind: "thread",
+          relationKind: thread.badges.lineageKinds.join(", "),
           confidence: null,
           changeType: null,
+          trust: thread.badges.trust,
+          sensitivity: thread.badges.sensitivity,
+          binding: thread.binding,
         }),
       );
       return `
@@ -164,7 +201,7 @@ const renderIntentSection = (items: NarrativeIntentItem[], title: string): strin
   return items
     .map((item) => {
       const detail = escapeHtml(
-        JSON.stringify({
+        buildDetailPayload({
           type: "intent",
           title: item.title,
           summary: item.summary,
@@ -174,6 +211,9 @@ const renderIntentSection = (items: NarrativeIntentItem[], title: string): strin
           relationKind: item.kind,
           confidence: null,
           changeType: item.status,
+          trust: item.badges.trust,
+          sensitivity: item.badges.sensitivity,
+          binding: item.binding,
         }),
       );
       return `
@@ -204,7 +244,7 @@ const renderTimelineSection = (events: NarrativeEventItem[]): string => {
   return events
     .map((event) => {
       const detail = escapeHtml(
-        JSON.stringify({
+        buildDetailPayload({
           type: "event",
           title: event.eventType,
           summary: event.summary,
@@ -214,6 +254,9 @@ const renderTimelineSection = (events: NarrativeEventItem[]): string => {
           relationKind: "event",
           confidence: null,
           changeType: null,
+          trust: event.badges.trust,
+          sensitivity: event.badges.sensitivity,
+          binding: event.binding,
         }),
       );
       return `
@@ -518,6 +561,7 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
         <div class="detail-list">
           <div><strong>Window</strong>: ${escapeHtml(viewModel.window.revRange ?? "HEAD")} · max ${viewModel.window.maxCommits} selected snapshot commit(s)</div>
           <div><strong>Generated at</strong>: ${escapeHtml(viewModel.generatedAt)}</div>
+          <div><strong>Projection</strong>: ${escapeHtml(viewModel.projectionMode)} · policy v${viewModel.projectionPolicyVersion}</div>
           <div><strong>Warnings</strong>: ${viewModel.warnings.length === 0 ? "none" : escapeHtml(viewModel.warnings.join(" | "))}</div>
         </div>
       </section>
@@ -569,6 +613,9 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
           ["Snapshot", payload.snapshotSha || "none"],
           ["Relation", payload.relationKind || "none"],
           ["Confidence", payload.confidence === null || payload.confidence === undefined ? "none" : String(payload.confidence)],
+          ["Trust", payload.trust || "none"],
+          ["Sensitivity", payload.sensitivity || "none"],
+          ["Bindings", payload.bindingSummary || "none"],
         ];
         detailCard.innerHTML = [
           '<div class="detail-title">' + (payload.title || 'Detail') + '</div>',
@@ -633,13 +680,17 @@ export const runNarrativeReport = async (cwd: string, options: NarrativeOptions 
   };
 };
 
-export const formatNarrativeText = (result: NarrativeResult & { schemaVersion?: number }): string =>
+export const formatNarrativeText = (
+  result: NarrativeResult & { schemaVersion?: number; projectionPolicyVersion?: number; projectionMode?: string },
+): string =>
   [
     "# ragit narrative",
     `- dry_run: ${result.dryRun}`,
     `- report_path: ${result.reportPath}`,
     ...(result.modelPath ? [`- model_path: ${result.modelPath}`] : []),
     `- schema_version: ${result.schemaVersion ?? NARRATIVE_MODEL_SCHEMA_VERSION}`,
+    `- projection_policy_version: ${result.projectionPolicyVersion ?? NARRATIVE_PROJECTION_POLICY_VERSION}`,
+    `- projection_mode: ${result.projectionMode ?? NARRATIVE_PROJECTION_MODE}`,
     `- head: ${result.headSha}`,
     `- window_rev_range: ${result.window.revRange ?? "HEAD"}`,
     `- selected_snapshots: ${result.window.selectedSnapshotShas.length}`,

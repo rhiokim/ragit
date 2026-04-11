@@ -141,6 +141,8 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
       "reportPath",
       "modelPath",
       "schemaVersion",
+      "projectionPolicyVersion",
+      "projectionMode",
       "headSha",
       "window.revRange",
       "window.maxCommits",
@@ -153,7 +155,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     options: [
       { name: "--max-commits", type: "number", description: "선택할 indexed snapshot commit 개수", defaultValue: 10 },
       { name: "--output", type: "path", description: "report 출력 경로" },
-      { name: "--emit-model", type: "path", description: "versioned sanitized narrative model JSON 출력 경로" },
+      { name: "--emit-model", type: "path", description: "versioned viewer-safe narrative model JSON 출력 경로" },
       { name: "--open", type: "boolean", description: "생성 후 기본 브라우저로 열기" },
       { name: "--dry-run", type: "boolean", description: "파일을 쓰지 않고 계획만 계산" },
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "text" },

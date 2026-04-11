@@ -121,6 +121,8 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeNarrativeOutput.data.spec.options.some((option: { name: string }) => option.name === "--open")).toBe(true);
       expect(describeNarrativeOutput.data.spec.options.some((option: { name: string }) => option.name === "--emit-model")).toBe(true);
       expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("schemaVersion");
+      expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("projectionPolicyVersion");
+      expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("projectionMode");
 
       const describeDriftOutput = JSON.parse(runCli(["describe", "drift", "--format", "json"]));
       expect(describeDriftOutput.command).toBe("describe");
@@ -216,6 +218,8 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(narrativeOutput.data.reportPath).toContain(".ragit/reports/narrative/");
       expect(narrativeOutput.data.modelPath).toBe(".ragit/reports/narrative/model.json");
       expect(narrativeOutput.data.schemaVersion).toBe(1);
+      expect(narrativeOutput.data.projectionPolicyVersion).toBe(1);
+      expect(narrativeOutput.data.projectionMode).toBe("viewer-safe");
       expect(Array.isArray(narrativeOutput.data.window.selectedSnapshotShas)).toBe(true);
       expect(narrativeOutput.data.summary).toBeTruthy();
       expect(narrativeOutput.warnings.some((warning: string) => warning.includes("--open"))).toBe(true);
