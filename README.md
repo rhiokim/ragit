@@ -248,6 +248,7 @@ pnpm ragit doctor --format json
 - Canonical artifact: self-contained HTML report
 - Optional viewer input: viewer-safe model export at `.ragit/reports/narrative/current.model.json`
 - Experimental local explorer: isolated OpenTUI viewer under `tools/narrative-tui/`
+- Freshness axis: the narrative model and report also carry `fresh|suspect|stale` freshness state derived from `ragit drift`; this is a separate axis from `trust`, `sensitivity`, and `lineage`
 
 ```bash
 pnpm ragit narrative --emit-model .ragit/reports/narrative/current.model.json

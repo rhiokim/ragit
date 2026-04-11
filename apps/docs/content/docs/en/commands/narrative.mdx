@@ -63,6 +63,7 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-mo
 - There is no JSON payload input.
 - JSON output includes `dryRun`, `reportPath`, `modelPath`, `schemaVersion`, `projectionPolicyVersion`, `projectionMode`, `headSha`, `window`, `summary`, and `warnings`.
 - `window` includes `revRange`, `maxCommits`, `selectedSnapshotShas`, and `missingSnapshotCommits`.
+- `summary.freshnessCounts` includes `fresh`, `suspect`, and `stale` counts derived from `ragit drift`.
 - `--dry-run` still returns the planned report path, planned model path, and summary, but writes neither file.
 - `--open` is ignored during dry-run and reported only as a warning.
 - If no manifest-backed snapshots are found, `narrative` still generates an empty-state report.
@@ -80,12 +81,22 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-mo
 - The viewer is intentionally isolated under `tools/narrative-tui/` and does not read `.ragit` or git state directly.
 - If you only need a shareable report, generate HTML and stop there.
 
+## Freshness Overlay
+
+- The narrative report carries a separate freshness axis in addition to `trust`, `sensitivity`, and `lineage`.
+- Freshness is derived from `ragit drift` and uses `fresh`, `suspect`, and `stale`.
+- `fresh` means the item is currently aligned with the selected snapshot window.
+- `suspect` means the item has incomplete baseline, binding, or evidence context.
+- `stale` means the item is anchored to paths, bindings, or dependencies that have drifted.
+- Freshness applies to the projected narrative model and to the HTML report; the OpenTUI viewer only consumes the exported freshness state and does not recompute drift.
+
 ## Projection Governance
 
 - The emitted model includes only viewer-safe projected fields.
 - Binding metadata is exposed as counts, not as raw goal/session identifiers.
 - `trust` badges distinguish `durable-doc`, `reviewed-artifact`, `promoted-artifact`, and `operational-event`.
 - `sensitivity` badges distinguish `standard`, `redacted`, and `restricted`.
+- Freshness badges distinguish `fresh`, `suspect`, and `stale` as a separate axis derived from `ragit drift`.
 - `restricted` means the viewer receives only the safe projected summary of the hidden binding state.
 
 ## Examples

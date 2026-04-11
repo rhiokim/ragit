@@ -55,6 +55,7 @@ bun run start -- --model fixtures/sample-model.json
 - Binding state appears as counts, not as raw goal/session identifiers.
 - `trust` badges identify whether an item came from durable docs, reviewed/promoted artifacts, or operational events.
 - `sensitivity` badges identify whether a value is `standard`, `redacted`, or `restricted`.
+- `freshness` badges identify whether an item is `fresh`, `suspect`, or `stale` based on the exported drift overlay from `ragit narrative`; the viewer does not recompute drift itself.
 - `restricted` means the producer intentionally hid raw binding values and exported only a safe summary.
 
 ## Smoke And Test
