@@ -719,10 +719,6 @@ const buildThreadDetail = (thread: ExplorerThreadView | null): ExplorerDetail =>
       `reasons: ${thread.driftReasonCodes.length > 0 ? thread.driftReasonCodes.join(", ") : "none"}`,
       `actions: ${thread.recommendedActions.length > 0 ? thread.recommendedActions.join(", ") : "none"}`,
       `drift sources: ${thread.driftSourceRefs.length}`,
-      `validation: ${thread.validationStatus ?? "none"}`,
-      `validation reasons: ${thread.validationReasonCodes.length > 0 ? thread.validationReasonCodes.join(", ") : "none"}`,
-      `validation evidence: ${thread.validationEvidenceRefs.length > 0 ? thread.validationEvidenceRefs.join(", ") : "none"}`,
-      `validation actions: ${thread.validationRecommendedActions.length > 0 ? thread.validationRecommendedActions.join(", ") : "none"}`,
       `bindings: goals=${thread.binding.goalCount}, episodes=${thread.binding.episodeCount}, sessions=${thread.binding.sessionCount}, relatedPaths=${thread.binding.relatedPathCount}`,
     ],
   };
@@ -861,10 +857,6 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
           `reasons: ${selectedIntent.driftReasonCodes.length > 0 ? selectedIntent.driftReasonCodes.join(", ") : "none"}`,
           `actions: ${selectedIntent.recommendedActions.length > 0 ? selectedIntent.recommendedActions.join(", ") : "none"}`,
           `drift sources: ${selectedIntent.driftSourceRefs.length}`,
-          `validation: ${selectedIntent.validationStatus ?? "none"}`,
-          `validation reasons: ${selectedIntent.validationReasonCodes.length > 0 ? selectedIntent.validationReasonCodes.join(", ") : "none"}`,
-          `validation evidence: ${selectedIntent.validationEvidenceRefs.length > 0 ? selectedIntent.validationEvidenceRefs.join(", ") : "none"}`,
-          `validation actions: ${selectedIntent.validationRecommendedActions.length > 0 ? selectedIntent.validationRecommendedActions.join(", ") : "none"}`,
           `bindings: goals=${selectedIntent.binding.goalCount}, episodes=${selectedIntent.binding.episodeCount}, sessions=${selectedIntent.binding.sessionCount}, relatedPaths=${selectedIntent.binding.relatedPathCount}`,
           `linked threads: ${selectedIntent.threadIds.length}`,
         ],
@@ -894,22 +886,6 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
             `reasons: ${selectedThreadOverlay.driftReasonCodes.length > 0 ? selectedThreadOverlay.driftReasonCodes.join(", ") : "none"}`,
             `actions: ${selectedThreadOverlay.recommendedActions.length > 0 ? selectedThreadOverlay.recommendedActions.join(", ") : "none"}`,
             `drift sources: ${selectedThreadOverlay.driftSourceRefs.length}`,
-            `validation: ${selectedThreadValidationOverlay.validationStatus ?? "none"}`,
-            `validation reasons: ${
-              selectedThreadValidationOverlay.validationReasonCodes.length > 0
-                ? selectedThreadValidationOverlay.validationReasonCodes.join(", ")
-                : "none"
-            }`,
-            `validation evidence: ${
-              selectedThreadValidationOverlay.validationEvidenceRefs.length > 0
-                ? selectedThreadValidationOverlay.validationEvidenceRefs.join(", ")
-                : "none"
-            }`,
-            `validation actions: ${
-              selectedThreadValidationOverlay.validationRecommendedActions.length > 0
-                ? selectedThreadValidationOverlay.validationRecommendedActions.join(", ")
-                : "none"
-            }`,
             `bindings: goals=${selectedEvent.binding.goalCount}, episodes=${selectedEvent.binding.episodeCount}, sessions=${selectedEvent.binding.sessionCount}, relatedPaths=${selectedEvent.binding.relatedPathCount}`,
             `linked threads: ${selectedEvent.threadIds.length}`,
           ],

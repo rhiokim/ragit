@@ -70,7 +70,6 @@ describe("narrative-tui model explorer", () => {
       view.selectedThread!.validationRecommendedActions,
     )).toContain("validation: attention");
     expect(view.detail.extra.join("\n")).toContain("freshness: suspect");
-    expect(view.detail.extra.join("\n")).toContain("validation: attention");
     expect(view.detail.extra.join("\n")).not.toContain("nodeIds:");
     expect(view.detail.extra.join("\n")).not.toContain("threadIds:");
   });
@@ -110,7 +109,6 @@ describe("narrative-tui model explorer", () => {
     expect(buildIntentOptionDescription(intentView.assignedIntentItems[0]!, true)).toContain("validation:verified");
     expect(buildValidationBadgeLabel(intentView.detail.validationStatus)).toBe("[attention]");
     expect(intentView.detail.extra.join("\n")).toContain("freshness: suspect");
-    expect(intentView.detail.extra.join("\n")).toContain("validation: attention");
 
     const eventState: ExplorerState = {
       query: "",
