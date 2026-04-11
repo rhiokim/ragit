@@ -22,6 +22,9 @@ import {
   buildPlaceholderThreadOption,
   buildThreadOptionDescription,
   buildThreadOptionName,
+  buildValidationBadgeLabel,
+  buildValidationDetailLines,
+  buildValidationSummary,
   isEventLinkedToThread,
   isIntentLinkedToThread,
   loadNarrativeModel,
@@ -116,6 +119,7 @@ const formatSummary = (
     `window: ${model.window.selectedSnapshotShas.length} snapshot(s), ${model.window.missingSnapshotCommits} missing manifest commit(s)`,
     `threads=${model.summary.decisionThreads} · nodes=${model.summary.decisionNodes} · intent=${model.summary.intentItems} · events=${model.summary.timelineEvents}`,
     `freshness: fresh=${model.summary.freshnessCounts.fresh} · suspect=${model.summary.freshnessCounts.suspect} · stale=${model.summary.freshnessCounts.stale}`,
+    `validation: verified=${model.summary.validationCounts.verified} · attention=${model.summary.validationCounts.attention} · unverified=${model.summary.validationCounts.unverified}`,
     `filter: ${formatScopeLabel(state.scope)} · query=${state.query.trim().length > 0 ? state.query : "(none)"}`,
     `selected: ${selectedThread ? `${selectedThread.title} [${selectedThread.docType}]` : "(none)"}`,
     "",
@@ -141,6 +145,12 @@ const formatDecisionEvolution = (thread: ExplorerThreadView | null): string => {
     `paths: ${thread.docPaths.join(", ")}`,
     `trust: ${thread.badges.trust} · sensitivity: ${thread.badges.sensitivity}`,
     `freshness: ${buildFreshnessSummary(thread.freshnessStatus, thread.driftReasonCodes, thread.recommendedActions)}`,
+    `validation: ${buildValidationSummary(
+      thread.validationStatus,
+      thread.validationReasonCodes,
+      thread.validationEvidenceRefs,
+      thread.validationRecommendedActions,
+    )}`,
     `bindings: goals=${thread.binding.goalCount}, episodes=${thread.binding.episodeCount}, sessions=${thread.binding.sessionCount}, relatedPaths=${thread.binding.relatedPathCount}`,
     "",
   ];
@@ -161,6 +171,12 @@ const formatDecisionEvolution = (thread: ExplorerThreadView | null): string => {
       `   artifact=${node.sourceArtifactId ?? "none"} · confidence=${node.confidence.toFixed(2)}`,
       `   trust=${node.badges.trust} · sensitivity=${node.badges.sensitivity}`,
       `   freshness: ${buildFreshnessSummary(node.freshnessStatus, node.driftReasonCodes, node.recommendedActions)}`,
+      `   validation: ${buildValidationSummary(
+        node.validationStatus,
+        node.validationReasonCodes,
+        node.validationEvidenceRefs,
+        node.validationRecommendedActions,
+      )}`,
       `   bindings=goals=${node.binding.goalCount}, episodes=${node.binding.episodeCount}, sessions=${node.binding.sessionCount}, relatedPaths=${node.binding.relatedPathCount}`,
     );
     if (node.predecessorNodeId) {
@@ -189,6 +205,15 @@ const formatDetail = (detail: ExplorerDetail): string => {
   ];
 
   lines.push("", ...buildFreshnessDetailLines(detail.freshnessStatus, detail.driftReasonCodes, detail.recommendedActions, detail.driftSourceRefs));
+  lines.push(
+    "",
+    ...buildValidationDetailLines(
+      detail.validationStatus,
+      detail.validationReasonCodes,
+      detail.validationEvidenceRefs,
+      detail.validationRecommendedActions,
+    ),
+  );
 
   if (detail.extra.length > 0) {
     lines.push("", "extra:");
@@ -196,6 +221,38 @@ const formatDetail = (detail: ExplorerDetail): string => {
   }
 
   return lines.join("\n");
+};
+
+const formatValidationPanel = (thread: ExplorerThreadView | null, detail: ExplorerDetail): string => {
+  if (!thread) {
+    return [
+      "No thread selected.",
+      "",
+      "Select a decision thread to inspect its validation posture and linked evidence.",
+    ].join("\n");
+  }
+
+  return [
+    `${buildValidationBadgeLabel(thread.validationStatus)} ${thread.title}`,
+    "",
+    buildValidationSummary(
+      thread.validationStatus,
+      thread.validationReasonCodes,
+      thread.validationEvidenceRefs,
+      thread.validationRecommendedActions,
+    ),
+    "",
+    `detail: ${buildValidationSummary(
+      detail.validationStatus,
+      detail.validationReasonCodes,
+      detail.validationEvidenceRefs,
+      detail.validationRecommendedActions,
+    )}`,
+    `evidence refs: ${thread.validationEvidenceRefs.length > 0 ? thread.validationEvidenceRefs.join(", ") : "none"}`,
+    `recommended actions: ${
+      thread.validationRecommendedActions.length > 0 ? thread.validationRecommendedActions.join(", ") : "none"
+    }`,
+  ].join("\n");
 };
 
 const buildIntentOptions = (
@@ -351,7 +408,7 @@ const renderModel = async (modelPath: string): Promise<void> => {
   });
   decisionPanel.add(decisionText);
 
-  const rightColumn = createPanel(renderer, "right-column", "Context", {
+  const rightColumn = createPanel(renderer, "right-column", "Context · Intent | Validation | Timeline", {
     width: "38%",
     flexDirection: "column",
     gap: 1,
@@ -370,7 +427,17 @@ const renderModel = async (modelPath: string): Promise<void> => {
   });
   intentPanel.add(intentSelect);
 
-  const eventPanel = createPanel(renderer, "event-panel", "Operational Timeline", {
+  const validationPanel = createPanel(renderer, "validation-panel", "Validation Panel", {
+    height: "26%",
+  });
+  const validationText = new TextRenderable(renderer, {
+    id: "validation-text",
+    width: "100%",
+    content: "",
+  });
+  validationPanel.add(validationText);
+
+  const eventPanel = createPanel(renderer, "event-panel", "Timeline", {
     height: "28%",
   });
   const eventSelect = new SelectRenderable(renderer, {
@@ -395,6 +462,7 @@ const renderModel = async (modelPath: string): Promise<void> => {
   detailPanel.add(detailText);
 
   rightColumn.add(intentPanel);
+  rightColumn.add(validationPanel);
   rightColumn.add(eventPanel);
   rightColumn.add(detailPanel);
 
@@ -490,6 +558,7 @@ const renderModel = async (modelPath: string): Promise<void> => {
 
     summaryText.content = formatSummary(model, state, view.selectedThread);
     decisionText.content = formatDecisionEvolution(view.selectedThread);
+    validationText.content = formatValidationPanel(view.selectedThread, view.detail);
     detailText.content = formatDetail(view.detail);
 
     summaryPanel.title = model.empty ? "Narrative Explorer · empty state" : "Narrative Explorer";
@@ -498,7 +567,8 @@ const renderModel = async (modelPath: string): Promise<void> => {
       ? `Decision Evolution · ${view.selectedThread.title}`
       : "Decision Evolution";
     intentPanel.title = `Intent Panel (${view.assignedIntentItems.length + view.unassignedIntentItems.length})`;
-    eventPanel.title = `Operational Timeline (${view.timelineEvents.length})`;
+    validationPanel.title = `Validation Panel (${view.selectedThread ? buildValidationBadgeLabel(view.selectedThread.validationStatus) : "[none]"})`;
+    eventPanel.title = `Timeline (${view.timelineEvents.length})`;
     detailPanel.title = `Detail · ${view.detail.kind}`;
 
     threadSelect.options = threadOptions;

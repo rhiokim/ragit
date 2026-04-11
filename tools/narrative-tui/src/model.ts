@@ -10,11 +10,18 @@ export type NarrativeProjectionMode = typeof NARRATIVE_PROJECTION_MODE;
 export type NarrativeTrustBadge = "durable-doc" | "reviewed-artifact" | "promoted-artifact" | "operational-event";
 export type NarrativeSensitivityBadge = "standard" | "redacted" | "restricted";
 export type NarrativeFreshnessStatus = "fresh" | "suspect" | "stale";
+export type NarrativeValidationStatus = "verified" | "attention" | "unverified";
 
 export interface NarrativeFreshnessCounts {
   fresh: number;
   suspect: number;
   stale: number;
+}
+
+export interface NarrativeValidationCounts {
+  verified: number;
+  attention: number;
+  unverified: number;
 }
 
 export interface NarrativeModel {
@@ -32,6 +39,7 @@ export interface NarrativeModel {
     timelineEvents: number;
     heuristicEdges: number;
     freshnessCounts: NarrativeFreshnessCounts;
+    validationCounts: NarrativeValidationCounts;
   };
   window: {
     revRange: string | null;
@@ -62,6 +70,10 @@ export interface NarrativeModel {
     driftReasonCodes: string[];
     recommendedActions: string[];
     driftSourceRefs: string[];
+    validationStatus: NarrativeValidationStatus | null;
+    validationReasonCodes: string[];
+    validationEvidenceRefs: string[];
+    validationRecommendedActions: string[];
     badges: {
       trust: "durable-doc";
       sensitivity: NarrativeSensitivityBadge;
@@ -93,6 +105,10 @@ export interface NarrativeModel {
     driftReasonCodes: string[];
     recommendedActions: string[];
     driftSourceRefs: string[];
+    validationStatus: NarrativeValidationStatus | null;
+    validationReasonCodes: string[];
+    validationEvidenceRefs: string[];
+    validationRecommendedActions: string[];
     badges: {
       trust: "durable-doc";
       sensitivity: NarrativeSensitivityBadge;
@@ -120,6 +136,10 @@ export interface NarrativeModel {
     driftReasonCodes: string[];
     recommendedActions: string[];
     driftSourceRefs: string[];
+    validationStatus: NarrativeValidationStatus | null;
+    validationReasonCodes: string[];
+    validationEvidenceRefs: string[];
+    validationRecommendedActions: string[];
     badges: {
       trust: "reviewed-artifact" | "promoted-artifact";
       sensitivity: NarrativeSensitivityBadge;
@@ -146,6 +166,10 @@ export interface NarrativeModel {
     driftReasonCodes: string[];
     recommendedActions: string[];
     driftSourceRefs: string[];
+    validationStatus: NarrativeValidationStatus | null;
+    validationReasonCodes: string[];
+    validationEvidenceRefs: string[];
+    validationRecommendedActions: string[];
     badges: {
       trust: "reviewed-artifact" | "promoted-artifact";
       sensitivity: NarrativeSensitivityBadge;
@@ -195,6 +219,10 @@ export interface ExplorerThreadView {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
   badges: NarrativeModel["threads"][number]["badges"];
   relationKinds: string[];
   searchText: string;
@@ -216,6 +244,10 @@ export interface ExplorerIntentView {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
   badges: NarrativeModel["intentItems"][number]["badges"];
   searchText: string;
 }
@@ -246,6 +278,10 @@ export interface ExplorerDetail {
   driftReasonCodes: string[];
   recommendedActions: string[];
   driftSourceRefs: string[];
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
   extra: string[];
 }
 
@@ -269,6 +305,12 @@ const emptyFreshnessCounts = (): NarrativeFreshnessCounts => ({
   stale: 0,
 });
 
+const emptyValidationCounts = (): NarrativeValidationCounts => ({
+  verified: 0,
+  attention: 0,
+  unverified: 0,
+});
+
 const emptyDriftOverlayFields = (): {
   freshnessStatus: NarrativeFreshnessStatus | null;
   driftReasonCodes: string[];
@@ -281,12 +323,33 @@ const emptyDriftOverlayFields = (): {
   driftSourceRefs: [],
 });
 
+const emptyValidationOverlayFields = (): {
+  validationStatus: NarrativeValidationStatus | null;
+  validationReasonCodes: string[];
+  validationEvidenceRefs: string[];
+  validationRecommendedActions: string[];
+} => ({
+  validationStatus: null,
+  validationReasonCodes: [],
+  validationEvidenceRefs: [],
+  validationRecommendedActions: [],
+});
+
 const coerceFreshnessCounts = (value: unknown): NarrativeFreshnessCounts => {
   if (!isPlainObject(value)) return emptyFreshnessCounts();
   return {
     fresh: typeof value.fresh === "number" && Number.isFinite(value.fresh) ? value.fresh : 0,
     suspect: typeof value.suspect === "number" && Number.isFinite(value.suspect) ? value.suspect : 0,
     stale: typeof value.stale === "number" && Number.isFinite(value.stale) ? value.stale : 0,
+  };
+};
+
+const coerceValidationCounts = (value: unknown): NarrativeValidationCounts => {
+  if (!isPlainObject(value)) return emptyValidationCounts();
+  return {
+    verified: typeof value.verified === "number" && Number.isFinite(value.verified) ? value.verified : 0,
+    attention: typeof value.attention === "number" && Number.isFinite(value.attention) ? value.attention : 0,
+    unverified: typeof value.unverified === "number" && Number.isFinite(value.unverified) ? value.unverified : 0,
   };
 };
 
@@ -309,9 +372,35 @@ const coerceDriftOverlayFields = (value: unknown): ReturnType<typeof emptyDriftO
   };
 };
 
+const coerceValidationOverlayFields = (value: unknown): ReturnType<typeof emptyValidationOverlayFields> => {
+  if (!isPlainObject(value)) return emptyValidationOverlayFields();
+  return {
+    validationStatus:
+      value.validationStatus === "verified" ||
+      value.validationStatus === "attention" ||
+      value.validationStatus === "unverified"
+        ? value.validationStatus
+        : null,
+    validationReasonCodes: Array.isArray(value.validationReasonCodes)
+      ? value.validationReasonCodes.filter((item): item is string => typeof item === "string")
+      : [],
+    validationEvidenceRefs: Array.isArray(value.validationEvidenceRefs)
+      ? value.validationEvidenceRefs.filter((item): item is string => typeof item === "string")
+      : [],
+    validationRecommendedActions: Array.isArray(value.validationRecommendedActions)
+      ? value.validationRecommendedActions.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+};
+
 const attachDriftOverlayDefaults = <T extends object>(value: T): T & ReturnType<typeof emptyDriftOverlayFields> => ({
   ...value,
   ...coerceDriftOverlayFields(value),
+});
+
+const attachValidationOverlayDefaults = <T extends object>(value: T): T & ReturnType<typeof emptyValidationOverlayFields> => ({
+  ...value,
+  ...coerceValidationOverlayFields(value),
 });
 
 const normalizeText = (value: string): string =>
@@ -368,18 +457,19 @@ const normalizeNarrativeModel = (value: unknown): NarrativeModel => {
       summary: {
         ...legacyValue.summary,
         freshnessCounts: coerceFreshnessCounts((legacyValue.summary as unknown as Record<string, unknown>).freshnessCounts),
+        validationCounts: coerceValidationCounts((legacyValue.summary as unknown as Record<string, unknown>).validationCounts),
       },
       threads: Array.isArray(legacyValue.threads)
-        ? (legacyValue.threads.map((thread) => attachDriftOverlayDefaults(thread)) as NarrativeDecisionThread[])
+        ? legacyValue.threads.map((thread) => attachValidationOverlayDefaults(attachDriftOverlayDefaults(thread)))
         : [],
       nodes: Array.isArray(legacyValue.nodes)
-        ? (legacyValue.nodes.map((node) => attachDriftOverlayDefaults(node)) as NarrativeDecisionNode[])
+        ? legacyValue.nodes.map((node) => attachValidationOverlayDefaults(attachDriftOverlayDefaults(node)))
         : [],
       intentItems: Array.isArray(legacyValue.intentItems)
-        ? (legacyValue.intentItems.map((item) => attachDriftOverlayDefaults(item)) as NarrativeIntentItem[])
+        ? legacyValue.intentItems.map((item) => attachValidationOverlayDefaults(attachDriftOverlayDefaults(item)))
         : [],
       unassignedIntentItems: Array.isArray(legacyValue.unassignedIntentItems)
-        ? (legacyValue.unassignedIntentItems.map((item) => attachDriftOverlayDefaults(item)) as NarrativeIntentItem[])
+        ? legacyValue.unassignedIntentItems.map((item) => attachValidationOverlayDefaults(attachDriftOverlayDefaults(item)))
         : [],
     };
   }
@@ -419,14 +509,21 @@ const normalizeNarrativeModel = (value: unknown): NarrativeModel => {
     projectionPolicyVersion,
     projectionMode,
     summary: {
-      ...(value.summary as NarrativeSummary),
+      ...(value.summary as NarrativeModel["summary"]),
       freshnessCounts: coerceFreshnessCounts((value.summary as unknown as Record<string, unknown>).freshnessCounts),
+      validationCounts: coerceValidationCounts((value.summary as unknown as Record<string, unknown>).validationCounts),
     },
-    threads: Array.isArray(value.threads) ? value.threads.map((thread) => attachDriftOverlayDefaults(thread)) : [],
-    nodes: Array.isArray(value.nodes) ? value.nodes.map((node) => attachDriftOverlayDefaults(node)) : [],
-    intentItems: Array.isArray(value.intentItems) ? value.intentItems.map((item) => attachDriftOverlayDefaults(item)) : [],
+    threads: Array.isArray(value.threads)
+      ? value.threads.map((thread) => attachValidationOverlayDefaults(attachDriftOverlayDefaults(thread)))
+      : [],
+    nodes: Array.isArray(value.nodes)
+      ? value.nodes.map((node) => attachValidationOverlayDefaults(attachDriftOverlayDefaults(node)))
+      : [],
+    intentItems: Array.isArray(value.intentItems)
+      ? value.intentItems.map((item) => attachValidationOverlayDefaults(attachDriftOverlayDefaults(item)))
+      : [],
     unassignedIntentItems: Array.isArray(value.unassignedIntentItems)
-      ? value.unassignedIntentItems.map((item) => attachDriftOverlayDefaults(item))
+      ? value.unassignedIntentItems.map((item) => attachValidationOverlayDefaults(attachDriftOverlayDefaults(item)))
       : [],
   };
 };
@@ -454,6 +551,10 @@ export const buildThreadViews = (model: NarrativeModel): ExplorerThreadView[] =>
       thread.driftReasonCodes.join(" "),
       thread.recommendedActions.join(" "),
       thread.driftSourceRefs.join(" "),
+      thread.validationStatus ?? "",
+      thread.validationReasonCodes.join(" "),
+      thread.validationEvidenceRefs.join(" "),
+      thread.validationRecommendedActions.join(" "),
       `goals ${thread.binding.goalCount}`,
       `episodes ${thread.binding.episodeCount}`,
       `sessions ${thread.binding.sessionCount}`,
@@ -474,6 +575,10 @@ export const buildThreadViews = (model: NarrativeModel): ExplorerThreadView[] =>
       driftReasonCodes: thread.driftReasonCodes,
       recommendedActions: thread.recommendedActions,
       driftSourceRefs: thread.driftSourceRefs,
+      validationStatus: thread.validationStatus,
+      validationReasonCodes: thread.validationReasonCodes,
+      validationEvidenceRefs: thread.validationEvidenceRefs,
+      validationRecommendedActions: thread.validationRecommendedActions,
       badges: thread.badges,
       relationKinds,
       searchText,
@@ -498,6 +603,10 @@ const buildIntentViews = (items: NarrativeModel["intentItems"] | NarrativeModel[
     driftReasonCodes: item.driftReasonCodes,
     recommendedActions: item.recommendedActions,
     driftSourceRefs: item.driftSourceRefs,
+    validationStatus: item.validationStatus,
+    validationReasonCodes: item.validationReasonCodes,
+    validationEvidenceRefs: item.validationEvidenceRefs,
+    validationRecommendedActions: item.validationRecommendedActions,
     badges: item.badges,
     searchText: [
       item.title,
@@ -510,6 +619,10 @@ const buildIntentViews = (items: NarrativeModel["intentItems"] | NarrativeModel[
       item.driftReasonCodes.join(" "),
       item.recommendedActions.join(" "),
       item.driftSourceRefs.join(" "),
+      item.validationStatus ?? "",
+      item.validationReasonCodes.join(" "),
+      item.validationEvidenceRefs.join(" "),
+      item.validationRecommendedActions.join(" "),
       `goals ${item.binding.goalCount}`,
       `episodes ${item.binding.episodeCount}`,
       `sessions ${item.binding.sessionCount}`,
@@ -573,6 +686,10 @@ const buildThreadDetail = (thread: ExplorerThreadView | null): ExplorerDetail =>
       driftReasonCodes: [],
       recommendedActions: [],
       driftSourceRefs: [],
+      validationStatus: null,
+      validationReasonCodes: [],
+      validationEvidenceRefs: [],
+      validationRecommendedActions: [],
       extra: [],
     };
   }
@@ -591,6 +708,10 @@ const buildThreadDetail = (thread: ExplorerThreadView | null): ExplorerDetail =>
     driftReasonCodes: thread.driftReasonCodes,
     recommendedActions: thread.recommendedActions,
     driftSourceRefs: thread.driftSourceRefs,
+    validationStatus: thread.validationStatus,
+    validationReasonCodes: thread.validationReasonCodes,
+    validationEvidenceRefs: thread.validationEvidenceRefs,
+    validationRecommendedActions: thread.validationRecommendedActions,
     extra: [
       `trust: ${thread.badges.trust}`,
       `sensitivity: ${thread.badges.sensitivity}`,
@@ -598,6 +719,10 @@ const buildThreadDetail = (thread: ExplorerThreadView | null): ExplorerDetail =>
       `reasons: ${thread.driftReasonCodes.length > 0 ? thread.driftReasonCodes.join(", ") : "none"}`,
       `actions: ${thread.recommendedActions.length > 0 ? thread.recommendedActions.join(", ") : "none"}`,
       `drift sources: ${thread.driftSourceRefs.length}`,
+      `validation: ${thread.validationStatus ?? "none"}`,
+      `validation reasons: ${thread.validationReasonCodes.length > 0 ? thread.validationReasonCodes.join(", ") : "none"}`,
+      `validation evidence: ${thread.validationEvidenceRefs.length > 0 ? thread.validationEvidenceRefs.join(", ") : "none"}`,
+      `validation actions: ${thread.validationRecommendedActions.length > 0 ? thread.validationRecommendedActions.join(", ") : "none"}`,
       `bindings: goals=${thread.binding.goalCount}, episodes=${thread.binding.episodeCount}, sessions=${thread.binding.sessionCount}, relatedPaths=${thread.binding.relatedPathCount}`,
     ],
   };
@@ -616,6 +741,10 @@ const buildItemDetail = (
   driftReasonCodes: string[],
   recommendedActions: string[],
   driftSourceRefs: string[],
+  validationStatus: NarrativeValidationStatus | null,
+  validationReasonCodes: string[],
+  validationEvidenceRefs: string[],
+  validationRecommendedActions: string[],
   extra: string[],
 ): ExplorerDetail => ({
   kind,
@@ -630,6 +759,10 @@ const buildItemDetail = (
   driftReasonCodes,
   recommendedActions,
   driftSourceRefs,
+  validationStatus,
+  validationReasonCodes,
+  validationEvidenceRefs,
+  validationRecommendedActions,
   extra,
 });
 
@@ -694,6 +827,14 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
         driftSourceRefs: selectedThread.driftSourceRefs,
       }
     : emptyDriftOverlayFields();
+  const selectedThreadValidationOverlay = selectedThread
+    ? {
+        validationStatus: selectedThread.validationStatus,
+        validationReasonCodes: selectedThread.validationReasonCodes,
+        validationEvidenceRefs: selectedThread.validationEvidenceRefs,
+        validationRecommendedActions: selectedThread.validationRecommendedActions,
+      }
+    : emptyValidationOverlayFields();
 
   const detail = selectedIntent
     ? buildItemDetail(
@@ -709,6 +850,10 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
         selectedIntent.driftReasonCodes,
         selectedIntent.recommendedActions,
         selectedIntent.driftSourceRefs,
+        selectedIntent.validationStatus,
+        selectedIntent.validationReasonCodes,
+        selectedIntent.validationEvidenceRefs,
+        selectedIntent.validationRecommendedActions,
         [
           `trust: ${selectedIntent.badges.trust}`,
           `sensitivity: ${selectedIntent.badges.sensitivity}`,
@@ -716,6 +861,10 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
           `reasons: ${selectedIntent.driftReasonCodes.length > 0 ? selectedIntent.driftReasonCodes.join(", ") : "none"}`,
           `actions: ${selectedIntent.recommendedActions.length > 0 ? selectedIntent.recommendedActions.join(", ") : "none"}`,
           `drift sources: ${selectedIntent.driftSourceRefs.length}`,
+          `validation: ${selectedIntent.validationStatus ?? "none"}`,
+          `validation reasons: ${selectedIntent.validationReasonCodes.length > 0 ? selectedIntent.validationReasonCodes.join(", ") : "none"}`,
+          `validation evidence: ${selectedIntent.validationEvidenceRefs.length > 0 ? selectedIntent.validationEvidenceRefs.join(", ") : "none"}`,
+          `validation actions: ${selectedIntent.validationRecommendedActions.length > 0 ? selectedIntent.validationRecommendedActions.join(", ") : "none"}`,
           `bindings: goals=${selectedIntent.binding.goalCount}, episodes=${selectedIntent.binding.episodeCount}, sessions=${selectedIntent.binding.sessionCount}, relatedPaths=${selectedIntent.binding.relatedPathCount}`,
           `linked threads: ${selectedIntent.threadIds.length}`,
         ],
@@ -734,6 +883,10 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
           selectedThreadOverlay.driftReasonCodes,
           selectedThreadOverlay.recommendedActions,
           selectedThreadOverlay.driftSourceRefs,
+          selectedThreadValidationOverlay.validationStatus,
+          selectedThreadValidationOverlay.validationReasonCodes,
+          selectedThreadValidationOverlay.validationEvidenceRefs,
+          selectedThreadValidationOverlay.validationRecommendedActions,
           [
             `trust: ${selectedEvent.badges.trust}`,
             `sensitivity: ${selectedEvent.badges.sensitivity}`,
@@ -741,6 +894,22 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
             `reasons: ${selectedThreadOverlay.driftReasonCodes.length > 0 ? selectedThreadOverlay.driftReasonCodes.join(", ") : "none"}`,
             `actions: ${selectedThreadOverlay.recommendedActions.length > 0 ? selectedThreadOverlay.recommendedActions.join(", ") : "none"}`,
             `drift sources: ${selectedThreadOverlay.driftSourceRefs.length}`,
+            `validation: ${selectedThreadValidationOverlay.validationStatus ?? "none"}`,
+            `validation reasons: ${
+              selectedThreadValidationOverlay.validationReasonCodes.length > 0
+                ? selectedThreadValidationOverlay.validationReasonCodes.join(", ")
+                : "none"
+            }`,
+            `validation evidence: ${
+              selectedThreadValidationOverlay.validationEvidenceRefs.length > 0
+                ? selectedThreadValidationOverlay.validationEvidenceRefs.join(", ")
+                : "none"
+            }`,
+            `validation actions: ${
+              selectedThreadValidationOverlay.validationRecommendedActions.length > 0
+                ? selectedThreadValidationOverlay.validationRecommendedActions.join(", ")
+                : "none"
+            }`,
             `bindings: goals=${selectedEvent.binding.goalCount}, episodes=${selectedEvent.binding.episodeCount}, sessions=${selectedEvent.binding.sessionCount}, relatedPaths=${selectedEvent.binding.relatedPathCount}`,
             `linked threads: ${selectedEvent.threadIds.length}`,
           ],
@@ -762,6 +931,10 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
             driftReasonCodes: [],
             recommendedActions: [],
             driftSourceRefs: [],
+            validationStatus: null,
+            validationReasonCodes: [],
+            validationEvidenceRefs: [],
+            validationRecommendedActions: [],
             extra: [],
           };
 
@@ -783,6 +956,12 @@ export const buildThreadOptionDescription = (thread: ExplorerThreadView, selecte
     thread.badges.sensitivity,
     thread.freshnessStatus ? `freshness:${thread.freshnessStatus}` : "freshness:none",
     thread.driftReasonCodes.length > 0 ? `reasons:${thread.driftReasonCodes.slice(0, 2).join(", ")}` : "reasons:none",
+    thread.validationStatus ? `validation:${thread.validationStatus}` : "validation:none",
+    thread.validationReasonCodes.length > 0 ? `v-reasons:${thread.validationReasonCodes.slice(0, 2).join(", ")}` : "v-reasons:none",
+    thread.validationEvidenceRefs.length > 0 ? `v-evidence:${thread.validationEvidenceRefs.slice(0, 2).join(", ")}` : "v-evidence:none",
+    thread.validationRecommendedActions.length > 0
+      ? `v-actions:${thread.validationRecommendedActions.slice(0, 2).join(", ")}`
+      : "v-actions:none",
     thread.relationKinds.length > 0 ? thread.relationKinds.join(" · ") : "root",
     `${thread.nodes.length} node(s)`,
     `${thread.snapshotShas.length} snapshot(s)`,
@@ -792,7 +971,7 @@ export const buildThreadOptionDescription = (thread: ExplorerThreadView, selecte
 };
 
 export const buildThreadOptionName = (thread: ExplorerThreadView, _selected: boolean): string =>
-  `${buildFreshnessBadgeLabel(thread.freshnessStatus)} ${thread.title}`;
+  `${buildFreshnessBadgeLabel(thread.freshnessStatus)} ${buildValidationBadgeLabel(thread.validationStatus)} ${thread.title}`;
 
 export const buildPlaceholderThreadOption = (): { name: string; description: string; value: string } => ({
   name: "No matching thread",
@@ -801,13 +980,19 @@ export const buildPlaceholderThreadOption = (): { name: string; description: str
 });
 
 export const buildIntentOptionName = (item: ExplorerIntentView, linked: boolean): string =>
-  `${buildFreshnessBadgeLabel(item.freshnessStatus)} ${linked ? "◆ " : ""}${item.title}`;
+  `${buildFreshnessBadgeLabel(item.freshnessStatus)} ${buildValidationBadgeLabel(item.validationStatus)} ${linked ? "◆ " : ""}${item.title}`;
 
 export const buildIntentOptionDescription = (item: ExplorerIntentView, linked: boolean): string =>
   `${item.kind} · ${item.status} · ${item.badges.trust} · ${item.badges.sensitivity} · ${
     item.freshnessStatus ? `freshness:${item.freshnessStatus}` : "freshness:none"
   }${linked ? " · linked" : ""} · ${
     item.driftReasonCodes.length > 0 ? `reasons:${item.driftReasonCodes.slice(0, 2).join(", ")}` : "reasons:none"
+  } · ${item.validationStatus ? `validation:${item.validationStatus}` : "validation:none"} · ${
+    item.validationReasonCodes.length > 0 ? `v-reasons:${item.validationReasonCodes.slice(0, 2).join(", ")}` : "v-reasons:none"
+  } · ${item.validationEvidenceRefs.length > 0 ? `v-evidence:${item.validationEvidenceRefs.slice(0, 2).join(", ")}` : "v-evidence:none"} · ${
+    item.validationRecommendedActions.length > 0
+      ? `v-actions:${item.validationRecommendedActions.slice(0, 2).join(", ")}`
+      : "v-actions:none"
   } · ${item.summary}`;
 
 export const buildEventOptionName = (item: ExplorerEventView, linked: boolean): string =>
@@ -847,4 +1032,32 @@ export const buildFreshnessDetailLines = (
   `Reasons: ${summarizeList(reasonCodes, 3)}`,
   `Recommended Actions: ${summarizeList(recommendedActions, 3)}`,
   `Drift Sources: ${driftSourceRefs.length}`,
+];
+
+export const buildValidationBadgeLabel = (status: NarrativeValidationStatus | null): string =>
+  status ? `[${status}]` : "[none]";
+
+export const buildValidationSummary = (
+  status: NarrativeValidationStatus | null,
+  reasonCodes: string[],
+  evidenceRefs: string[],
+  recommendedActions: string[],
+): string => {
+  const parts = [`validation: ${status ?? "none"}`];
+  parts.push(`reasons: ${summarizeList(reasonCodes)}`);
+  parts.push(`evidence: ${summarizeList(evidenceRefs)}`);
+  parts.push(`actions: ${summarizeList(recommendedActions)}`);
+  return parts.join(" · ");
+};
+
+export const buildValidationDetailLines = (
+  status: NarrativeValidationStatus | null,
+  reasonCodes: string[],
+  evidenceRefs: string[],
+  recommendedActions: string[],
+): string[] => [
+  `Validation: ${status ?? "none"}`,
+  `Reasons: ${summarizeList(reasonCodes, 3)}`,
+  `Evidence: ${summarizeList(evidenceRefs, 3)}`,
+  `Recommended Actions: ${summarizeList(recommendedActions, 3)}`,
 ];

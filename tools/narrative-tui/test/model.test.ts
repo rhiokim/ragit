@@ -5,6 +5,8 @@ import path from "node:path";
 import {
   buildExplorerView,
   buildIntentOptionDescription,
+  buildValidationBadgeLabel,
+  buildValidationSummary,
   buildThreadOptionDescription,
   buildThreadViews,
   isEventLinkedToThread,
@@ -34,6 +36,11 @@ describe("narrative-tui model explorer", () => {
       suspect: 4,
       stale: 2,
     });
+    expect(model.summary.validationCounts).toEqual({
+      verified: 5,
+      attention: 3,
+      unverified: 2,
+    });
   });
 
   it("builds a default view with the first visible thread selected", async () => {
@@ -53,8 +60,17 @@ describe("narrative-tui model explorer", () => {
     expect(view.selectedThread?.threadId).toBe("thread_1");
     expect(view.detail.kind).toBe("thread");
     expect(view.selectedThread?.freshnessStatus).toBe("suspect");
+    expect(view.selectedThread?.validationStatus).toBe("attention");
     expect(buildThreadOptionDescription(view.selectedThread!, true)).toContain("freshness:suspect");
+    expect(buildThreadOptionDescription(view.selectedThread!, true)).toContain("validation:attention");
+    expect(buildValidationSummary(
+      view.selectedThread!.validationStatus,
+      view.selectedThread!.validationReasonCodes,
+      view.selectedThread!.validationEvidenceRefs,
+      view.selectedThread!.validationRecommendedActions,
+    )).toContain("validation: attention");
     expect(view.detail.extra.join("\n")).toContain("freshness: suspect");
+    expect(view.detail.extra.join("\n")).toContain("validation: attention");
     expect(view.detail.extra.join("\n")).not.toContain("nodeIds:");
     expect(view.detail.extra.join("\n")).not.toContain("threadIds:");
   });
@@ -89,8 +105,12 @@ describe("narrative-tui model explorer", () => {
     expect(intentView.detail.kind).toBe("intent");
     expect(intentView.detail.title).toContain("Viewer must read sanitized JSON only");
     expect(intentView.detail.freshnessStatus).toBe("suspect");
+    expect(intentView.detail.validationStatus).toBe("attention");
     expect(buildIntentOptionDescription(intentView.assignedIntentItems[0]!, true)).toContain("freshness:fresh");
+    expect(buildIntentOptionDescription(intentView.assignedIntentItems[0]!, true)).toContain("validation:verified");
+    expect(buildValidationBadgeLabel(intentView.detail.validationStatus)).toBe("[attention]");
     expect(intentView.detail.extra.join("\n")).toContain("freshness: suspect");
+    expect(intentView.detail.extra.join("\n")).toContain("validation: attention");
 
     const eventState: ExplorerState = {
       query: "",
@@ -165,6 +185,11 @@ describe("narrative-tui model explorer", () => {
       fresh: 0,
       suspect: 0,
       stale: 0,
+    });
+    expect(legacy.summary.validationCounts).toEqual({
+      verified: 0,
+      attention: 0,
+      unverified: 0,
     });
   });
 

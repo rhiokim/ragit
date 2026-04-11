@@ -22,6 +22,11 @@
       "fresh": 4,
       "suspect": 4,
       "stale": 2
+    },
+    "validationCounts": {
+      "verified": 5,
+      "attention": 3,
+      "unverified": 2
     }
   },
   "snapshots": [
@@ -51,6 +56,10 @@
       "driftReasonCodes": ["tracked_path_changed"],
       "recommendedActions": ["doc refresh"],
       "driftSourceRefs": ["docs/adr/001-narrative-report.md"],
+      "validationStatus": "attention",
+      "validationReasonCodes": ["dependency_stale"],
+      "validationEvidenceRefs": ["tools/narrative-tui/src/index.ts", "tools/narrative-tui/fixtures/sample-model.json"],
+      "validationRecommendedActions": ["harness verify"],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineageKinds": ["root", "path-continuity", "heuristic-high"] }
     },
     {
@@ -65,6 +74,10 @@
       "driftReasonCodes": [],
       "recommendedActions": [],
       "driftSourceRefs": [],
+      "validationStatus": "verified",
+      "validationReasonCodes": [],
+      "validationEvidenceRefs": ["tools/narrative-tui/src/model.ts"],
+      "validationRecommendedActions": [],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineageKinds": ["explicit"] }
     }
   ],
@@ -94,6 +107,10 @@
       "driftReasonCodes": [],
       "recommendedActions": [],
       "driftSourceRefs": [],
+      "validationStatus": "verified",
+      "validationReasonCodes": [],
+      "validationEvidenceRefs": ["src/core/narrative.ts"],
+      "validationRecommendedActions": [],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "root" }
     },
     {
@@ -121,6 +138,10 @@
       "driftReasonCodes": ["source_head_behind"],
       "recommendedActions": ["doc refresh"],
       "driftSourceRefs": ["src/core/narrative-model.ts"],
+      "validationStatus": "attention",
+      "validationReasonCodes": ["related_path_changed"],
+      "validationEvidenceRefs": ["src/core/narrative-model.ts", "src/core/security.ts"],
+      "validationRecommendedActions": ["artifact review"],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "path-continuity" }
     },
     {
@@ -148,6 +169,10 @@
       "driftReasonCodes": ["tracked_path_changed", "dependency_stale"],
       "recommendedActions": ["ingest", "harness verify"],
       "driftSourceRefs": ["tools/narrative-tui/package.json"],
+      "validationStatus": "unverified",
+      "validationReasonCodes": ["dependency_stale"],
+      "validationEvidenceRefs": ["tools/narrative-tui/package.json"],
+      "validationRecommendedActions": ["harness verify"],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "heuristic-high" }
     },
     {
@@ -175,6 +200,10 @@
       "driftReasonCodes": [],
       "recommendedActions": [],
       "driftSourceRefs": [],
+      "validationStatus": "verified",
+      "validationReasonCodes": [],
+      "validationEvidenceRefs": ["docs/adr/001-narrative-report.md"],
+      "validationRecommendedActions": [],
       "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "explicit" }
     }
   ],
@@ -198,6 +227,10 @@
       "driftReasonCodes": [],
       "recommendedActions": [],
       "driftSourceRefs": [],
+      "validationStatus": "verified",
+      "validationReasonCodes": [],
+      "validationEvidenceRefs": ["docs/adr/001-narrative-report.md"],
+      "validationRecommendedActions": [],
       "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     },
     {
@@ -219,6 +252,10 @@
       "driftReasonCodes": ["related_path_changed"],
       "recommendedActions": ["artifact review"],
       "driftSourceRefs": ["tools/narrative-tui/src/index.ts"],
+      "validationStatus": "attention",
+      "validationReasonCodes": ["dependency_stale"],
+      "validationEvidenceRefs": ["tools/narrative-tui/src/index.ts", "tools/narrative-tui/src/model.ts"],
+      "validationRecommendedActions": ["harness verify"],
       "badges": { "trust": "promoted-artifact", "sensitivity": "restricted" }
     },
     {
@@ -240,6 +277,10 @@
       "driftReasonCodes": ["failure_evidence_present", "dependency_stale"],
       "recommendedActions": ["harness verify", "doc refresh"],
       "driftSourceRefs": ["pnpm-workspace.yaml", "tools/narrative-tui/package.json"],
+      "validationStatus": "unverified",
+      "validationReasonCodes": ["failure_evidence_present"],
+      "validationEvidenceRefs": ["pnpm-workspace.yaml", "tools/narrative-tui/package.json"],
+      "validationRecommendedActions": ["harness run"],
       "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     }
   ],
@@ -263,6 +304,10 @@
       "driftReasonCodes": ["missing_binding"],
       "recommendedActions": ["artifact review"],
       "driftSourceRefs": ["src/cli.ts"],
+      "validationStatus": "verified",
+      "validationReasonCodes": [],
+      "validationEvidenceRefs": ["src/cli.ts"],
+      "validationRecommendedActions": [],
       "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     }
   ],
