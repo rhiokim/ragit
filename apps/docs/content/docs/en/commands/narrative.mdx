@@ -6,7 +6,7 @@ command_path: narrative
 
 ## What It Does
 
-`narrative` reads selected snapshot history, commit-bound documents, artifact records, and event data, then writes a self-contained HTML narrative report. The report is designed for a new contributor or agent that needs to understand the project's intent, decisions, and timeline without replaying the entire collaboration history.
+`narrative` reads selected snapshot history, commit-bound documents, artifact records, and event data, then writes a self-contained HTML narrative report. The report is designed for a new contributor or agent that needs to understand the project's intent, decisions, and timeline without replaying the entire collaboration history. The HTML file remains the canonical export. An optional sanitized JSON model can be emitted for the separate experimental OpenTUI viewer.
 
 ## When To Use / When Not To Use
 
@@ -26,7 +26,7 @@ command_path: narrative
 ## Syntax
 
 ```bash
-pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--open] [--dry-run] [--format text|json|both] [--cwd <path>]
+pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-model <path>] [--open] [--dry-run] [--format text|json|both] [--cwd <path>]
 ```
 
 ## Arguments And Options
@@ -34,6 +34,7 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--open] [
 - `[revRange]`: Optional git revision range to scan. If omitted, `HEAD` is used.
 - `--max-commits <n>`: Limit the number of selected snapshot commits. The default is `10`.
 - `--output <path>`: Write the HTML report to a specific path instead of the default `.ragit/reports/narrative/<anchorSha>.html`.
+- `--emit-model <path>`: Write the sanitized narrative JSON model for a separate viewer. This is intended for the isolated experimental OpenTUI explorer under `tools/narrative-tui/`.
 - `--open`: Open the generated report in the default browser after writing it.
 - `--dry-run`: Compute the report plan and summary without writing files.
 - `--format text|json|both`: Choose human text, JSON, or both.
@@ -42,11 +43,18 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--open] [
 ## Input And Output Contract
 
 - There is no JSON payload input.
-- JSON output includes `dryRun`, `reportPath`, `headSha`, `window`, `summary`, and `warnings`.
+- JSON output includes `dryRun`, `reportPath`, `modelPath`, `headSha`, `window`, `summary`, and `warnings`.
 - `window` includes `revRange`, `maxCommits`, `selectedSnapshotShas`, and `missingSnapshotCommits`.
-- `--dry-run` still returns the planned report path and summary.
+- `--dry-run` still returns the planned report path, planned model path, and summary.
 - `--open` is ignored during dry-run and reported as a warning.
 - If no manifest-backed snapshots are found, `narrative` still generates an empty-state report.
+
+## Canonical HTML vs Experimental Viewer
+
+- The self-contained HTML report is the canonical narrative artifact.
+- `--emit-model` exists only to support a separate local OpenTUI explorer.
+- The viewer is intentionally isolated under `tools/narrative-tui/` and does not read `.ragit` or git state directly.
+- If you only need a shareable report, generate HTML and stop there.
 
 ## Examples
 
@@ -68,9 +76,18 @@ Preview the report plan as JSON:
 pnpm ragit narrative --dry-run --format json
 ```
 
+Generate HTML plus a sanitized model, then open the experimental local explorer:
+
+```bash
+pnpm ragit narrative --emit-model .ragit/reports/narrative/current.model.json
+cd tools/narrative-tui
+bun run start -- --model ../../.ragit/reports/narrative/current.model.json
+```
+
 ## Failures And Cautions
 
 - `--output` writes a file, so make sure the parent directory is writable.
+- `--emit-model` also writes a file and should be treated as viewer input, not as a replacement for the canonical HTML report.
 - The report is derived from snapshot-backed knowledge, not from raw transcripts.
 - `--open` is best-effort and may be skipped if no opener exists on the current machine.
 - When no snapshot manifests exist in the selected window, the command still succeeds with an empty-state report.

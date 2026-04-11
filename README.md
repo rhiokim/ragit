@@ -224,6 +224,7 @@ pnpm ragit init --yes --output json
 pnpm ragit init --yes --git-init
 pnpm ragit log --max-count 5 --view default --format both
 pnpm ragit narrative --format both
+pnpm ragit narrative --emit-model .ragit/reports/narrative/current.model.json
 pnpm ragit drift --scope all --view default --format both
 pnpm ragit repair --scope all --format json
 pnpm ragit security audit --format json
@@ -240,6 +241,14 @@ pnpm ragit migrate from-json-store --dry-run
 pnpm ragit migrate from-sqlitevss --dry-run
 pnpm ragit status --format json
 pnpm ragit doctor --format json
+```
+
+`ragit narrative` continues to generate the canonical self-contained HTML report. If you also want the experimental local OpenTUI explorer, export a sanitized model and open it separately:
+
+```bash
+pnpm ragit narrative --emit-model .ragit/reports/narrative/current.model.json
+cd tools/narrative-tui
+bun run start -- --model ../../.ragit/reports/narrative/current.model.json
 ```
 
 ## How Ingest Works
