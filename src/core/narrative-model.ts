@@ -13,6 +13,7 @@ import {
   RagitEventType,
   SnapshotManifest,
 } from "./types.js";
+import { RAGIT_VERSION } from "./version.js";
 
 const DECISION_DOC_TYPES = new Set<DocType>(["adr", "plan", "spec", "pbd"]);
 const INTENT_KINDS = new Set<ArtifactRecord["kind"]>(["feedback", "constraint", "insight", "openLoop", "failure"]);
@@ -27,6 +28,9 @@ const TIMELINE_EVENT_TYPES = new Set<RagitEventType>([
   "security.admission",
   "ingest.completed",
 ]);
+
+export const NARRATIVE_MODEL_SCHEMA_VERSION = 1;
+export const NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION = "legacy-unversioned";
 
 export interface NarrativeOptions {
   revRange?: string;
@@ -140,6 +144,8 @@ export interface NarrativeEventItem {
 }
 
 export interface NarrativeViewModel {
+  schemaVersion: number;
+  producerVersion: string;
   repoName: string;
   headSha: string;
   generatedAt: string;
@@ -158,6 +164,12 @@ export interface NarrativeViewModel {
   timelineEvents: NarrativeEventItem[];
   warnings: string[];
   empty: boolean;
+}
+
+export interface NarrativeViewModelNormalizationResult {
+  value: NarrativeViewModel | null;
+  compatibility: "versioned" | "legacy-unversioned" | "invalid";
+  warnings: string[];
 }
 
 export interface NarrativeBuildResult {
@@ -189,6 +201,57 @@ const arraysIntersect = (left: string[], right: string[]): boolean => {
 };
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const hasNarrativeViewModelCoreShape = (value: Record<string, unknown>): boolean =>
+  typeof value.repoName === "string" &&
+  typeof value.headSha === "string" &&
+  typeof value.generatedAt === "string" &&
+  isPlainObject(value.window) &&
+  isPlainObject(value.summary) &&
+  Array.isArray(value.snapshots) &&
+  Array.isArray(value.threads) &&
+  Array.isArray(value.nodes) &&
+  Array.isArray(value.intentItems) &&
+  Array.isArray(value.unassignedIntentItems) &&
+  Array.isArray(value.timelineEvents) &&
+  Array.isArray(value.warnings) &&
+  typeof value.empty === "boolean";
+
+export const normalizeNarrativeViewModel = (
+  value: unknown,
+): NarrativeViewModelNormalizationResult => {
+  if (!isPlainObject(value) || !hasNarrativeViewModelCoreShape(value)) {
+    return {
+      value: null,
+      compatibility: "invalid",
+      warnings: ["narrative model payload shape is invalid"],
+    };
+  }
+
+  if (typeof value.schemaVersion !== "number" || !Number.isInteger(value.schemaVersion)) {
+    return {
+      value: {
+        schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
+        producerVersion: NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
+        ...(value as Omit<NarrativeViewModel, "schemaVersion" | "producerVersion">),
+      },
+      compatibility: "legacy-unversioned",
+      warnings: ["narrative model payload had no schemaVersion and was coerced as legacy-unversioned"],
+    };
+  }
+
+  return {
+    value: {
+      ...((value as unknown) as NarrativeViewModel),
+      producerVersion:
+        typeof value.producerVersion === "string" && value.producerVersion.trim().length > 0
+          ? value.producerVersion
+          : "unknown",
+    },
+    compatibility: "versioned",
+    warnings: [],
+  };
+};
 
 const documentTitle = (doc: DocumentRecord): string => {
   const firstSection = doc.sections[0];
@@ -737,6 +800,8 @@ export const buildNarrativeViewModel = async (
     warnings.push("selected window에 snapshot manifest가 없어 empty-state report를 생성합니다.");
   }
   const rawViewModel: NarrativeViewModel = {
+    schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
+    producerVersion: RAGIT_VERSION,
     repoName: path.basename(cwd),
     headSha,
     generatedAt: new Date().toISOString(),

@@ -8,6 +8,8 @@ import { reviewArtifacts, sessionMaterialize } from "../src/core/artifacts.js";
 import { runIngest } from "../src/core/ingest.js";
 import { runMemoryWrap } from "../src/core/memory.js";
 import { runNarrativeReport } from "../src/core/narrative.js";
+import { NARRATIVE_MODEL_SCHEMA_VERSION } from "../src/core/narrative-model.js";
+import { RAGIT_VERSION } from "../src/core/version.js";
 
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
@@ -143,6 +145,8 @@ Ship the recovery changes in two deliberate phases.
       const reportPath = path.join(temp, result.reportPath);
       const html = await readFile(reportPath, "utf8");
       const modelJson = JSON.parse(await readFile(path.join(temp, result.modelPath as string), "utf8"));
+      expect(modelJson.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
+      expect(modelJson.producerVersion).toBe(RAGIT_VERSION);
       expect(html).toContain('id="report-summary"');
       expect(html).toContain('id="decision-evolution"');
       expect(html).toContain('id="intent-panel"');

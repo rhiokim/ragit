@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 import { runInit } from "../src/commands/init.js";
 import { reviewArtifacts, sessionMaterialize } from "../src/core/artifacts.js";
 import { runIngest } from "../src/core/ingest.js";
-import { buildNarrativeViewModel } from "../src/core/narrative-model.js";
+import {
+  buildNarrativeViewModel,
+  NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
+  NARRATIVE_MODEL_SCHEMA_VERSION,
+  normalizeNarrativeViewModel,
+} from "../src/core/narrative-model.js";
+import { RAGIT_VERSION } from "../src/core/version.js";
 
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
@@ -78,6 +84,8 @@ Keep report synthesis separate from viewer rendering.
       expect(built.result.reportPath).toMatch(/\.ragit\/reports\/narrative\/.+\.html$/);
       expect(built.viewModel.summary).toEqual(built.result.summary);
       expect(built.viewModel.window).toEqual(built.result.window);
+      expect(built.viewModel.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
+      expect(built.viewModel.producerVersion).toBe(RAGIT_VERSION);
       expect(built.viewModel.snapshots).toHaveLength(1);
       expect(built.viewModel.threads.length).toBeGreaterThan(0);
       expect(built.viewModel.intentItems.length).toBeGreaterThan(0);
@@ -88,4 +96,40 @@ Keep report synthesis separate from viewer rendering.
     },
     20_000,
   );
+
+  it("coerces a legacy unversioned narrative model into the current schema version", async () => {
+    const legacyPayload: Record<string, unknown> = {
+      repoName: "ragit",
+      headSha: "abc1234",
+      generatedAt: "2026-04-12T00:00:00.000Z",
+      window: {
+        revRange: "HEAD",
+        maxCommits: 10,
+        selectedSnapshotShas: ["abc1234"],
+        missingSnapshotCommits: 0,
+      },
+      summary: {
+        decisionThreads: 1,
+        decisionNodes: 1,
+        intentItems: 1,
+        timelineEvents: 1,
+        heuristicEdges: 0,
+      },
+      snapshots: [],
+      threads: [],
+      nodes: [],
+      intentItems: [],
+      unassignedIntentItems: [],
+      timelineEvents: [],
+      warnings: [],
+      empty: true,
+    };
+
+    const normalized = normalizeNarrativeViewModel(legacyPayload);
+
+    expect(normalized.compatibility).toBe("legacy-unversioned");
+    expect(normalized.value?.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
+    expect(normalized.value?.producerVersion).toBe(NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION);
+    expect(normalized.warnings[0]).toContain("legacy-unversioned");
+  });
 });
