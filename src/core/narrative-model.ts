@@ -37,6 +37,13 @@ export const NARRATIVE_PROJECTION_MODE = "viewer-safe";
 export type NarrativeProjectionMode = typeof NARRATIVE_PROJECTION_MODE;
 export type NarrativeTrustBadge = "durable-doc" | "reviewed-artifact" | "promoted-artifact" | "operational-event";
 export type NarrativeSensitivityBadge = "standard" | "redacted" | "restricted";
+export type NarrativeFreshnessStatus = "fresh" | "suspect" | "stale";
+
+export interface NarrativeFreshnessCounts {
+  fresh: number;
+  suspect: number;
+  stale: number;
+}
 
 export interface NarrativeOptions {
   revRange?: string;
@@ -59,6 +66,7 @@ export interface NarrativeSummary {
   intentItems: number;
   timelineEvents: number;
   heuristicEdges: number;
+  freshnessCounts: NarrativeFreshnessCounts;
 }
 
 export interface NarrativeResult {
@@ -106,6 +114,10 @@ interface NarrativeSynthesisDecisionNode extends RawNarrativeDecisionNode {
   predecessorNodeId: string | null;
   relationKind: NarrativeRelationKind;
   confidence: number;
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
 }
 
 interface NarrativeSynthesisDecisionThread {
@@ -118,6 +130,10 @@ interface NarrativeSynthesisDecisionThread {
   sessionIds: string[];
   snapshotShas: string[];
   nodeIds: string[];
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
 }
 
 interface NarrativeSynthesisIntentItem {
@@ -134,6 +150,10 @@ interface NarrativeSynthesisIntentItem {
   relatedPaths: string[];
   createdAt: string;
   threadIds: string[];
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
 }
 
 interface NarrativeSynthesisEventItem {
@@ -171,6 +191,10 @@ export interface NarrativeDecisionThread {
   snapshotShas: string[];
   nodeIds: string[];
   binding: NarrativeBindingSummary;
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
   badges: {
     trust: "durable-doc";
     sensitivity: NarrativeSensitivityBadge;
@@ -194,6 +218,10 @@ export interface NarrativeDecisionNode {
   relationKind: NarrativeRelationKind;
   confidence: number;
   binding: NarrativeBindingSummary;
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
   badges: {
     trust: "durable-doc";
     sensitivity: NarrativeSensitivityBadge;
@@ -213,6 +241,10 @@ export interface NarrativeIntentItem {
   createdAt: string;
   threadIds: string[];
   binding: NarrativeBindingSummary;
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
   badges: {
     trust: "reviewed-artifact" | "promoted-artifact";
     sensitivity: NarrativeSensitivityBadge;
@@ -306,6 +338,64 @@ const arraysIntersect = (left: string[], right: string[]): boolean => {
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
+const emptyFreshnessCounts = (): NarrativeFreshnessCounts => ({
+  fresh: 0,
+  suspect: 0,
+  stale: 0,
+});
+
+const emptyDriftOverlayFields = (): {
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
+} => ({
+  freshnessStatus: null,
+  driftReasonCodes: [],
+  recommendedActions: [],
+  driftSourceRefs: [],
+});
+
+const coerceFreshnessCounts = (value: unknown): NarrativeFreshnessCounts => {
+  if (!isPlainObject(value)) return emptyFreshnessCounts();
+  return {
+    fresh: typeof value.fresh === "number" && Number.isFinite(value.fresh) ? value.fresh : 0,
+    suspect: typeof value.suspect === "number" && Number.isFinite(value.suspect) ? value.suspect : 0,
+    stale: typeof value.stale === "number" && Number.isFinite(value.stale) ? value.stale : 0,
+  };
+};
+
+const coerceDriftOverlayFields = (
+  value: unknown,
+): {
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
+} => {
+  if (!isPlainObject(value)) return emptyDriftOverlayFields();
+  return {
+    freshnessStatus:
+      value.freshnessStatus === "fresh" || value.freshnessStatus === "suspect" || value.freshnessStatus === "stale"
+        ? value.freshnessStatus
+        : null,
+    driftReasonCodes: Array.isArray(value.driftReasonCodes)
+      ? value.driftReasonCodes.filter((item): item is string => typeof item === "string")
+      : [],
+    recommendedActions: Array.isArray(value.recommendedActions)
+      ? value.recommendedActions.filter((item): item is string => typeof item === "string")
+      : [],
+    driftSourceRefs: Array.isArray(value.driftSourceRefs)
+      ? value.driftSourceRefs.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+};
+
+const attachNarrativeDriftDefaults = <T extends object>(value: T): T & ReturnType<typeof emptyDriftOverlayFields> => ({
+  ...value,
+  ...coerceDriftOverlayFields(value),
+});
+
 const hasNarrativeViewModelCoreShape = (value: Record<string, unknown>): boolean =>
   typeof value.repoName === "string" &&
   typeof value.headSha === "string" &&
@@ -333,16 +423,34 @@ export const normalizeNarrativeViewModel = (
   }
 
   if (typeof value.schemaVersion !== "number" || !Number.isInteger(value.schemaVersion)) {
+    const legacyValue = value as Omit<
+      NarrativeViewModel,
+      "schemaVersion" | "producerVersion" | "projectionPolicyVersion" | "projectionMode"
+    >;
     return {
       value: {
         schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
         producerVersion: NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
         projectionPolicyVersion: NARRATIVE_PROJECTION_POLICY_VERSION,
         projectionMode: NARRATIVE_PROJECTION_MODE,
-        ...(value as Omit<
-          NarrativeViewModel,
-          "schemaVersion" | "producerVersion" | "projectionPolicyVersion" | "projectionMode"
-        >),
+        ...legacyValue,
+        summary: {
+          ...legacyValue.summary,
+          freshnessCounts: coerceFreshnessCounts((legacyValue.summary as unknown as Record<string, unknown>).freshnessCounts),
+        },
+        threads: Array.isArray(legacyValue.threads)
+          ? (legacyValue.threads.map((thread) => attachNarrativeDriftDefaults(thread)) as NarrativeDecisionThread[])
+          : [],
+        nodes: Array.isArray(legacyValue.nodes)
+          ? (legacyValue.nodes.map((node) => attachNarrativeDriftDefaults(node)) as NarrativeDecisionNode[])
+          : [],
+        intentItems: Array.isArray(legacyValue.intentItems)
+          ? (legacyValue.intentItems.map((item) => attachNarrativeDriftDefaults(item)) as NarrativeIntentItem[])
+          : [],
+        unassignedIntentItems: Array.isArray(legacyValue.unassignedIntentItems)
+          ? (legacyValue.unassignedIntentItems.map((item) => attachNarrativeDriftDefaults(item)) as NarrativeIntentItem[])
+          : [],
+        timelineEvents: Array.isArray(legacyValue.timelineEvents) ? legacyValue.timelineEvents : [],
       },
       compatibility: "legacy-unversioned",
       warnings: ["narrative model payload had no schemaVersion and was coerced as legacy-unversioned"],
@@ -369,6 +477,19 @@ export const normalizeNarrativeViewModel = (
           ? value.projectionPolicyVersion
           : NARRATIVE_PROJECTION_POLICY_VERSION,
       projectionMode: value.projectionMode === NARRATIVE_PROJECTION_MODE ? value.projectionMode : NARRATIVE_PROJECTION_MODE,
+      summary: {
+        ...(value.summary as NarrativeSummary),
+        freshnessCounts: coerceFreshnessCounts((value.summary as unknown as Record<string, unknown>).freshnessCounts),
+      },
+      threads: Array.isArray(value.threads) ? value.threads.map((thread) => attachNarrativeDriftDefaults(thread)) : [],
+      nodes: Array.isArray(value.nodes) ? value.nodes.map((node) => attachNarrativeDriftDefaults(node)) : [],
+      intentItems: Array.isArray(value.intentItems)
+        ? value.intentItems.map((item) => attachNarrativeDriftDefaults(item))
+        : [],
+      unassignedIntentItems: Array.isArray(value.unassignedIntentItems)
+        ? value.unassignedIntentItems.map((item) => attachNarrativeDriftDefaults(item))
+        : [],
+      timelineEvents: Array.isArray(value.timelineEvents) ? value.timelineEvents : [],
     },
     compatibility: "versioned",
     warnings,
@@ -575,6 +696,7 @@ const collectCandidateIntentItems = async (
       relatedPaths: artifact.relatedPaths.map(normalizeRepoPath),
       createdAt: artifact.createdAt,
       threadIds: [],
+      ...emptyDriftOverlayFields(),
     }));
 };
 
@@ -697,6 +819,7 @@ const assignNarrativeThreads = async (
       predecessorNodeId: predecessor?.nodeId ?? null,
       relationKind,
       confidence: relationConfidence(relationKind),
+      ...emptyDriftOverlayFields(),
     });
   }
 
@@ -727,6 +850,7 @@ const buildThreads = (nodes: NarrativeSynthesisDecisionNode[]): NarrativeSynthes
         sessionIds: uniqueStrings(orderedNodes.map((node) => node.sourceSessionId)),
         snapshotShas: uniqueStrings(orderedNodes.map((node) => node.commitSha)),
         nodeIds: orderedNodes.map((node) => node.nodeId),
+        ...emptyDriftOverlayFields(),
       };
     })
     .sort((left, right) => left.title.localeCompare(right.title));
@@ -751,6 +875,7 @@ const attachIntentItems = (
     return {
       ...item,
       threadIds: matched.map((thread) => thread.threadId),
+      ...emptyDriftOverlayFields(),
     };
   });
   return {
@@ -904,6 +1029,7 @@ const toSummary = (
   intentItems: intentItems.length,
   timelineEvents: timelineEvents.length,
   heuristicEdges: nodes.filter((node) => node.relationKind === "heuristic-high" || node.relationKind === "heuristic-medium").length,
+  freshnessCounts: emptyFreshnessCounts(),
 });
 
 const toBindingSummary = (input: {
@@ -951,6 +1077,7 @@ const projectDecisionNodeForViewerSafe = (node: NarrativeSynthesisDecisionNode):
   return {
     ...(sanitized.value as typeof projected),
     binding,
+    ...emptyDriftOverlayFields(),
     badges: {
       trust: "durable-doc",
       sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
@@ -983,6 +1110,7 @@ const projectThreadForViewerSafe = (
   return {
     ...(sanitized.value as typeof projected),
     binding,
+    ...emptyDriftOverlayFields(),
     badges: {
       trust: "durable-doc",
       sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
@@ -1014,6 +1142,7 @@ const projectIntentItemForViewerSafe = (item: NarrativeSynthesisIntentItem): Nar
   return {
     ...(sanitized.value as typeof projected),
     binding,
+    ...emptyDriftOverlayFields(),
     badges: {
       trust: item.status === "promoted" ? "promoted-artifact" : "reviewed-artifact",
       sensitivity: toSensitivityBadge(binding.goalCount + binding.episodeCount + binding.sessionCount > 0, sanitized.summary.applied),
