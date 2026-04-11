@@ -72,6 +72,7 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-mo
 - The self-contained HTML report is the canonical narrative artifact.
 - `--emit-model` exists only to support a separate local OpenTUI explorer.
 - The emitted model is versioned. `schemaVersion` is the compatibility key, while `producerVersion` is producer metadata only.
+- Current `ragit narrative --emit-model` writes a versioned model. Legacy unversioned models exist only for backward-compatible viewer reads.
 - The viewer is intentionally isolated under `tools/narrative-tui/` and does not read `.ragit` or git state directly.
 - If you only need a shareable report, generate HTML and stop there.
 

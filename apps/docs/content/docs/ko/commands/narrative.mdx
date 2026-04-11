@@ -72,6 +72,7 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-mo
 - self-contained HTML report가 canonical narrative 산출물입니다.
 - `--emit-model`은 분리된 local OpenTUI explorer를 위한 viewer input일 뿐입니다.
 - emitted model은 versioned model이며, 호환성 판단은 `schemaVersion`으로만 합니다. `producerVersion`은 producer metadata일 뿐입니다.
+- 현재 `ragit narrative --emit-model`은 항상 versioned model을 씁니다. schemaVersion이 없는 legacy model은 viewer의 backward-compatible read 경로에서만 허용합니다.
 - viewer는 의도적으로 `tools/narrative-tui/` 아래에 분리되어 있으며, `.ragit`나 git 상태를 직접 읽지 않습니다.
 - 공유 가능한 결과만 필요하면 HTML만 생성하면 됩니다.
 
