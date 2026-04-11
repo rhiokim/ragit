@@ -109,6 +109,7 @@ const formatSummary = (
 
   return [
     `${model.repoName} · HEAD ${model.headSha}`,
+    `schema=${model.schemaVersion} · projection=${model.projectionMode} · policy=${model.projectionPolicyVersion}`,
     `window: ${model.window.selectedSnapshotShas.length} snapshot(s), ${model.window.missingSnapshotCommits} missing manifest commit(s)`,
     `threads=${model.summary.decisionThreads} · nodes=${model.summary.decisionNodes} · intent=${model.summary.intentItems} · events=${model.summary.timelineEvents}`,
     `filter: ${formatScopeLabel(state.scope)} · query=${state.query.trim().length > 0 ? state.query : "(none)"}`,
@@ -134,8 +135,8 @@ const formatDecisionEvolution = (thread: ExplorerThreadView | null): string => {
     `${thread.title}`,
     `${thread.docType} thread · ${thread.nodes.length} node(s) · ${thread.snapshotShas.length} snapshot(s)`,
     `paths: ${thread.docPaths.join(", ")}`,
-    `goalIds: ${thread.goalIds.length > 0 ? thread.goalIds.join(", ") : "none"}`,
-    `episodeIds: ${thread.episodeIds.length > 0 ? thread.episodeIds.join(", ") : "none"}`,
+    `trust: ${thread.badges.trust} · sensitivity: ${thread.badges.sensitivity}`,
+    `bindings: goals=${thread.binding.goalCount}, episodes=${thread.binding.episodeCount}, sessions=${thread.binding.sessionCount}, relatedPaths=${thread.binding.relatedPathCount}`,
     "",
   ];
 
@@ -153,6 +154,8 @@ const formatDecisionEvolution = (thread: ExplorerThreadView | null): string => {
       `   ${node.path}`,
       `   ${node.summary}`,
       `   artifact=${node.sourceArtifactId ?? "none"} · confidence=${node.confidence.toFixed(2)}`,
+      `   trust=${node.badges.trust} · sensitivity=${node.badges.sensitivity}`,
+      `   bindings=goals=${node.binding.goalCount}, episodes=${node.binding.episodeCount}, sessions=${node.binding.sessionCount}, relatedPaths=${node.binding.relatedPathCount}`,
     );
     if (node.predecessorNodeId) {
       lines.push(`   predecessor=${node.predecessorNodeId}`);

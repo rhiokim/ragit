@@ -9,6 +9,8 @@ import {
   isIntentLinkedToThread,
   NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
   NARRATIVE_MODEL_SCHEMA_VERSION,
+  NARRATIVE_PROJECTION_MODE,
+  NARRATIVE_PROJECTION_POLICY_VERSION,
   loadNarrativeModel,
   type ExplorerState,
 } from "../src/model";
@@ -23,6 +25,8 @@ describe("narrative-tui model explorer", () => {
 
     expect(model.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
     expect(typeof model.producerVersion).toBe("string");
+    expect(model.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
+    expect(model.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
   });
 
   it("builds a default view with the first visible thread selected", async () => {
@@ -140,6 +144,8 @@ describe("narrative-tui model explorer", () => {
 
     expect(legacy.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
     expect(legacy.producerVersion).toBe(NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION);
+    expect(legacy.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
+    expect(legacy.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
   });
 
   it("fails fast on unsupported narrative model major versions", async () => {
@@ -179,5 +185,46 @@ describe("narrative-tui model explorer", () => {
     );
 
     await expect(loadNarrativeModel(unsupportedPath)).rejects.toThrow(/Unsupported narrative model schemaVersion=2/);
+  });
+
+  it("fails fast on unsupported narrative projection policy versions", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-narrative-tui-projection-unsupported-"));
+    const unsupportedPath = path.join(temp, "unsupported-projection-model.json");
+    await writeFile(
+      unsupportedPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        producerVersion: "1.0.1",
+        projectionPolicyVersion: 2,
+        projectionMode: "viewer-safe",
+        repoName: "ragit",
+        headSha: "abc1234",
+        generatedAt: "2026-04-12T00:00:00.000Z",
+        window: {
+          revRange: "HEAD",
+          maxCommits: 10,
+          selectedSnapshotShas: ["abc1234"],
+          missingSnapshotCommits: 0,
+        },
+        summary: {
+          decisionThreads: 0,
+          decisionNodes: 0,
+          intentItems: 0,
+          timelineEvents: 0,
+          heuristicEdges: 0,
+        },
+        snapshots: [],
+        threads: [],
+        nodes: [],
+        intentItems: [],
+        unassignedIntentItems: [],
+        timelineEvents: [],
+        warnings: [],
+        empty: true,
+      }),
+      "utf8",
+    );
+
+    await expect(loadNarrativeModel(unsupportedPath)).rejects.toThrow(/Unsupported narrative projectionPolicyVersion=2/);
   });
 });

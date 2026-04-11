@@ -4,10 +4,17 @@ import path from "node:path";
 export type FilterScope = "all" | "threads" | "decisions" | "intent" | "events";
 export const NARRATIVE_MODEL_SCHEMA_VERSION = 1;
 export const NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION = "legacy-unversioned";
+export const NARRATIVE_PROJECTION_POLICY_VERSION = 1;
+export const NARRATIVE_PROJECTION_MODE = "viewer-safe";
+export type NarrativeProjectionMode = typeof NARRATIVE_PROJECTION_MODE;
+export type NarrativeTrustBadge = "durable-doc" | "reviewed-artifact" | "promoted-artifact" | "operational-event";
+export type NarrativeSensitivityBadge = "standard" | "redacted" | "restricted";
 
 export interface NarrativeModel {
   schemaVersion: number;
   producerVersion: string;
+  projectionPolicyVersion: number;
+  projectionMode: NarrativeProjectionMode;
   repoName: string;
   headSha: string;
   generatedAt: string;
@@ -35,11 +42,19 @@ export interface NarrativeModel {
     title: string;
     docType: string;
     docPaths: string[];
-    goalIds?: string[];
-    episodeIds?: string[];
-    sessionIds?: string[];
     snapshotShas: string[];
     nodeIds: string[];
+    binding: {
+      goalCount: number;
+      episodeCount: number;
+      sessionCount: number;
+      relatedPathCount: number;
+    };
+    badges: {
+      trust: "durable-doc";
+      sensitivity: NarrativeSensitivityBadge;
+      lineageKinds: string[];
+    };
   }>;
   nodes: Array<{
     nodeId: string;
@@ -53,12 +68,20 @@ export interface NarrativeModel {
     relationKind: string;
     confidence: number;
     docType: string;
-    goalId?: string | null;
-    episodeId?: string | null;
-    sourceSessionId?: string | null;
     relatedPaths?: string[];
     sourceArtifactId?: string | null;
     predecessorNodeId?: string | null;
+    binding: {
+      goalCount: number;
+      episodeCount: number;
+      sessionCount: number;
+      relatedPathCount: number;
+    };
+    badges: {
+      trust: "durable-doc";
+      sensitivity: NarrativeSensitivityBadge;
+      lineage: string;
+    };
   }>;
   intentItems: Array<{
     itemId: string;
@@ -67,13 +90,20 @@ export interface NarrativeModel {
     status: string;
     title: string;
     summary: string;
-    goalId?: string | null;
-    episodeId?: string | null;
-    sourceSessionId?: string | null;
     anchorSha?: string | null;
     relatedPaths?: string[];
     createdAt: string;
     threadIds?: string[];
+    binding: {
+      goalCount: number;
+      episodeCount: number;
+      sessionCount: number;
+      relatedPathCount: number;
+    };
+    badges: {
+      trust: "reviewed-artifact" | "promoted-artifact";
+      sensitivity: NarrativeSensitivityBadge;
+    };
   }>;
   unassignedIntentItems: Array<{
     itemId: string;
@@ -82,13 +112,20 @@ export interface NarrativeModel {
     status: string;
     title: string;
     summary: string;
-    goalId?: string | null;
-    episodeId?: string | null;
-    sourceSessionId?: string | null;
     anchorSha?: string | null;
     relatedPaths?: string[];
     createdAt: string;
     threadIds?: string[];
+    binding: {
+      goalCount: number;
+      episodeCount: number;
+      sessionCount: number;
+      relatedPathCount: number;
+    };
+    badges: {
+      trust: "reviewed-artifact" | "promoted-artifact";
+      sensitivity: NarrativeSensitivityBadge;
+    };
   }>;
   timelineEvents: Array<{
     eventId: string;
@@ -96,11 +133,18 @@ export interface NarrativeModel {
     recordedAt: string;
     summary: string;
     sourceHeadSha?: string | null;
-    goalId?: string | null;
-    episodeId?: string | null;
-    sessionId?: string | null;
     relatedPaths?: string[];
     threadIds?: string[];
+    binding: {
+      goalCount: number;
+      episodeCount: number;
+      sessionCount: number;
+      relatedPathCount: number;
+    };
+    badges: {
+      trust: "operational-event";
+      sensitivity: NarrativeSensitivityBadge;
+    };
   }>;
   warnings: string[];
   empty: boolean;
@@ -119,12 +163,11 @@ export interface ExplorerThreadView {
   title: string;
   docType: string;
   docPaths: string[];
-  goalIds: string[];
-  episodeIds: string[];
-  sessionIds: string[];
   snapshotShas: string[];
   nodeIds: string[];
   nodes: NarrativeModel["nodes"];
+  binding: NarrativeModel["threads"][number]["binding"];
+  badges: NarrativeModel["threads"][number]["badges"];
   relationKinds: string[];
   searchText: string;
 }
@@ -136,13 +179,12 @@ export interface ExplorerIntentView {
   status: string;
   title: string;
   summary: string;
-  goalId?: string | null;
-  episodeId?: string | null;
-  sourceSessionId?: string | null;
   anchorSha?: string | null;
   relatedPaths: string[];
   createdAt: string;
   threadIds: string[];
+  binding: NarrativeModel["intentItems"][number]["binding"];
+  badges: NarrativeModel["intentItems"][number]["badges"];
   searchText: string;
 }
 
@@ -152,11 +194,10 @@ export interface ExplorerEventView {
   recordedAt: string;
   summary: string;
   sourceHeadSha?: string | null;
-  goalId?: string | null;
-  episodeId?: string | null;
-  sessionId?: string | null;
   relatedPaths: string[];
   threadIds: string[];
+  binding: NarrativeModel["timelineEvents"][number]["binding"];
+  badges: NarrativeModel["timelineEvents"][number]["badges"];
   searchText: string;
 }
 
@@ -230,7 +271,9 @@ const normalizeNarrativeModel = (value: unknown): NarrativeModel => {
     return {
       schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
       producerVersion: NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
-      ...(value as Omit<NarrativeModel, "schemaVersion" | "producerVersion">),
+      projectionPolicyVersion: NARRATIVE_PROJECTION_POLICY_VERSION,
+      projectionMode: NARRATIVE_PROJECTION_MODE,
+      ...(value as Omit<NarrativeModel, "schemaVersion" | "producerVersion" | "projectionPolicyVersion" | "projectionMode">),
     };
   }
 
@@ -241,12 +284,33 @@ const normalizeNarrativeModel = (value: unknown): NarrativeModel => {
     );
   }
 
+  const projectionPolicyVersion =
+    typeof value.projectionPolicyVersion === "number" && Number.isInteger(value.projectionPolicyVersion)
+      ? value.projectionPolicyVersion
+      : NARRATIVE_PROJECTION_POLICY_VERSION;
+  if (projectionPolicyVersion !== NARRATIVE_PROJECTION_POLICY_VERSION) {
+    throw new Error(
+      `Unsupported narrative projectionPolicyVersion=${String(projectionPolicyVersion)}. ` +
+        `This viewer supports only projectionPolicyVersion=${NARRATIVE_PROJECTION_POLICY_VERSION}.`,
+    );
+  }
+
+  if (typeof value.projectionMode === "string" && value.projectionMode !== NARRATIVE_PROJECTION_MODE) {
+    throw new Error(
+      `Unsupported narrative projectionMode=${String(value.projectionMode)}. ` +
+        `This viewer supports only projectionMode=${NARRATIVE_PROJECTION_MODE}.`,
+    );
+  }
+  const projectionMode = value.projectionMode === NARRATIVE_PROJECTION_MODE ? value.projectionMode : NARRATIVE_PROJECTION_MODE;
+
   return {
     ...(value as NarrativeModel),
     producerVersion:
       typeof value.producerVersion === "string" && value.producerVersion.trim().length > 0
         ? value.producerVersion
         : "unknown",
+    projectionPolicyVersion,
+    projectionMode,
   };
 };
 
@@ -265,10 +329,13 @@ export const buildThreadViews = (model: NarrativeModel): ExplorerThreadView[] =>
       thread.title,
       thread.docType,
       thread.docPaths.join(" "),
-      thread.goalIds?.join(" ") ?? "",
-      thread.episodeIds?.join(" ") ?? "",
-      thread.sessionIds?.join(" ") ?? "",
       thread.snapshotShas.join(" "),
+      thread.badges.trust,
+      thread.badges.sensitivity,
+      thread.badges.lineageKinds.join(" "),
+      `goals ${thread.binding.goalCount}`,
+      `episodes ${thread.binding.episodeCount}`,
+      `sessions ${thread.binding.sessionCount}`,
       nodes.map((node) => [node.title, node.summary, node.path, node.changeType, node.relationKind].join(" ")).join(" "),
     ]
       .filter(Boolean)
@@ -278,12 +345,11 @@ export const buildThreadViews = (model: NarrativeModel): ExplorerThreadView[] =>
       title: thread.title,
       docType: thread.docType,
       docPaths: thread.docPaths,
-      goalIds: uniqueStrings(thread.goalIds ?? []),
-      episodeIds: uniqueStrings(thread.episodeIds ?? []),
-      sessionIds: uniqueStrings(thread.sessionIds ?? []),
       snapshotShas: thread.snapshotShas,
       nodeIds: thread.nodeIds,
       nodes,
+      binding: thread.binding,
+      badges: thread.badges,
       relationKinds,
       searchText,
     };
@@ -298,21 +364,22 @@ const buildIntentViews = (items: NarrativeModel["intentItems"] | NarrativeModel[
     status: item.status,
     title: item.title,
     summary: item.summary,
-    goalId: item.goalId ?? null,
-    episodeId: item.episodeId ?? null,
-    sourceSessionId: item.sourceSessionId ?? null,
     anchorSha: item.anchorSha ?? null,
     relatedPaths: asArray(item.relatedPaths).filter((value) => typeof value === "string"),
     createdAt: item.createdAt,
     threadIds: asArray(item.threadIds).filter((value) => typeof value === "string"),
+    binding: item.binding,
+    badges: item.badges,
     searchText: [
       item.title,
       item.summary,
       item.kind,
       item.status,
-      item.goalId ?? "",
-      item.episodeId ?? "",
-      item.sourceSessionId ?? "",
+      item.badges.trust,
+      item.badges.sensitivity,
+      `goals ${item.binding.goalCount}`,
+      `episodes ${item.binding.episodeCount}`,
+      `sessions ${item.binding.sessionCount}`,
       item.anchorSha ?? "",
       asArray(item.relatedPaths).join(" "),
       asArray(item.threadIds).join(" "),
@@ -328,19 +395,20 @@ const buildEventViews = (items: NarrativeModel["timelineEvents"]): ExplorerEvent
     recordedAt: event.recordedAt,
     summary: event.summary,
     sourceHeadSha: event.sourceHeadSha ?? null,
-    goalId: event.goalId ?? null,
-    episodeId: event.episodeId ?? null,
-    sessionId: event.sessionId ?? null,
     relatedPaths: asArray(event.relatedPaths).filter((value) => typeof value === "string"),
     threadIds: asArray(event.threadIds).filter((value) => typeof value === "string"),
+    binding: event.binding,
+    badges: event.badges,
     searchText: [
       event.eventType,
       event.summary,
       event.recordedAt,
       event.sourceHeadSha ?? "",
-      event.goalId ?? "",
-      event.episodeId ?? "",
-      event.sessionId ?? "",
+      event.badges.trust,
+      event.badges.sensitivity,
+      `goals ${event.binding.goalCount}`,
+      `episodes ${event.binding.episodeCount}`,
+      `sessions ${event.binding.sessionCount}`,
       asArray(event.relatedPaths).join(" "),
       asArray(event.threadIds).join(" "),
     ]
@@ -383,9 +451,9 @@ const buildThreadDetail = (thread: ExplorerThreadView | null): ExplorerDetail =>
     relationKind: thread.relationKinds.join(" · ") || "root",
     confidence: latestNode ? String(latestNode.confidence) : "none",
     extra: [
-      `goalIds: ${thread.goalIds.length > 0 ? thread.goalIds.join(", ") : "none"}`,
-      `episodeIds: ${thread.episodeIds.length > 0 ? thread.episodeIds.join(", ") : "none"}`,
-      `sessionIds: ${thread.sessionIds.length > 0 ? thread.sessionIds.join(", ") : "none"}`,
+      `trust: ${thread.badges.trust}`,
+      `sensitivity: ${thread.badges.sensitivity}`,
+      `bindings: goals=${thread.binding.goalCount}, episodes=${thread.binding.episodeCount}, sessions=${thread.binding.sessionCount}, relatedPaths=${thread.binding.relatedPathCount}`,
       `nodeIds: ${thread.nodeIds.join(", ")}`,
     ],
   };
@@ -416,15 +484,11 @@ const buildItemDetail = (
 export const isIntentLinkedToThread = (thread: ExplorerThreadView, item: ExplorerIntentView): boolean =>
   item.threadIds.includes(thread.threadId) ||
   arraysIntersect(thread.docPaths, item.relatedPaths) ||
-  (item.goalId ? thread.goalIds.includes(item.goalId) : false) ||
-  (item.episodeId ? thread.episodeIds.includes(item.episodeId) : false) ||
   (item.anchorSha ? thread.snapshotShas.includes(item.anchorSha) : false);
 
 export const isEventLinkedToThread = (thread: ExplorerThreadView, event: ExplorerEventView): boolean =>
   event.threadIds.includes(thread.threadId) ||
   arraysIntersect(thread.docPaths, event.relatedPaths) ||
-  (event.goalId ? thread.goalIds.includes(event.goalId) : false) ||
-  (event.sessionId ? thread.sessionIds.includes(event.sessionId) : false) ||
   (event.sourceHeadSha ? thread.snapshotShas.includes(event.sourceHeadSha) : false);
 
 const arraysIntersect = (left: string[], right: string[]): boolean => {
@@ -482,9 +546,9 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
         `${selectedIntent.kind} · ${selectedIntent.status}`,
         "n/a",
         [
-          `goalId: ${selectedIntent.goalId ?? "none"}`,
-          `episodeId: ${selectedIntent.episodeId ?? "none"}`,
-          `sessionId: ${selectedIntent.sourceSessionId ?? "none"}`,
+          `trust: ${selectedIntent.badges.trust}`,
+          `sensitivity: ${selectedIntent.badges.sensitivity}`,
+          `bindings: goals=${selectedIntent.binding.goalCount}, episodes=${selectedIntent.binding.episodeCount}, sessions=${selectedIntent.binding.sessionCount}, relatedPaths=${selectedIntent.binding.relatedPathCount}`,
           `threadIds: ${selectedIntent.threadIds.join(", ") || "none"}`,
         ],
       )
@@ -499,9 +563,9 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
           "event",
           "n/a",
           [
-            `goalId: ${selectedEvent.goalId ?? "none"}`,
-            `episodeId: ${selectedEvent.episodeId ?? "none"}`,
-            `sessionId: ${selectedEvent.sessionId ?? "none"}`,
+            `trust: ${selectedEvent.badges.trust}`,
+            `sensitivity: ${selectedEvent.badges.sensitivity}`,
+            `bindings: goals=${selectedEvent.binding.goalCount}, episodes=${selectedEvent.binding.episodeCount}, sessions=${selectedEvent.binding.sessionCount}, relatedPaths=${selectedEvent.binding.relatedPathCount}`,
             `threadIds: ${selectedEvent.threadIds.join(", ") || "none"}`,
           ],
         )
@@ -535,6 +599,8 @@ export const buildExplorerView = (model: NarrativeModel, state: ExplorerState): 
 
 export const buildThreadOptionDescription = (thread: ExplorerThreadView, selected: boolean): string => {
   const badges = [
+    thread.badges.trust,
+    thread.badges.sensitivity,
     thread.relationKinds.length > 0 ? thread.relationKinds.join(" · ") : "root",
     `${thread.nodes.length} node(s)`,
     `${thread.snapshotShas.length} snapshot(s)`,
@@ -555,10 +621,10 @@ export const buildIntentOptionName = (item: ExplorerIntentView, linked: boolean)
   `${linked ? "◆ " : ""}${item.title}`;
 
 export const buildIntentOptionDescription = (item: ExplorerIntentView, linked: boolean): string =>
-  `${item.kind} · ${item.status}${linked ? " · linked" : ""} · ${item.summary}`;
+  `${item.kind} · ${item.status} · ${item.badges.trust} · ${item.badges.sensitivity}${linked ? " · linked" : ""} · ${item.summary}`;
 
 export const buildEventOptionName = (item: ExplorerEventView, linked: boolean): string =>
   `${linked ? "◆ " : ""}${item.eventType} · ${item.recordedAt}`;
 
 export const buildEventOptionDescription = (item: ExplorerEventView, linked: boolean): string =>
-  `${linked ? "linked · " : ""}${item.summary}`;
+  `${item.badges.trust} · ${item.badges.sensitivity}${linked ? " · linked" : ""} · ${item.summary}`;

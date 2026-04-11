@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
   "producerVersion": "1.0.1",
+  "projectionPolicyVersion": 1,
+  "projectionMode": "viewer-safe",
   "repoName": "ragit",
   "headSha": "abc1234",
   "generatedAt": "2026-04-11T00:00:00.000Z",
@@ -37,22 +39,20 @@
       "title": "Narrative report architecture",
       "docType": "adr",
       "docPaths": ["docs/adr/001-narrative-report.md"],
-      "goalIds": ["goal_narrative"],
-      "episodeIds": ["episode_narrative"],
-      "sessionIds": ["session_arch"],
       "snapshotShas": ["fedcba9", "abc1234"],
-      "nodeIds": ["node_1", "node_2", "node_3"]
+      "nodeIds": ["node_1", "node_2", "node_3"],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 3 },
+      "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineageKinds": ["root", "path-continuity", "heuristic-high"] }
     },
     {
       "threadId": "thread_2",
       "title": "Narrative viewer rollout plan",
       "docType": "plan",
       "docPaths": ["docs/plans/narrative-viewer-rollout.md"],
-      "goalIds": ["goal_narrative"],
-      "episodeIds": ["episode_viewer"],
-      "sessionIds": ["session_viewer"],
       "snapshotShas": ["abc1234"],
-      "nodeIds": ["node_4"]
+      "nodeIds": ["node_4"],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineageKinds": ["explicit"] }
     }
   ],
   "nodes": [
@@ -75,7 +75,9 @@
       "threadId": "thread_1",
       "predecessorNodeId": null,
       "relationKind": "root",
-      "confidence": 1
+      "confidence": 1,
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "root" }
     },
     {
       "sourceKey": "abc1234:modified:docs/adr/001-narrative-report.md",
@@ -96,7 +98,9 @@
       "threadId": "thread_1",
       "predecessorNodeId": "node_1",
       "relationKind": "path-continuity",
-      "confidence": 0.95
+      "confidence": 0.95,
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "path-continuity" }
     },
     {
       "sourceKey": "abc1234:added:docs/adr/002-viewer-boundary.md",
@@ -117,7 +121,9 @@
       "threadId": "thread_1",
       "predecessorNodeId": "node_2",
       "relationKind": "heuristic-high",
-      "confidence": 0.72
+      "confidence": 0.72,
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "heuristic-high" }
     },
     {
       "sourceKey": "abc1234:added:docs/plans/narrative-viewer-rollout.md",
@@ -138,7 +144,9 @@
       "threadId": "thread_2",
       "predecessorNodeId": null,
       "relationKind": "explicit",
-      "confidence": 1
+      "confidence": 1,
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "badges": { "trust": "durable-doc", "sensitivity": "restricted", "lineage": "explicit" }
     }
   ],
   "intentItems": [
@@ -155,7 +163,9 @@
       "anchorSha": "fedcba9",
       "relatedPaths": ["docs/adr/001-narrative-report.md"],
       "createdAt": "2026-04-10T09:45:00.000Z",
-      "threadIds": ["thread_1"]
+      "threadIds": ["thread_1"],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     },
     {
       "itemId": "artifact_3",
@@ -170,7 +180,9 @@
       "anchorSha": "abc1234",
       "relatedPaths": ["tools/narrative-tui/src/index.ts"],
       "createdAt": "2026-04-11T00:05:00.000Z",
-      "threadIds": ["thread_1", "thread_2"]
+      "threadIds": ["thread_1", "thread_2"],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "badges": { "trust": "promoted-artifact", "sensitivity": "restricted" }
     },
     {
       "itemId": "artifact_4",
@@ -185,7 +197,9 @@
       "anchorSha": "abc1234",
       "relatedPaths": ["pnpm-workspace.yaml", "tools/narrative-tui/package.json"],
       "createdAt": "2026-04-11T00:07:00.000Z",
-      "threadIds": ["thread_2"]
+      "threadIds": ["thread_2"],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     }
   ],
   "unassignedIntentItems": [
@@ -202,7 +216,9 @@
       "anchorSha": "abc1234",
       "relatedPaths": ["src/cli.ts"],
       "createdAt": "2026-04-11T00:20:00.000Z",
-      "threadIds": []
+      "threadIds": [],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "badges": { "trust": "reviewed-artifact", "sensitivity": "restricted" }
     }
   ],
   "timelineEvents": [
@@ -216,7 +232,9 @@
       "episodeId": "episode_narrative",
       "sessionId": "session_arch",
       "relatedPaths": ["docs/adr/001-narrative-report.md"],
-      "threadIds": ["thread_1"]
+      "threadIds": ["thread_1"],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "badges": { "trust": "operational-event", "sensitivity": "restricted" }
     },
     {
       "eventId": "event_2",
@@ -228,7 +246,9 @@
       "episodeId": "episode_viewer",
       "sessionId": "session_viewer",
       "relatedPaths": ["tools/narrative-tui/src/index.ts"],
-      "threadIds": ["thread_2"]
+      "threadIds": ["thread_2"],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 1 },
+      "badges": { "trust": "operational-event", "sensitivity": "restricted" }
     },
     {
       "eventId": "event_3",
@@ -240,7 +260,9 @@
       "episodeId": "episode_viewer",
       "sessionId": "session_viewer",
       "relatedPaths": ["tools/narrative-tui/src/index.ts", "docs/plans/narrative-viewer-rollout.md"],
-      "threadIds": ["thread_1", "thread_2"]
+      "threadIds": ["thread_1", "thread_2"],
+      "binding": { "goalCount": 1, "episodeCount": 1, "sessionCount": 1, "relatedPathCount": 2 },
+      "badges": { "trust": "operational-event", "sensitivity": "restricted" }
     }
   ],
   "warnings": [
