@@ -246,7 +246,7 @@ pnpm ragit doctor --format json
 `ragit narrative` usage boundary:
 
 - Canonical artifact: self-contained HTML report
-- Optional viewer input: sanitized model export at `.ragit/reports/narrative/current.model.json`
+- Optional viewer input: viewer-safe model export at `.ragit/reports/narrative/current.model.json`
 - Experimental local explorer: isolated OpenTUI viewer under `tools/narrative-tui/`
 
 ```bash
