@@ -6,7 +6,12 @@ command_path: narrative
 
 ## What It Does
 
-`narrative` reads selected snapshot history, commit-bound documents, artifact records, and event data, then writes a self-contained HTML narrative report. The report is designed for a new contributor or agent that needs to understand the project's intent, decisions, and timeline without replaying the entire collaboration history. The HTML file remains the canonical export. An optional sanitized JSON model can be emitted for the separate experimental OpenTUI viewer.
+`narrative` reads selected snapshot history, commit-bound documents, artifact records, and event data, then writes a self-contained HTML narrative report. The report is designed for a new contributor or agent that needs to understand the project's intent, decisions, and timeline without replaying the entire collaboration history.
+
+Operationally, treat the command in two layers:
+
+- The HTML file is the canonical report.
+- `--emit-model` is optional and exists only to feed the separate experimental OpenTUI viewer.
 
 ## When To Use / When Not To Use
 
@@ -23,6 +28,19 @@ command_path: narrative
 - You need append-only operational events. Use <a href="/en/docs/commands/timeline">`timeline`</a>.
 - You need retrieval hits or live question answering. Use <a href="/en/docs/commands/query">`query`</a>.
 
+## Operating Procedure
+
+Use `narrative` in this order:
+
+1. Generate the canonical HTML report.
+2. Add `--emit-model` only when you also need local terminal exploration.
+3. Open the isolated viewer from `tools/narrative-tui/` only after the model file exists.
+
+The operational success rule is simple:
+
+- If the HTML report was generated, the main task succeeded.
+- If the viewer later fails, treat that as an explorer failure, not as a narrative generation failure.
+
 ## Syntax
 
 ```bash
@@ -34,7 +52,7 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-mo
 - `[revRange]`: Optional git revision range to scan. If omitted, `HEAD` is used.
 - `--max-commits <n>`: Limit the number of selected snapshot commits. The default is `10`.
 - `--output <path>`: Write the HTML report to a specific path instead of the default `.ragit/reports/narrative/<anchorSha>.html`.
-- `--emit-model <path>`: Write the sanitized narrative JSON model for a separate viewer. This is intended for the isolated experimental OpenTUI explorer under `tools/narrative-tui/`.
+- `--emit-model <path>`: Write the versioned sanitized narrative JSON model for a separate viewer. This is intended only for the isolated experimental OpenTUI explorer under `tools/narrative-tui/`.
 - `--open`: Open the generated report in the default browser after writing it.
 - `--dry-run`: Compute the report plan and summary without writing files.
 - `--format text|json|both`: Choose human text, JSON, or both.
@@ -43,16 +61,17 @@ pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-mo
 ## Input And Output Contract
 
 - There is no JSON payload input.
-- JSON output includes `dryRun`, `reportPath`, `modelPath`, `headSha`, `window`, `summary`, and `warnings`.
+- JSON output includes `dryRun`, `reportPath`, `modelPath`, `schemaVersion`, `headSha`, `window`, `summary`, and `warnings`.
 - `window` includes `revRange`, `maxCommits`, `selectedSnapshotShas`, and `missingSnapshotCommits`.
-- `--dry-run` still returns the planned report path, planned model path, and summary.
-- `--open` is ignored during dry-run and reported as a warning.
+- `--dry-run` still returns the planned report path, planned model path, and summary, but writes neither file.
+- `--open` is ignored during dry-run and reported only as a warning.
 - If no manifest-backed snapshots are found, `narrative` still generates an empty-state report.
 
 ## Canonical HTML vs Experimental Viewer
 
 - The self-contained HTML report is the canonical narrative artifact.
 - `--emit-model` exists only to support a separate local OpenTUI explorer.
+- The emitted model is versioned. `schemaVersion` is the compatibility key, while `producerVersion` is producer metadata only.
 - The viewer is intentionally isolated under `tools/narrative-tui/` and does not read `.ragit` or git state directly.
 - If you only need a shareable report, generate HTML and stop there.
 
@@ -88,6 +107,7 @@ bun run start -- --model ../../.ragit/reports/narrative/current.model.json
 
 - `--output` writes a file, so make sure the parent directory is writable.
 - `--emit-model` also writes a file and should be treated as viewer input, not as a replacement for the canonical HTML report.
+- `schemaVersion` is the only compatibility key for the emitted model. If a future viewer rejects the model major version, the HTML report is still the canonical successful output.
 - The report is derived from snapshot-backed knowledge, not from raw transcripts.
 - `--open` is best-effort and may be skipped if no opener exists on the current machine.
 - When no snapshot manifests exist in the selected window, the command still succeeds with an empty-state report.
