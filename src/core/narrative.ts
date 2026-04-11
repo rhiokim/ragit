@@ -7,6 +7,7 @@ import {
   NARRATIVE_MODEL_SCHEMA_VERSION,
   NARRATIVE_PROJECTION_MODE,
   NARRATIVE_PROJECTION_POLICY_VERSION,
+  NarrativeFreshnessStatus,
   NarrativeEventItem,
   NarrativeIntentItem,
   NarrativeOptions,
@@ -62,6 +63,17 @@ const renderBadge = (label: string, tone: string): string =>
 
 const renderBadgeRow = (badges: string[]): string =>
   badges.length > 0 ? `<div class="badge-row">${badges.join("")}</div>` : "";
+
+const renderFreshnessBadge = (status: NarrativeFreshnessStatus | null): string =>
+  status ? renderBadge(status, `freshness-${status}`) : "";
+
+const renderDriftSummary = (status: NarrativeFreshnessStatus | null, reasons: string[], actions: string[]): string => {
+  const parts: string[] = [];
+  if (status && status !== "fresh") parts.push(status);
+  if (reasons.length > 0) parts.push(`reason: ${reasons[0]}`);
+  if (actions.length > 0) parts.push(`action: ${actions[0]}`);
+  return parts.length > 0 ? `<span class="drift-summary">${escapeHtml(parts.join(" · "))}</span>` : "";
+};
 
 const normalizeRepoPath = (value: string): string => value.replaceAll("\\", "/");
 
@@ -279,6 +291,10 @@ const buildDetailPayload = (payload: {
   changeType: string | null;
   trust: string;
   sensitivity: string;
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  driftReasonCodes: string[];
+  recommendedActions: string[];
+  driftSourceRefs: string[];
   binding: {
     goalCount: number;
     episodeCount: number;
@@ -333,6 +349,7 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
                       class="node-chip node-${escapeHtml(node.changeType)}"
                       data-thread-focus="${escapeHtml(thread.threadId)}"
                       data-thread-ref="${escapeHtml(thread.threadId)}"
+                      data-freshness-status="${escapeHtml(node.freshnessStatus ?? "")}"
                       data-detail='${escapeHtml(
                         buildDetailPayload({
                           type: "decision",
@@ -346,6 +363,10 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
                           changeType: node.changeType,
                           trust: node.badges.trust,
                           sensitivity: node.badges.sensitivity,
+                          freshnessStatus: node.freshnessStatus,
+                          driftReasonCodes: node.driftReasonCodes,
+                          recommendedActions: node.recommendedActions,
+                          driftSourceRefs: node.driftSourceRefs,
                           binding: node.binding,
                         }),
                       )}'
@@ -353,11 +374,13 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
                       <span class="node-badge">${escapeHtml(node.changeType)}</span>
                       <span class="node-title">${escapeHtml(node.title)}</span>
                       ${renderBadgeRow([
+                        renderFreshnessBadge(node.freshnessStatus),
                         renderBadge(node.badges.trust, "trust"),
                         renderBadge(node.badges.lineage, node.badges.lineage.startsWith("heuristic") ? "heuristic" : "lineage"),
                         renderBadge(node.badges.sensitivity, node.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
                       ])}
                       <span class="node-meta">${escapeHtml(node.relationKind)}</span>
+                      ${renderDriftSummary(node.freshnessStatus, node.driftReasonCodes, node.recommendedActions)}
                     </button>
                   `,
                 )
@@ -379,6 +402,10 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
           changeType: null,
           trust: thread.badges.trust,
           sensitivity: thread.badges.sensitivity,
+          freshnessStatus: thread.freshnessStatus,
+          driftReasonCodes: thread.driftReasonCodes,
+          recommendedActions: thread.recommendedActions,
+          driftSourceRefs: thread.driftSourceRefs,
           binding: thread.binding,
         }),
       );
@@ -389,10 +416,12 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
             class="thread-label"
             data-thread-focus="${escapeHtml(thread.threadId)}"
             data-thread-ref="${escapeHtml(thread.threadId)}"
+            data-freshness-status="${escapeHtml(thread.freshnessStatus ?? "")}"
             data-detail='${labelDetail}'
           >
             <span class="thread-title">${escapeHtml(thread.title)}</span>
             ${renderBadgeRow([
+              renderFreshnessBadge(thread.freshnessStatus),
               renderBadge(thread.badges.trust, "trust"),
               renderBadge(thread.badges.sensitivity, thread.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
               ...thread.badges.lineageKinds.map((lineage) =>
@@ -400,6 +429,7 @@ const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
               ),
             ])}
             <span class="thread-meta">${escapeHtml(thread.docType)} · ${thread.nodeIds.length} node(s)</span>
+            ${renderDriftSummary(thread.freshnessStatus, thread.driftReasonCodes, thread.recommendedActions)}
           </button>
           ${cells}
         </div>
@@ -437,6 +467,10 @@ const renderIntentSection = (items: NarrativeIntentItem[], title: string): strin
           changeType: item.status,
           trust: item.badges.trust,
           sensitivity: item.badges.sensitivity,
+          freshnessStatus: item.freshnessStatus,
+          driftReasonCodes: item.driftReasonCodes,
+          recommendedActions: item.recommendedActions,
+          driftSourceRefs: item.driftSourceRefs,
           binding: item.binding,
         }),
       );
@@ -449,15 +483,18 @@ const renderIntentSection = (items: NarrativeIntentItem[], title: string): strin
             type="button"
             class="intent-button"
             data-thread-focus="${escapeHtml(item.threadIds[0] ?? "")}"
+            data-freshness-status="${escapeHtml(item.freshnessStatus ?? "")}"
             data-detail='${detail}'
           >
             <span class="intent-kind">${escapeHtml(item.kind)}</span>
             <span class="intent-title">${escapeHtml(item.title)}</span>
             ${renderBadgeRow([
+              renderFreshnessBadge(item.freshnessStatus),
               renderBadge(item.badges.trust, "trust"),
               renderBadge(item.badges.sensitivity, item.badges.sensitivity === "standard" ? "muted" : "sensitivity"),
             ])}
             <span class="intent-summary">${escapeHtml(item.summary)}</span>
+            ${renderDriftSummary(item.freshnessStatus, item.driftReasonCodes, item.recommendedActions)}
           </button>
         </article>
       `;
@@ -484,6 +521,10 @@ const renderTimelineSection = (events: NarrativeEventItem[]): string => {
           changeType: null,
           trust: event.badges.trust,
           sensitivity: event.badges.sensitivity,
+          freshnessStatus: null,
+          driftReasonCodes: [],
+          recommendedActions: [],
+          driftSourceRefs: [],
           binding: event.binding,
         }),
       );
@@ -683,6 +724,26 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
         border-color: rgba(14, 107, 80, 0.24);
         color: #0e6b50;
       }
+      .badge-freshness {
+        background: rgba(15, 92, 142, 0.12);
+        border-color: rgba(15, 92, 142, 0.24);
+        color: #0f5c8e;
+      }
+      .badge-freshness-fresh {
+        background: rgba(84, 182, 125, 0.12);
+        border-color: rgba(84, 182, 125, 0.24);
+        color: #2f7f51;
+      }
+      .badge-freshness-suspect {
+        background: rgba(211, 166, 40, 0.16);
+        border-color: rgba(211, 166, 40, 0.28);
+        color: #8b6200;
+      }
+      .badge-freshness-stale {
+        background: rgba(196, 93, 74, 0.14);
+        border-color: rgba(196, 93, 74, 0.24);
+        color: #8b2f1f;
+      }
       .badge-lineage {
         background: rgba(20, 61, 89, 0.08);
         border-color: rgba(20, 61, 89, 0.18);
@@ -733,6 +794,11 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
         font-size: 13px;
         line-height: 1.45;
         color: #3f392f;
+      }
+      .drift-summary {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--muted);
       }
       .intent-group + .intent-group {
         margin-top: 16px;
@@ -830,6 +896,9 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
           <div class="summary-card"><div class="summary-label">Intent Items</div><div class="summary-value">${viewModel.summary.intentItems}</div></div>
           <div class="summary-card"><div class="summary-label">Timeline Events</div><div class="summary-value">${viewModel.summary.timelineEvents}</div></div>
           <div class="summary-card"><div class="summary-label">Missing Snapshot Commits</div><div class="summary-value">${viewModel.window.missingSnapshotCommits}</div></div>
+          <div class="summary-card freshness-card freshness-fresh"><div class="summary-label">Fresh</div><div class="summary-value">${viewModel.summary.freshnessCounts.fresh}</div></div>
+          <div class="summary-card freshness-card freshness-suspect"><div class="summary-label">Suspect</div><div class="summary-value">${viewModel.summary.freshnessCounts.suspect}</div></div>
+          <div class="summary-card freshness-card freshness-stale"><div class="summary-label">Stale</div><div class="summary-value">${viewModel.summary.freshnessCounts.stale}</div></div>
         </div>
         <div class="detail-list">
           <div><strong>Window</strong>: ${escapeHtml(viewModel.window.revRange ?? "HEAD")} · max ${viewModel.window.maxCommits} selected snapshot commit(s)</div>
@@ -886,6 +955,13 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
           ["Snapshot", payload.snapshotSha || "none"],
           ["Relation", payload.relationKind || "none"],
           ["Confidence", payload.confidence === null || payload.confidence === undefined ? "none" : String(payload.confidence)],
+          ["Freshness", payload.freshnessStatus || "none"],
+          ["Reasons", Array.isArray(payload.driftReasonCodes) && payload.driftReasonCodes.length > 0 ? payload.driftReasonCodes.join(", ") : "none"],
+          [
+            "Recommended Action",
+            Array.isArray(payload.recommendedActions) && payload.recommendedActions.length > 0 ? payload.recommendedActions.join(", ") : "none",
+          ],
+          ["Drift Sources", Array.isArray(payload.driftSourceRefs) && payload.driftSourceRefs.length > 0 ? payload.driftSourceRefs.join(", ") : "none"],
           ["Trust", payload.trust || "none"],
           ["Sensitivity", payload.sensitivity || "none"],
           ["Bindings", payload.bindingSummary || "none"],
@@ -976,5 +1052,6 @@ export const formatNarrativeText = (
     `- intent_items: ${result.summary.intentItems}`,
     `- timeline_events: ${result.summary.timelineEvents}`,
     `- heuristic_edges: ${result.summary.heuristicEdges}`,
+    `- freshness_counts: fresh=${result.summary.freshnessCounts.fresh} suspect=${result.summary.freshnessCounts.suspect} stale=${result.summary.freshnessCounts.stale}`,
     ...(result.warnings.length === 0 ? [] : ["", ...result.warnings.map((warning) => `- warning ${warning}`)]),
   ].join("\n");

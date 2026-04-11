@@ -123,6 +123,9 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("schemaVersion");
       expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("projectionPolicyVersion");
       expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("projectionMode");
+      expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.freshnessCounts.fresh");
+      expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.freshnessCounts.suspect");
+      expect(describeNarrativeOutput.data.spec.outputSchemaSummary).toContain("summary.freshnessCounts.stale");
 
       const describeDriftOutput = JSON.parse(runCli(["describe", "drift", "--format", "json"]));
       expect(describeDriftOutput.command).toBe("describe");
@@ -222,6 +225,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(narrativeOutput.data.projectionMode).toBe("viewer-safe");
       expect(Array.isArray(narrativeOutput.data.window.selectedSnapshotShas)).toBe(true);
       expect(narrativeOutput.data.summary).toBeTruthy();
+      expect(narrativeOutput.data.summary.freshnessCounts).toBeTruthy();
+      expect(
+        narrativeOutput.data.summary.freshnessCounts.fresh +
+          narrativeOutput.data.summary.freshnessCounts.suspect +
+          narrativeOutput.data.summary.freshnessCounts.stale,
+      ).toBeGreaterThan(0);
       expect(narrativeOutput.warnings.some((warning: string) => warning.includes("--open"))).toBe(true);
 
       const driftOutput = JSON.parse(runCli(["drift", "--cwd", temp, "--format", "json", "--scope", "all", "--view", "default"]));

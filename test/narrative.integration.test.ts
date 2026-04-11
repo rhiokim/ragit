@@ -160,6 +160,9 @@ Ship the recovery changes in two deliberate phases.
       expect(html).toContain("Auth Boundary");
       expect(html).toContain("Auth Rollout");
       expect(html).toContain("badge-trust");
+      expect(html).toContain("badge-freshness-fresh");
+      expect(html).toContain("freshness-card");
+      expect(html).toContain("drift-summary");
       expect(html).toContain("durable-doc");
       expect(html).toContain("restricted");
       expect(html).not.toContain("super-secret-value");
