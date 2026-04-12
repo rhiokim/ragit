@@ -179,6 +179,7 @@ pnpm build
 - Primary URL (English): `https://rhiokim.github.io/ragit/en/`
 - Korean URL: `https://rhiokim.github.io/ragit/ko/`
 - English is the source of truth, and Korean is provided in the same structure.
+- New project onboarding starts at `https://rhiokim.github.io/ragit/en/docs/getting-started/` and `https://rhiokim.github.io/ragit/ko/docs/getting-started/`.
 
 Run locally:
 
