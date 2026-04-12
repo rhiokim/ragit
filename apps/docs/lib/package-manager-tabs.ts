@@ -112,6 +112,49 @@ function convertScriptLine(line: string): PackageManagerTabs | null {
   return convertScriptTabs(indent, `${script}${args ? ` ${args}` : ''}`, script, args);
 }
 
+function hasLineContinuation(line: string): boolean {
+  const trimmed = line.trimEnd();
+  return trimmed.endsWith('\\') && !trimmed.endsWith('\\\\');
+}
+
+function stripLineContinuation(line: string): string {
+  const trimmed = line.trimEnd();
+  return trimmed.replace(/\s*\\$/, '');
+}
+
+function normalizeLogicalLines(raw: string): string[] | null {
+  const physicalLines = raw.split(/\r?\n/);
+  const logicalLines: string[] = [];
+  let current: string | null = null;
+
+  for (const line of physicalLines) {
+    if (line.trim() === '') {
+      if (current !== null) {
+        return null;
+      }
+
+      logicalLines.push(line);
+      continue;
+    }
+
+    current = current == null ? line : `${current} ${line.trimStart()}`;
+
+    if (hasLineContinuation(current)) {
+      current = stripLineContinuation(current);
+      continue;
+    }
+
+    logicalLines.push(current);
+    current = null;
+  }
+
+  if (current !== null) {
+    return null;
+  }
+
+  return logicalLines;
+}
+
 function convertLineForFamily(
   line: string,
   family: BlockFamily
@@ -136,7 +179,11 @@ function convertLineForFamily(
 
 export function buildPackageManagerTabs(raw: string): PackageManagerCodeBlock | null {
   const newline = raw.includes('\r\n') ? '\r\n' : '\n';
-  const lines = raw.split(/\r?\n/);
+  const lines = normalizeLogicalLines(raw);
+  if (!lines) {
+    return null;
+  }
+
   const firstCommandLine = lines.find((line) => line.trim() !== '');
 
   if (!firstCommandLine) {

@@ -70,6 +70,48 @@ describe('package manager tabs', () => {
     );
   });
 
+  it('supports POSIX line continuation in package manager blocks', () => {
+    const converted = buildPackageManagerTabs(
+      [
+        '  pnpm ragit narrative [revRange] [--max-commits <n>] \\',
+        '    [--output <path>] [--emit-model <path>] \\',
+        '    [--open] [--dry-run] \\',
+        '    [--format text|json|both] [--cwd <path>]',
+        '',
+        '  pnpm build',
+      ].join('\n')
+    );
+
+    expect(converted?.tabs.pnpm).toBe(
+      [
+        '  pnpm ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-model <path>] [--open] [--dry-run] [--format text|json|both] [--cwd <path>]',
+        '',
+        '  pnpm build',
+      ].join('\n')
+    );
+    expect(converted?.tabs.npm).toBe(
+      [
+        '  npm run ragit -- narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-model <path>] [--open] [--dry-run] [--format text|json|both] [--cwd <path>]',
+        '',
+        '  npm run build',
+      ].join('\n')
+    );
+    expect(converted?.tabs.yarn).toBe(
+      [
+        '  yarn ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-model <path>] [--open] [--dry-run] [--format text|json|both] [--cwd <path>]',
+        '',
+        '  yarn build',
+      ].join('\n')
+    );
+    expect(converted?.tabs.bun).toBe(
+      [
+        '  bun run ragit narrative [revRange] [--max-commits <n>] [--output <path>] [--emit-model <path>] [--open] [--dry-run] [--format text|json|both] [--cwd <path>]',
+        '',
+        '  bun run build',
+      ].join('\n')
+    );
+  });
+
   it('does not promote blocks without convertible pnpm lines', () => {
     expect(buildPackageManagerTabs('echo "hello"')).toBeNull();
     expect(buildPackageManagerTabs('npm install')).toBeNull();
