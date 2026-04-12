@@ -14,6 +14,7 @@ Admission control runs before persistence. Implicit selectors (`--all`, `--since
 
 ### When to use it
 
+- If you are onboarding a new project, read <a href="/en/docs/getting-started">Getting Started</a> first, then run `ingest` after `init`.
 - You added or changed project docs and want retrieval to see them.
 - You promoted durable memory into `docs/memory/**`.
 - You want to preview which files would be indexed before running a real mutation.
@@ -81,6 +82,7 @@ pnpm ragit ingest --input ingest.json --dry-run --format json
 
 ## Related Commands
 
+- <a href="/en/docs/commands/status">`status`</a>
 - <a href="/en/docs/commands/query">`query`</a>
 - <a href="/en/docs/commands/context/pack">`context pack`</a>
 - <a href="/en/docs/commands/memory/promote">`memory promote`</a>
