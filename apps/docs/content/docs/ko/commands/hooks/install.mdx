@@ -13,7 +13,8 @@ command_path: hooks install
 ### 언제 쓰는가
 
 - 저장소 변경과 인덱싱을 더 자동으로 연결하고 싶을 때
-- `init` 직후 후속 작업으로 hook까지 설치하고 싶을 때
+- 첫 번째 ingest가 성공한 뒤, 관리형 hook으로 incremental indexing을 저장소 변경에 더 가깝게 붙이고 싶을 때
+- 이 단계는 필수가 아니라 첫 successful ingest 이후의 선택적 권장 단계입니다.
 
 ### 언제 쓰지 않는가
 

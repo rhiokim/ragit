@@ -1,0 +1,89 @@
+---
+title: Getting Started
+description: 신규 프로젝트에 RAGit을 적용하는 canonical onboarding
+---
+
+## 이 문서는 누구를 위한 것인가
+
+이 문서는 신규 프로젝트에 RAGit을 처음 적용하면서 설치부터 첫 번째 검증 가능한 ingest까지 한 번에 끝내고 싶은 사용자를 위한 canonical onboarding입니다.
+
+RAGit 저장소 자체를 개발하고 있다면 이 문서보다 <a href="/ko/docs/init-guide">Init Guide</a>를 먼저 읽으십시오.
+
+## 요구 사항
+
+- Git 저장소
+- Node.js 20+
+- pnpm 10+
+- 로컬 초기화를 위한 zvec bootstrap 지원 플랫폼: `darwin/arm64`, `linux/arm64`, `linux/x64`
+
+## 설치 경로 선택
+
+### Published CLI
+
+일반적인 신규 프로젝트 적용 경로라면 published CLI를 사용하는 편이 좋습니다.
+
+```bash
+npm install -g ragit
+# 또는
+pnpm add -g ragit
+# 또는
+bun add -g ragit
+```
+
+### 저장소 로컬 개발
+
+이 경로는 RAGit 저장소 자체를 개발할 때만 사용하십시오.
+
+```bash
+pnpm install
+pnpm ragit --help
+```
+
+## Happy Path
+
+1. published CLI 또는 로컬 저장소 스크립트로 RAGit을 설치합니다.
+2. `ragit init`으로 저장소를 초기화합니다.
+3. 프로젝트의 최소 문서 세트를 작성합니다.
+4. `ragit ingest --all`로 문서를 인덱싱합니다.
+5. `ragit status`와 `ragit query`로 결과를 확인합니다.
+
+```bash
+ragit init
+ragit ingest --all
+ragit status
+ragit query "project goal"
+```
+
+RAGit 저장소를 직접 개발 중이라면 `ragit` 대신 `pnpm ragit`을 사용하십시오.
+
+## Greenfield 최소 문서 세트
+
+다음 에이전트가 프로젝트를 이해하기 위해 필요한 최소 세트부터 시작하십시오.
+
+- `PRD` 1개
+- `SRS` 또는 `SPEC` 1개
+- 안정화된 결정을 남겨야 할 때만 `ADR` 1개
+
+## 선택 단계
+
+첫 번째 ingest가 성공한 뒤에는, 저장소 변경과 인덱싱을 더 가깝게 유지하고 싶을 때만 managed hooks를 설치하십시오.
+
+```bash
+ragit hooks install
+```
+
+## 완료 판정
+
+다음 조건을 만족하면 신규 프로젝트 적용이 끝난 상태로 봅니다.
+
+- `status`에서 저장소가 초기화되고 인덱싱된 상태로 보입니다.
+- `query`가 방금 추가한 문서에서 관련 chunk를 반환합니다.
+- 팀이 bootstrap 과정을 다시 읽지 않아도 문서만으로 다음 작업을 이어갈 수 있습니다.
+
+검증이 실패하면 워크플로를 바꾸기 전에 <a href="/ko/docs/commands/doctor">doctor</a>로 먼저 진단하십시오.
+
+## 다음 문서
+
+- <a href="/ko/docs/quickstart">Quickstart</a>
+- <a href="/ko/docs/init-guide">Init Guide</a>
+- <a href="/ko/docs/commands">Commands</a>
