@@ -88,7 +88,7 @@ recall_top_k = 12
     expect(result.packet.openLoops[0]?.status).toBe("blocked");
     expect(result.packet.relatedDecisions[0]?.title).toBe("Use additive memory commands");
     expect(result.packet.retrievedHits).toHaveLength(0);
-    expect(result.packet.warnings[0]).toContain("working memory만으로 복원");
+    expect(result.packet.warnings[0]).toContain("검색 snapshot이 없어 artifact source만 사용했습니다");
     expect(result.markdown).toContain("ragit memory recall");
   });
 });

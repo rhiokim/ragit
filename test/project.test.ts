@@ -11,7 +11,9 @@ describe("project helpers", () => {
     await ensureGitIgnoreEntries(temp);
 
     const content = await readFile(path.join(temp, ".gitignore"), "utf8");
-    expect(content).toBe(".ragit/store/\n.ragit/cache/\n");
+    expect(content).toBe(
+      ".ragit/store/\n.ragit/store.next/\n.ragit/store.prev/\n.ragit/cache/\n"
+    );
   });
 
   it("appends only missing entries to an existing .gitignore", async () => {
@@ -22,13 +24,19 @@ describe("project helpers", () => {
     await ensureGitIgnoreEntries(temp);
 
     const content = await readFile(gitIgnorePath, "utf8");
-    expect(content).toBe("node_modules/\n.ragit/store/\n.ragit/cache/\n");
+    expect(content).toBe(
+      "node_modules/\n.ragit/store/\n.ragit/store.next/\n.ragit/store.prev/\n.ragit/cache/\n"
+    );
   });
 
   it("does not rewrite .gitignore when all entries already exist", async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-project-stable-"));
     const gitIgnorePath = path.join(temp, ".gitignore");
-    await writeFile(gitIgnorePath, ".ragit/store/\n.ragit/cache/\n", "utf8");
+    await writeFile(
+      gitIgnorePath,
+      ".ragit/store/\n.ragit/store.next/\n.ragit/store.prev/\n.ragit/cache/\n",
+      "utf8"
+    );
     const before = await stat(gitIgnorePath);
 
     await new Promise((resolve) => setTimeout(resolve, 20));

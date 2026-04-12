@@ -134,7 +134,8 @@ type ArtifactCandidate = {
 
 const escapeFilterLiteral = (value: string): string => value.replaceAll("'", "''");
 
-const buildSnapshotIdFilter = (ids: string[]): string => `id IN (${ids.map((id) => `'${escapeFilterLiteral(id)}'`).join(",")})`;
+const buildSnapshotPathFilter = (paths: string[]): string =>
+  `path IN (${paths.map((entry) => `'${escapeFilterLiteral(entry)}'`).join(",")})`;
 
 const hydrateChunk = (raw: { id: string; fields: Record<string, unknown> }): ChunkRecord => ({
   id: raw.id,
@@ -149,6 +150,52 @@ const hydrateChunk = (raw: { id: string; fields: Record<string, unknown> }): Chu
   tokenCount: Number(raw.fields.tokenCount),
   embedding: [],
 });
+
+const SNAPSHOT_QUERY_OUTPUT_FIELDS = [
+  "documentId",
+  "documentVersionId",
+  "sectionId",
+  "sectionTitle",
+  "path",
+  "docType",
+  "commitSha",
+  "text",
+  "tokenCount",
+] as const;
+
+const buildSnapshotHit = async (
+  cwd: string,
+  raw: { id: string; score: number; fields: Record<string, unknown> },
+  query: string,
+  alpha: number,
+  scopeById: Map<string, RetrievalScope>,
+  artifactEntryByChunkId: Map<string, NonNullable<SnapshotManifest["artifactEntries"]>[number]>,
+): Promise<RetrievalHit> => {
+  const chunk = hydrateChunk(raw);
+  const scoreVector = zvecCosineDistanceToSimilarity(raw.score);
+  const scoreKeyword = keywordScore(query, chunk.text);
+  const semanticHybrid = calculateHybridScore(scoreVector, scoreKeyword, alpha);
+  const hitScope = scopeById.get(chunk.id) ?? "durable";
+  const artifactEntry = artifactEntryByChunkId.get(chunk.id);
+  const artifact = artifactEntry ? await loadArtifactRecord(cwd, artifactEntry.artifactId) : null;
+  const authorityWeight = authorityWeightForScope(hitScope, artifact?.authority);
+  const scoreFinal = 0.8 * semanticHybrid + 0.15 * authorityWeight + 0.05 * recencyWeight(artifact?.updatedAt);
+  return {
+    chunkId: chunk.id,
+    path: chunk.path,
+    sectionTitle: chunk.sectionTitle,
+    scoreVector,
+    scoreKeyword,
+    scoreFinal,
+    text: chunk.text,
+    scope: hitScope,
+    originType: artifactEntry ? "artifact" : "document",
+    artifactId: artifactEntry?.artifactId ?? null,
+    artifactKind: artifactEntry?.kind ?? null,
+    authority: artifact?.authority ?? (hitScope === "durable" ? "promoted_durable" : null),
+    confidence: artifact?.confidence ?? null,
+  };
+};
 
 const resolveChunkIdsForScope = (snapshot: SnapshotManifest, scope: RetrievalScope): { ids: string[]; scopeById: Map<string, RetrievalScope> } => {
   const scopes = snapshot.chunkScopes ?? {
@@ -324,56 +371,43 @@ const buildSnapshotHits = async (
   const artifactEntryByChunkId = new Map(
     (snapshot.artifactEntries ?? []).flatMap((entry) => entry.chunkIds.map((chunkId) => [chunkId, entry] as const)),
   );
-  if (manifestChunkIds.length === 0) return [];
+  const scopedVersionIds = new Set(
+    snapshot.chunks
+      .filter((chunk) => manifestChunkIds.includes(chunk.id))
+      .map((chunk) => chunk.documentVersionId),
+  );
+  const scopedPaths = Array.from(
+    new Set(snapshot.docs.filter((document) => scopedVersionIds.has(document.versionId)).map((document) => document.path)),
+  );
+  if (manifestChunkIds.length === 0 || scopedPaths.length === 0) return [];
 
   const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), true);
   try {
-    const batchSize = 400;
+    const batchSize = 200;
     const candidateLimit = Math.min(manifestChunkIds.length, Math.max(topK * 20, 100));
     const candidates = new Map<string, RetrievalHit>();
-    const scopedChunkIds = new Set(manifestChunkIds);
 
-    for (let cursor = 0; cursor < manifestChunkIds.length; cursor += batchSize) {
-      const slice = manifestChunkIds.slice(cursor, cursor + batchSize);
-      const filter = buildSnapshotIdFilter(slice);
+    for (let cursor = 0; cursor < scopedPaths.length; cursor += batchSize) {
+      const slice = scopedPaths.slice(cursor, cursor + batchSize);
+      const filter = buildSnapshotPathFilter(slice);
       const result = store.chunks.querySync({
         fieldName: "embedding",
         vector: queryEmbedding,
-        topk: Math.min(candidateLimit, slice.length),
+        topk: candidateLimit,
         filter,
-        outputFields: ["documentId", "documentVersionId", "sectionId", "sectionTitle", "path", "docType", "commitSha", "text", "tokenCount"],
+        outputFields: SNAPSHOT_QUERY_OUTPUT_FIELDS as unknown as string[],
       });
       for (const raw of result) {
         const chunk = hydrateChunk(raw);
-        const scoreVector = zvecCosineDistanceToSimilarity(raw.score);
-        const scoreKeyword = keywordScore(query, chunk.text);
-        const semanticHybrid = calculateHybridScore(scoreVector, scoreKeyword, alpha);
-        const hitScope = scopeById.get(chunk.id) ?? "durable";
-        const artifactEntry = artifactEntryByChunkId.get(chunk.id);
-        const artifact = artifactEntry ? await loadArtifactRecord(cwd, artifactEntry.artifactId) : null;
-        const authorityWeight = authorityWeightForScope(hitScope, artifact?.authority);
-        const scoreFinal = 0.8 * semanticHybrid + 0.15 * authorityWeight + 0.05 * recencyWeight(artifact?.updatedAt);
-        const existing = candidates.get(chunk.id);
-        if (existing && existing.scoreFinal >= scoreFinal) continue;
-        candidates.set(chunk.id, {
-          chunkId: chunk.id,
-          path: chunk.path,
-          sectionTitle: chunk.sectionTitle,
-          scoreVector,
-          scoreKeyword,
-          scoreFinal,
-          text: chunk.text,
-          scope: hitScope,
-          originType: artifactEntry ? "artifact" : "document",
-          artifactId: artifactEntry?.artifactId ?? null,
-          artifactKind: artifactEntry?.kind ?? null,
-          authority: artifact?.authority ?? (hitScope === "durable" ? "promoted_durable" : null),
-          confidence: artifact?.confidence ?? null,
-        });
+        if (!scopedVersionIds.has(chunk.documentVersionId)) continue;
+        const hit = await buildSnapshotHit(cwd, raw, query, alpha, scopeById, artifactEntryByChunkId);
+        const existing = candidates.get(hit.chunkId);
+        if (existing && existing.scoreFinal >= hit.scoreFinal) continue;
+        candidates.set(hit.chunkId, hit);
       }
     }
 
-    return Array.from(candidates.values()).filter((hit) => scopedChunkIds.has(hit.chunkId));
+    return Array.from(candidates.values());
   } finally {
     closeCanonicalStore(store);
   }
