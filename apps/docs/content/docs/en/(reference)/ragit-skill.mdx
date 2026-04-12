@@ -43,7 +43,8 @@ Typical symlink flow:
 
 ```bash
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-ln -s "/absolute/path/to/ragit/skills/use-ragit" "${CODEX_HOME:-$HOME/.codex}/skills/use-ragit"
+ln -s "/absolute/path/to/ragit/skills/use-ragit" \
+  "${CODEX_HOME:-$HOME/.codex}/skills/use-ragit"
 ```
 
 If you prefer not to symlink, copy the folder instead.
