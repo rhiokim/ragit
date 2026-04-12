@@ -8,15 +8,18 @@ import { usePackageManager } from '@/components/provider';
 import { cn } from '@/lib/cn';
 import {
   PACKAGE_MANAGERS,
+  type PackageManagerDisplayTabs,
   type PackageManagerTabs,
 } from '@/lib/package-manager-tabs';
 
 type PackageManagerCodeBlockProps = {
   tabs: PackageManagerTabs;
+  displayTabs: PackageManagerDisplayTabs;
 };
 
 export function PackageManagerCodeBlock({
   tabs,
+  displayTabs,
 }: PackageManagerCodeBlockProps) {
   const { packageManager, setPackageManager } = usePackageManager();
   const [checked, onCopy] = useCopyButton(() =>
@@ -80,7 +83,7 @@ export function PackageManagerCodeBlock({
         className="max-h-[600px] overflow-auto px-4 py-3.5 text-[0.8125rem]"
       >
         <pre className="min-w-full w-max font-mono leading-6" data-language="bash">
-          {tabs[packageManager]}
+          {displayTabs[packageManager]}
         </pre>
       </div>
     </div>

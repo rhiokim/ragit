@@ -3,6 +3,7 @@ export const PACKAGE_MANAGERS = ['pnpm', 'npm', 'yarn', 'bun'] as const;
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 export type PackageManagerTabs = Record<PackageManager, string>;
+export type PackageManagerDisplayTabs = Record<PackageManager, string>;
 
 export const DEFAULT_PACKAGE_MANAGER: PackageManager = 'pnpm';
 
@@ -18,6 +19,7 @@ type BlockFamily = 'install' | 'run' | 'script';
 
 export type PackageManagerCodeBlock = {
   tabs: PackageManagerTabs;
+  displayTabs: PackageManagerDisplayTabs;
   transformedLineCount: number;
 };
 
@@ -34,6 +36,17 @@ function createTabs(
     bun,
   };
 }
+
+type ParsedCommandItem =
+  | {
+      kind: 'blank';
+      line: string;
+    }
+  | {
+      kind: 'command';
+      physicalLines: string[];
+      canonicalLine: string;
+    };
 
 function detectBlockFamily(line: string): BlockFamily | null {
   if (/^\s*pnpm\s+install(?:\s|$)/.test(line)) {
@@ -122,37 +135,95 @@ function stripLineContinuation(line: string): string {
   return trimmed.replace(/\s*\\$/, '');
 }
 
-function normalizeLogicalLines(raw: string): string[] | null {
-  const physicalLines = raw.split(/\r?\n/);
-  const logicalLines: string[] = [];
+function toContinuationSegment(line: string): string {
+  const withoutContinuation = hasLineContinuation(line)
+    ? stripLineContinuation(line)
+    : line.trimEnd();
+  return withoutContinuation.trimStart();
+}
+
+function toCanonicalCommandLine(physicalLines: string[]): string {
   let current: string | null = null;
 
   for (const line of physicalLines) {
+    current =
+      current == null
+        ? hasLineContinuation(line)
+          ? stripLineContinuation(line)
+          : line.trimEnd()
+        : `${current} ${toContinuationSegment(line)}`;
+  }
+
+  return current ?? '';
+}
+
+function parseCommandItems(raw: string): ParsedCommandItem[] | null {
+  const physicalLines = raw.split(/\r?\n/);
+  const items: ParsedCommandItem[] = [];
+  let currentLines: string[] = [];
+
+  for (const line of physicalLines) {
     if (line.trim() === '') {
-      if (current !== null) {
+      if (currentLines.length > 0) {
         return null;
       }
 
-      logicalLines.push(line);
+      items.push({
+        kind: 'blank',
+        line,
+      });
       continue;
     }
 
-    current = current == null ? line : `${current} ${line.trimStart()}`;
-
-    if (hasLineContinuation(current)) {
-      current = stripLineContinuation(current);
+    currentLines.push(line);
+    if (hasLineContinuation(line)) {
       continue;
     }
 
-    logicalLines.push(current);
-    current = null;
+    items.push({
+      kind: 'command',
+      physicalLines: currentLines,
+      canonicalLine: toCanonicalCommandLine(currentLines),
+    });
+    currentLines = [];
   }
 
-  if (current !== null) {
+  if (currentLines.length > 0) {
     return null;
   }
 
-  return logicalLines;
+  return items;
+}
+
+function buildDisplayTabs(
+  physicalLines: string[],
+  canonicalTabs: PackageManagerTabs
+): PackageManagerDisplayTabs {
+  if (physicalLines.length <= 1) {
+    return canonicalTabs;
+  }
+
+  const tail = physicalLines
+    .slice(1)
+    .map((line) => toContinuationSegment(line))
+    .join(' ');
+  const suffix = tail ? ` ${tail}` : '';
+
+  const buildDisplay = (canonical: string): string => {
+    if (suffix === '' || !canonical.endsWith(suffix)) {
+      return canonical;
+    }
+
+    const head = canonical.slice(0, canonical.length - suffix.length);
+    return [(`${head} \\`), ...physicalLines.slice(1)].join('\n');
+  };
+
+  return createTabs(
+    buildDisplay(canonicalTabs.pnpm),
+    buildDisplay(canonicalTabs.npm),
+    buildDisplay(canonicalTabs.yarn),
+    buildDisplay(canonicalTabs.bun)
+  );
 }
 
 function convertLineForFamily(
@@ -179,18 +250,18 @@ function convertLineForFamily(
 
 export function buildPackageManagerTabs(raw: string): PackageManagerCodeBlock | null {
   const newline = raw.includes('\r\n') ? '\r\n' : '\n';
-  const lines = normalizeLogicalLines(raw);
-  if (!lines) {
+  const items = parseCommandItems(raw);
+  if (!items) {
     return null;
   }
 
-  const firstCommandLine = lines.find((line) => line.trim() !== '');
+  const firstCommand = items.find((item) => item.kind === 'command');
 
-  if (!firstCommandLine) {
+  if (!firstCommand || firstCommand.kind !== 'command') {
     return null;
   }
 
-  const family = detectBlockFamily(firstCommandLine);
+  const family = detectBlockFamily(firstCommand.canonicalLine);
   if (!family) {
     return null;
   }
@@ -201,21 +272,35 @@ export function buildPackageManagerTabs(raw: string): PackageManagerCodeBlock | 
     yarn: [],
     bun: [],
   };
+  const displayLines: Record<PackageManager, string[]> = {
+    pnpm: [],
+    npm: [],
+    yarn: [],
+    bun: [],
+  };
 
   let transformedLineCount = 0;
 
-  for (const line of lines) {
-    const converted = convertLineForFamily(line, family);
+  for (const item of items) {
+    if (item.kind === 'blank') {
+      for (const packageManager of PACKAGE_MANAGERS) {
+        outputLines[packageManager].push(item.line);
+        displayLines[packageManager].push(item.line);
+      }
+      continue;
+    }
+
+    const converted = convertLineForFamily(item.canonicalLine, family);
     if (!converted) {
       return null;
     }
 
-    if (line.trim() !== '') {
-      transformedLineCount += 1;
-    }
+    transformedLineCount += 1;
+    const display = buildDisplayTabs(item.physicalLines, converted);
 
     for (const packageManager of PACKAGE_MANAGERS) {
       outputLines[packageManager].push(converted[packageManager]);
+      displayLines[packageManager].push(display[packageManager]);
     }
   }
 
@@ -230,6 +315,12 @@ export function buildPackageManagerTabs(raw: string): PackageManagerCodeBlock | 
       outputLines.npm.join(newline),
       outputLines.yarn.join(newline),
       outputLines.bun.join(newline)
+    ),
+    displayTabs: createTabs(
+      displayLines.pnpm.join(newline),
+      displayLines.npm.join(newline),
+      displayLines.yarn.join(newline),
+      displayLines.bun.join(newline)
     ),
   };
 }

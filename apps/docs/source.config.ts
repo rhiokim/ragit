@@ -62,9 +62,13 @@ export default defineConfig({
 
                 node.properties.__raw__ = this.source;
                 node.properties.__npm__ = packageManagerTabs.tabs.npm;
+                node.properties.__npm_display__ = packageManagerTabs.displayTabs.npm;
                 node.properties.__yarn__ = packageManagerTabs.tabs.yarn;
+                node.properties.__yarn_display__ = packageManagerTabs.displayTabs.yarn;
                 node.properties.__pnpm__ = packageManagerTabs.tabs.pnpm;
+                node.properties.__pnpm_display__ = packageManagerTabs.displayTabs.pnpm;
                 node.properties.__bun__ = packageManagerTabs.tabs.bun;
+                node.properties.__bun_display__ = packageManagerTabs.displayTabs.bun;
               },
             },
           ],

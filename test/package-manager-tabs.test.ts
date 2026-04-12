@@ -110,6 +110,46 @@ describe('package manager tabs', () => {
         '  bun run build',
       ].join('\n')
     );
+    expect(converted?.displayTabs.pnpm).toBe(
+      [
+        '  pnpm ragit narrative [revRange] [--max-commits <n>] \\',
+        '    [--output <path>] [--emit-model <path>] \\',
+        '    [--open] [--dry-run] \\',
+        '    [--format text|json|both] [--cwd <path>]',
+        '',
+        '  pnpm build',
+      ].join('\n')
+    );
+    expect(converted?.displayTabs.npm).toBe(
+      [
+        '  npm run ragit -- narrative [revRange] [--max-commits <n>] \\',
+        '    [--output <path>] [--emit-model <path>] \\',
+        '    [--open] [--dry-run] \\',
+        '    [--format text|json|both] [--cwd <path>]',
+        '',
+        '  npm run build',
+      ].join('\n')
+    );
+    expect(converted?.displayTabs.yarn).toBe(
+      [
+        '  yarn ragit narrative [revRange] [--max-commits <n>] \\',
+        '    [--output <path>] [--emit-model <path>] \\',
+        '    [--open] [--dry-run] \\',
+        '    [--format text|json|both] [--cwd <path>]',
+        '',
+        '  yarn build',
+      ].join('\n')
+    );
+    expect(converted?.displayTabs.bun).toBe(
+      [
+        '  bun run ragit narrative [revRange] [--max-commits <n>] \\',
+        '    [--output <path>] [--emit-model <path>] \\',
+        '    [--open] [--dry-run] \\',
+        '    [--format text|json|both] [--cwd <path>]',
+        '',
+        '  bun run build',
+      ].join('\n')
+    );
   });
 
   it('does not promote blocks without convertible pnpm lines', () => {
