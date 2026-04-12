@@ -1,59 +1,26 @@
 ---
 title: Quickstart
-description: Get started with RAGit and docs workflow
+description: Navigate the onboarding paths for new projects and repo-local development
 ---
 
-## Requirements
+This page is a hub, not the full onboarding walkthrough.
+If you are applying RAGit to a new project, start with <a href="/en/docs/getting-started">Getting Started</a>.
+If you are developing RAGit itself inside this repository, read <a href="/en/docs/init-guide">Init Guide</a>.
 
-- Node.js 20+
-- pnpm 10+
-- Git repository
+## Choose Your Path
 
-## Install
+- New project onboarding: <a href="/en/docs/getting-started">Getting Started</a>
+- Repository-local development: <a href="/en/docs/init-guide">Init Guide</a>
+- Command reference: <a href="/en/docs/commands">Commands</a>
+- Memory model and control-plane behavior: <a href="/en/docs/memory-model">Memory Model Guide</a>
+- Agent CLI contract and JSON output rules: <a href="/en/docs/agent-cli">Agent CLI Contract</a>
 
-For repository-local development:
-
-```bash
-pnpm install
-```
-
-Inside a repository checkout, run CLI commands with the project script entry for your selected package manager.
-To confirm that the local CLI entry is wired correctly, run:
-
-```bash
-pnpm ragit --help
-```
-
-The local build step is optional and only needed when you want to generate the `dist/` bundle locally.
-
-```bash
-pnpm build
-```
-
-For the published CLI:
-
-```bash
-npm install -g ragit
-pnpm add -g ragit
-bun add -g ragit
-npx ragit --help
-```
-
-## Initialize RAGit
-
-```bash
-pnpm ragit init
-pnpm ragit hooks install
-pnpm ragit ingest --all
-```
-
-At this point you can start using commit-bound retrieval. If you want the philosophy behind `memory wrap`, `memory recall`, and `memory promote`, read <a href="/en/docs/memory-model">Memory Model Guide</a> before you add memory workflows to your project.
-If you want detailed command syntax and per-command examples, continue with <a href="/en/docs/commands">Commands</a>.
-
-## Run docs locally
+## Docs Local Development
 
 ```bash
 pnpm docs:dev
 ```
 
-Then open `/en/docs` and `/ko/docs`.
+Open `/en/docs` or `/ko/docs` after the site starts.
+
+If you only need the full onboarding path, do not use this page as the source of truth. Use <a href="/en/docs/getting-started">Getting Started</a>.

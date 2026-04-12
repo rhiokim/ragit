@@ -1,6 +1,7 @@
 {
   "title": "Workflows",
   "pages": [
+    "getting-started",
     "init-guide",
     "memory-model"
   ]

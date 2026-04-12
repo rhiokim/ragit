@@ -1,0 +1,89 @@
+---
+title: Getting Started
+description: Canonical onboarding for applying RAGit to a new project
+---
+
+## Who This Is For
+
+Use this guide if you are applying RAGit to a project for the first time and want one canonical path from install to first verified ingest.
+
+If you are developing RAGit itself inside this repository, start with <a href="/en/docs/init-guide">Init Guide</a> instead.
+
+## Requirements
+
+- Git repository
+- Node.js 20+
+- pnpm 10+
+- A supported zvec bootstrap platform for local initialization: `darwin/arm64`, `linux/arm64`, or `linux/x64`
+
+## Choose Your Install Path
+
+### Published CLI
+
+Use the published CLI if you want the normal project onboarding path.
+
+```bash
+npm install -g ragit
+# or
+pnpm add -g ragit
+# or
+bun add -g ragit
+```
+
+### Repository-Local Development
+
+Use the repository-local script only if you are working on RAGit itself.
+
+```bash
+pnpm install
+pnpm ragit --help
+```
+
+## Happy Path
+
+1. Install RAGit with the published CLI or your local repository checkout.
+2. Initialize the repository.
+3. Write the minimum document set for your project.
+4. Ingest the repository docs.
+5. Verify the result with `status` and `query`.
+
+```bash
+ragit init
+ragit ingest --all
+ragit status
+ragit query "project goal"
+```
+
+If you use the repository-local script while developing RAGit itself, replace `ragit` with `pnpm ragit`.
+
+## Minimum Document Set
+
+Start with the smallest set that lets the next agent understand the project:
+
+- One `PRD`
+- One `SRS` or `SPEC`
+- One `ADR` when you need to record a durable decision
+
+## Optional Next Step
+
+After your first successful ingest, install managed hooks if you want incremental indexing to stay close to repository changes.
+
+```bash
+ragit hooks install
+```
+
+## Completion Criteria
+
+You are ready when:
+
+- `status` shows the repository is initialized and indexed
+- `query` returns relevant chunks from the documents you just added
+- your team can continue from the written docs without rereading the bootstrap steps
+
+If verification fails, use <a href="/en/docs/doctor">doctor</a> before changing the workflow.
+
+## Next Documents
+
+- <a href="/en/docs/quickstart">Quickstart</a>
+- <a href="/en/docs/init-guide">Init Guide</a>
+- <a href="/en/docs/commands">Commands</a>
