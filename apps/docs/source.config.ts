@@ -2,6 +2,10 @@ import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import rehypePrettyCode from 'rehype-pretty-code';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 
+import {
+  rehypeRewriteInternalDocsLinks,
+  remarkRewriteInternalDocsLinks,
+} from './lib/internal-doc-links';
 import { buildPackageManagerTabs } from './lib/package-manager-tabs';
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
@@ -39,8 +43,13 @@ export const docsKo = defineDocs({
 
 export default defineConfig({
   mdxOptions: {
+    remarkPlugins: (plugins) => {
+      plugins.push(remarkRewriteInternalDocsLinks as any);
+      return plugins;
+    },
     rehypePlugins: (plugins) => {
       plugins.shift();
+      plugins.push(rehypeRewriteInternalDocsLinks as any);
       plugins.push([
         rehypePrettyCode as any,
         {

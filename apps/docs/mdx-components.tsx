@@ -1,5 +1,6 @@
 import { PackageManagerCodeBlock } from '@/components/package-manager-code-block';
 import { MermaidDiagram } from '@/components/mermaid-diagram';
+import { normalizeInternalDocsHref } from '@/lib/internal-doc-links';
 import {
   CodeBlock,
   type CodeBlockProps,
@@ -36,10 +37,23 @@ function hasPackageManagerTabs(props: CodePropsWithTabs) {
 }
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
+  const Anchor = components?.a ?? defaultMdxComponents.a ?? 'a';
+  const DefaultAnchor = defaultMdxComponents.a ?? 'a';
+
   return {
     ...defaultMdxComponents,
     ...components,
     MermaidDiagram,
+    a: ({ href, ...props }: React.ComponentProps<'a'>) => {
+      const normalizedHref =
+        typeof href === 'string' ? normalizeInternalDocsHref(href) : href;
+
+      if (typeof href === 'string' && normalizedHref !== href) {
+        return <DefaultAnchor {...props} href={normalizedHref} />;
+      }
+
+      return <Anchor {...props} href={normalizedHref} />;
+    },
     pre: ({ children, ...props }: PreProps) => {
       if (
         isValidElement<CodePropsWithTabs>(children) &&
