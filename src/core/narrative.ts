@@ -16,6 +16,7 @@ import {
   NarrativeViewModel,
   NarrativeValidationStatus,
 } from "./narrative-model.js";
+import { buildNarrativeRecoveryProfile } from "./recovery-profile.js";
 import type { ArtifactRecord, DriftItem, DriftResult, DriftStatus } from "./types.js";
 
 export type {
@@ -705,6 +706,268 @@ const buildDetailPayload = (payload: {
       `relatedPaths=${payload.binding.relatedPathCount}`,
     ].join(" · "),
   });
+
+const renderRecoverNowSection = (viewModel: NarrativeViewModel): string => {
+  const recoverNow = viewModel.recovery.recoverNow;
+  const trustCounts = viewModel.recovery.whatToTrust;
+
+  const priorityItems =
+    recoverNow.items.length > 0
+      ? recoverNow.items
+          .map((item) => {
+            const detail = escapeHtml(
+              buildDetailPayload({
+                type: item.kind === "intent" ? "intent" : item.kind === "thread" ? "thread" : "decision",
+                title: item.title,
+                summary: item.summary,
+                path: item.relatedPaths.join(", "),
+                artifactId: null,
+                snapshotSha: item.snapshotSha,
+                relationKind: item.sourceRef,
+                confidence: null,
+                changeType: item.kind,
+                trust: "none",
+                sensitivity: "standard",
+                validationStatus: null,
+                validationReasonCodes: [],
+                validationEvidenceRefs: [],
+                validationRecommendedActions: [],
+                freshnessStatus: null,
+                driftReasonCodes: [],
+                recommendedActions: [],
+                driftSourceRefs: [],
+                binding: {
+                  goalCount: recoverNow.currentGoal ? 1 : 0,
+                  episodeCount: 0,
+                  sessionCount: recoverNow.latestSessionId ? 1 : 0,
+                  relatedPathCount: item.relatedPaths.length,
+                },
+              }),
+            );
+            return `
+              <article class="trust-item">
+                <button
+                  type="button"
+                  class="trust-button"
+                  data-thread-focus="${escapeHtml(item.threadId ?? "")}"
+                  data-detail='${detail}'
+                >
+                  <span class="validation-kind">${escapeHtml(item.kind)}</span>
+                  <span class="trust-title">${escapeHtml(item.title)}</span>
+                  ${renderBadgeRow([
+                    renderBadge(`#${item.rank}`, "muted"),
+                    renderBadge(item.source, "muted"),
+                    item.status ? renderBadge(item.status, "validation-attention") : "",
+                  ].filter(Boolean))}
+                  <span class="validation-summary-text">${escapeHtml(item.summary)}</span>
+                  <span class="detail-meta">${escapeHtml(item.sourceRef)}</span>
+                </button>
+              </article>
+            `;
+          })
+          .join("")
+      : `<div class="empty-state"><p>No recovery priority items are currently available.</p></div>`;
+
+  const openLoopRows = recoverNow.items.filter((item) => item.kind === "open-loop");
+  const nextActionRows = recoverNow.items.filter((item) => item.kind === "next-action");
+  const constraintRows = recoverNow.items.filter((item) => item.kind === "constraint");
+
+  return `
+    <h2>Recover Now</h2>
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-label">Recovery Source</div><div class="summary-value">${escapeHtml(recoverNow.source)}</div></div>
+      <div class="summary-card"><div class="summary-label">Open Loops</div><div class="summary-value">${recoverNow.openLoopCount}</div></div>
+      <div class="summary-card"><div class="summary-label">Next Actions</div><div class="summary-value">${recoverNow.nextActionCount}</div></div>
+      <div class="summary-card"><div class="summary-label">Stable Decisions</div><div class="summary-value">${recoverNow.stableDecisionCount}</div></div>
+      <div class="summary-card freshness-card freshness-fresh"><div class="summary-label">Fresh</div><div class="summary-value">${trustCounts.freshnessCounts.fresh}</div></div>
+      <div class="summary-card validation-card validation-verified"><div class="summary-label">Verified</div><div class="summary-value">${trustCounts.validationCounts.verified}</div></div>
+    </div>
+    <div class="detail-list">
+      <div><strong>Head</strong>: ${escapeHtml(shortSha(viewModel.headSha))}</div>
+      <div><strong>Window</strong>: ${escapeHtml(viewModel.window.revRange ?? "HEAD")} · max ${viewModel.window.maxCommits} selected snapshot commit(s)</div>
+      <div><strong>Generated at</strong>: ${escapeHtml(viewModel.generatedAt)}</div>
+      <div><strong>Goal</strong>: ${escapeHtml(recoverNow.currentGoal ?? "none")}</div>
+      <div><strong>Summary</strong>: ${escapeHtml(recoverNow.currentSummary ?? "none")}</div>
+      <div><strong>Latest session</strong>: ${escapeHtml(recoverNow.latestSessionId ?? "none")}</div>
+      <div><strong>Projection</strong>: ${escapeHtml(viewModel.projectionMode)} · policy v${viewModel.projectionPolicyVersion}</div>
+      <div><strong>Warnings</strong>: ${viewModel.warnings.length > 0 ? escapeHtml(viewModel.warnings.join(" | ")) : "none"}</div>
+    </div>
+    <div class="content-grid recovery-grid" style="margin-top: 18px;">
+      <div class="stack">
+        <div class="intent-group">
+          <h3>Recovery Signals</h3>
+          ${
+            constraintRows.length > 0
+              ? `<ul class="recovery-list">${constraintRows
+                  .map((item) => `<li><strong>${escapeHtml(item.title)}</strong><div>${escapeHtml(item.summary)}</div></li>`)
+                  .join("")}</ul>`
+              : `<div class="empty-state"><p>No active constraints were recovered.</p></div>`
+          }
+        </div>
+        <div class="intent-group">
+          <h3>Open Loops</h3>
+          ${
+            openLoopRows.length > 0
+              ? `<div class="validation-list">${openLoopRows
+                  .map(
+                    (item) => `
+                      <article class="validation-item">
+                        <div class="validation-button">
+                          <span class="validation-kind">${escapeHtml(item.status ?? "open")}</span>
+                          <span class="validation-title">${escapeHtml(item.title)}</span>
+                          <span class="validation-summary-text">${escapeHtml(item.summary)}</span>
+                        </div>
+                      </article>
+                    `,
+                  )
+                  .join("")}</div>`
+              : `<div class="empty-state"><p>No open loops are blocking recovery right now.</p></div>`
+          }
+        </div>
+      </div>
+      <div class="stack">
+        <div class="intent-group">
+          <h3>Priority Queue</h3>
+          <div class="trust-list">${priorityItems}</div>
+        </div>
+        <div class="intent-group">
+          <h3>Next Actions</h3>
+          ${
+            nextActionRows.length > 0
+              ? `<ul class="recovery-list recovery-hit-list">${nextActionRows
+                  .map((item) => `<li><strong>${escapeHtml(item.title)}</strong><div>${escapeHtml(item.summary)}</div></li>`)
+                  .join("")}</ul>`
+              : `<div class="empty-state"><p>No explicit next action was recovered for the current packet.</p></div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+const renderTrustSection = (viewModel: NarrativeViewModel): string => {
+  if (viewModel.recovery.whatToTrust.items.length === 0) {
+    return `<div class="empty-state"><p>No trust items are available in the selected window.</p></div>`;
+  }
+
+  return viewModel.recovery.whatToTrust.items
+    .map((item) => {
+      const detail = escapeHtml(
+        buildDetailPayload({
+          type: item.kind === "event" ? "event" : item.kind === "intent" ? "intent" : item.kind === "thread" ? "thread" : "decision",
+          title: item.title,
+          summary: item.summary,
+          path: item.relatedPaths.join(", "),
+          artifactId: null,
+          snapshotSha: null,
+          relationKind: item.sourceRef,
+          confidence: null,
+          changeType: item.kind,
+          trust: item.trustBadge ?? "none",
+          sensitivity: item.sensitivity ?? "none",
+          validationStatus: item.validationStatus,
+          validationReasonCodes: item.reasonCodes,
+          validationEvidenceRefs: item.evidenceRefs,
+          validationRecommendedActions: item.recommendedActions,
+          freshnessStatus: item.freshnessStatus,
+          driftReasonCodes: item.reasonCodes,
+          recommendedActions: item.recommendedActions,
+          driftSourceRefs: [],
+          binding: {
+            goalCount: 0,
+            episodeCount: 0,
+            sessionCount: 0,
+            relatedPathCount: item.relatedPaths.length,
+          },
+        }),
+      );
+      return `
+        <article class="trust-item" data-thread-refs="${escapeHtml(item.threadId ?? "")}">
+          <button
+            type="button"
+            class="trust-button"
+            data-thread-focus="${escapeHtml(item.threadId ?? "")}"
+            data-freshness-status="${escapeHtml(item.freshnessStatus ?? "")}"
+            data-detail='${detail}'
+          >
+            <span class="validation-kind">${escapeHtml(item.kind)}</span>
+            <span class="trust-title">${escapeHtml(item.title)}</span>
+            ${renderBadgeRow([
+              renderBadge(`#${item.rank}`, "muted"),
+              item.freshnessStatus ? renderFreshnessBadge(item.freshnessStatus) : "",
+              item.validationStatus ? renderValidationBadge(item.validationStatus) : "",
+              item.trustBadge ? renderBadge(item.trustBadge, "trust") : "",
+              ...item.lineageKinds.map((lineage) =>
+                renderBadge(lineage, lineage.startsWith("heuristic") ? "heuristic" : "lineage"),
+              ),
+              item.sensitivity && item.sensitivity !== "standard" ? renderBadge(item.sensitivity, "sensitivity") : "",
+            ].filter(Boolean))}
+            <span class="validation-summary-text">${escapeHtml(item.summary)}</span>
+            ${renderDriftSummary(item.freshnessStatus, item.reasonCodes, item.recommendedActions)}
+            ${renderValidationSummary(item.validationStatus, item.reasonCodes, item.evidenceRefs, item.recommendedActions)}
+          </button>
+        </article>
+      `;
+    })
+    .join("");
+};
+
+const renderFormationSection = (viewModel: NarrativeViewModel): string => {
+  if (viewModel.recovery.howWeGotHere.steps.length === 0) {
+    return `<div class="empty-state"><p>No formation steps were recovered from the selected window.</p></div>`;
+  }
+  return viewModel.recovery.howWeGotHere.steps
+    .map((step) => {
+      const detail = escapeHtml(
+        buildDetailPayload({
+          type: step.kind === "event" ? "event" : step.kind === "intent" ? "intent" : step.kind === "memory" ? "thread" : "decision",
+          title: step.title,
+          summary: step.summary,
+          path: step.relatedPaths.join(", "),
+          artifactId: null,
+          snapshotSha: null,
+          relationKind: step.refId,
+          confidence: null,
+          changeType: step.kind,
+          trust: "none",
+          sensitivity: "standard",
+          validationStatus: null,
+          validationReasonCodes: [],
+          validationEvidenceRefs: [],
+          validationRecommendedActions: [],
+          freshnessStatus: null,
+          driftReasonCodes: [],
+          recommendedActions: [],
+          driftSourceRefs: [],
+          binding: {
+            goalCount: 0,
+            episodeCount: 0,
+            sessionCount: 0,
+            relatedPathCount: step.relatedPaths.length,
+          },
+        }),
+      );
+      return `
+        <article class="timeline-item" data-thread-refs="${escapeHtml(step.threadId ?? "")}">
+          <button
+            type="button"
+            class="timeline-button"
+            data-thread-focus="${escapeHtml(step.threadId ?? "")}"
+            data-detail='${detail}'
+          >
+            <span class="timeline-date">${escapeHtml(step.when ?? "none")}</span>
+            <span class="timeline-type">${escapeHtml(step.kind)}</span>
+            ${renderBadgeRow([
+              renderBadge(`#${step.rank}`, "muted"),
+              step.threadId ? renderBadge("thread-linked", "lineage") : "",
+            ].filter(Boolean))}
+            <span class="timeline-summary">${escapeHtml(step.summary)}</span>
+          </button>
+        </article>
+      `;
+    })
+    .join("");
+};
 
 const renderDecisionSection = (viewModel: NarrativeViewModel): string => {
   if (viewModel.empty || viewModel.threads.length === 0 || viewModel.snapshots.length === 0) {
@@ -1443,6 +1706,44 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
         border-radius: 14px;
         background: rgba(255,255,255,0.72);
       }
+      .trust-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .trust-item {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255,255,255,0.72);
+      }
+      .trust-button {
+        width: 100%;
+        appearance: none;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+        color: inherit;
+        padding: 14px;
+        display: grid;
+        gap: 6px;
+      }
+      .trust-title {
+        font-weight: 700;
+      }
+      .recovery-list {
+        margin: 12px 0 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 8px;
+        line-height: 1.45;
+      }
+      .recovery-hit-list {
+        padding-left: 18px;
+      }
+      .recovery-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
       .validation-button {
         width: 100%;
         appearance: none;
@@ -1507,6 +1808,9 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
         .content-grid {
           grid-template-columns: 1fr;
         }
+        .recovery-grid {
+          grid-template-columns: 1fr;
+        }
       }
       @media (max-width: 760px) {
         main {
@@ -1526,9 +1830,9 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
     <main>
       <header class="report-header">
         <div>
-          <h1>${escapeHtml(viewModel.repoName)} narrative report</h1>
+          <h1>${escapeHtml(viewModel.repoName)} recovery view</h1>
           <p class="report-subtitle">
-            프로젝트의 결정 변화사, 의도, 운영 시간축을 같은 창에서 읽도록 합성한 self-contained report입니다.
+            지금 이 프로젝트에 다시 진입할 때 무엇부터 회복하고, 무엇을 믿고, 어떻게 여기까지 왔는지를 한 화면에서 읽도록 합성한 self-contained report입니다.
           </p>
         </div>
         <div class="legend">
@@ -1540,48 +1844,47 @@ export const renderNarrativeReport = (viewModel: NarrativeViewModel): string => 
       </header>
 
       <section id="report-summary">
-        <div class="summary-grid">
-          <div class="summary-card"><div class="summary-label">Head</div><div class="summary-value">${escapeHtml(shortSha(viewModel.headSha))}</div></div>
-          <div class="summary-card"><div class="summary-label">Selected Snapshots</div><div class="summary-value">${viewModel.window.selectedSnapshotShas.length}</div></div>
-          <div class="summary-card"><div class="summary-label">Decision Threads</div><div class="summary-value">${viewModel.summary.decisionThreads}</div></div>
-          <div class="summary-card"><div class="summary-label">Intent Items</div><div class="summary-value">${viewModel.summary.intentItems}</div></div>
-          <div class="summary-card"><div class="summary-label">Timeline Events</div><div class="summary-value">${viewModel.summary.timelineEvents}</div></div>
-          <div class="summary-card"><div class="summary-label">Missing Snapshot Commits</div><div class="summary-value">${viewModel.window.missingSnapshotCommits}</div></div>
-          <div class="summary-card freshness-card freshness-fresh"><div class="summary-label">Fresh</div><div class="summary-value">${viewModel.summary.freshnessCounts.fresh}</div></div>
-          <div class="summary-card freshness-card freshness-suspect"><div class="summary-label">Suspect</div><div class="summary-value">${viewModel.summary.freshnessCounts.suspect}</div></div>
-          <div class="summary-card freshness-card freshness-stale"><div class="summary-label">Stale</div><div class="summary-value">${viewModel.summary.freshnessCounts.stale}</div></div>
-          <div class="summary-card validation-card validation-verified"><div class="summary-label">Verified</div><div class="summary-value">${viewModel.summary.validationCounts.verified}</div></div>
-          <div class="summary-card validation-card validation-attention"><div class="summary-label">Attention</div><div class="summary-value">${viewModel.summary.validationCounts.attention}</div></div>
-          <div class="summary-card validation-card validation-unverified"><div class="summary-label">Unverified</div><div class="summary-value">${viewModel.summary.validationCounts.unverified}</div></div>
-        </div>
-        <div class="detail-list">
-          <div><strong>Window</strong>: ${escapeHtml(viewModel.window.revRange ?? "HEAD")} · max ${viewModel.window.maxCommits} selected snapshot commit(s)</div>
-          <div><strong>Generated at</strong>: ${escapeHtml(viewModel.generatedAt)}</div>
-          <div><strong>Projection</strong>: ${escapeHtml(viewModel.projectionMode)} · policy v${viewModel.projectionPolicyVersion}</div>
-          <div><strong>Warnings</strong>: ${viewModel.warnings.length === 0 ? "none" : escapeHtml(viewModel.warnings.join(" | "))}</div>
-        </div>
+        ${renderRecoverNowSection(viewModel)}
       </section>
 
       <div class="content-grid" style="margin-top: 18px;">
         <section id="decision-evolution">
-          <h2>Decision Evolution</h2>
-          ${renderDecisionSection(viewModel)}
+          <h2>How We Got Here</h2>
+          <div class="timeline-list">${renderFormationSection(viewModel)}</div>
+          <div class="intent-group" style="margin-top: 18px;">
+            <h3>Decision Evolution</h3>
+            ${renderDecisionSection(viewModel)}
+          </div>
         </section>
 
         <div class="stack">
           <section id="intent-panel">
-            <h2>Intent Panel</h2>
+            <h2>What To Trust</h2>
+            <div class="summary-grid validation-summary-grid">
+              <div class="summary-card"><div class="summary-label">Threads</div><div class="summary-value">${viewModel.recovery.howWeGotHere.threadCount}</div></div>
+              <div class="summary-card"><div class="summary-label">Intent Items</div><div class="summary-value">${viewModel.recovery.howWeGotHere.intentCount}</div></div>
+              <div class="summary-card freshness-card freshness-fresh"><div class="summary-label">Fresh</div><div class="summary-value">${viewModel.recovery.whatToTrust.freshnessCounts.fresh}</div></div>
+              <div class="summary-card freshness-card freshness-suspect"><div class="summary-label">Suspect</div><div class="summary-value">${viewModel.recovery.whatToTrust.freshnessCounts.suspect}</div></div>
+              <div class="summary-card freshness-card freshness-stale"><div class="summary-label">Stale</div><div class="summary-value">${viewModel.recovery.whatToTrust.freshnessCounts.stale}</div></div>
+              <div class="summary-card validation-card validation-verified"><div class="summary-label">Verified</div><div class="summary-value">${viewModel.recovery.whatToTrust.validationCounts.verified}</div></div>
+              <div class="summary-card validation-card validation-attention"><div class="summary-label">Attention</div><div class="summary-value">${viewModel.recovery.whatToTrust.validationCounts.attention}</div></div>
+              <div class="summary-card validation-card validation-unverified"><div class="summary-label">Unverified</div><div class="summary-value">${viewModel.recovery.whatToTrust.validationCounts.unverified}</div></div>
+            </div>
             <div class="intent-group">
-              <h3>Assigned</h3>
+              <h3>Trust Items</h3>
+              <div class="trust-list">${renderTrustSection(viewModel)}</div>
+            </div>
+            <div class="intent-group">
+              <h3>Assigned Intent</h3>
               <div class="intent-list">${renderIntentSection(viewModel.intentItems, "Assigned intent items")}</div>
             </div>
             <div class="intent-group">
-              <h3>Unassigned</h3>
+              <h3>Unassigned Intent</h3>
               <div class="intent-list">${renderIntentSection(viewModel.unassignedIntentItems, "Unassigned intent items")}</div>
             </div>
             <div id="detail-card" class="detail-card">
               <div class="detail-title">Detail</div>
-              <div class="detail-summary">노드, intent, timeline event를 클릭하면 결속 정보와 근거 메타데이터를 여기서 보여 줍니다.</div>
+              <div class="detail-summary">복원 우선순위, trust item, 형성 단계 중 하나를 클릭하면 결속 정보와 근거 메타데이터를 여기서 보여 줍니다.</div>
             </div>
           </section>
 
@@ -1688,7 +1991,12 @@ export const runNarrativeReport = async (cwd: string, options: NarrativeOptions 
   const built = await buildNarrativeViewModel(cwd, options);
   const drift = await runDrift(cwd);
   const viewModelWithFreshness = applyDriftOverlay(built.viewModel, drift);
-  const viewModel = await applyValidationOverlay(cwd, viewModelWithFreshness, drift);
+  const viewModelWithValidation = await applyValidationOverlay(cwd, viewModelWithFreshness, drift);
+  const recovery = await buildNarrativeRecoveryProfile(cwd, viewModelWithValidation);
+  const viewModel = {
+    ...viewModelWithValidation,
+    recovery,
+  };
   const modelOutput = options.emitModel ? resolveNarrativeModelOutput(cwd, options.emitModel) : null;
   if (!options.dryRun) {
     await mkdir(path.dirname(built.absoluteReportPath), { recursive: true });
@@ -1705,6 +2013,9 @@ export const runNarrativeReport = async (cwd: string, options: NarrativeOptions 
     ...built.result,
     summary: viewModel.summary,
     modelPath: modelOutput?.displayPath ?? null,
+    recoverySource: viewModel.recovery.recoverNow.source,
+    recoveryGoal: viewModel.recovery.recoverNow.currentGoal,
+    recoveryPriorityItems: viewModel.recovery.recoverNow.items.length,
   };
 };
 
@@ -1720,6 +2031,9 @@ export const formatNarrativeText = (
     `- projection_policy_version: ${result.projectionPolicyVersion ?? NARRATIVE_PROJECTION_POLICY_VERSION}`,
     `- projection_mode: ${result.projectionMode ?? NARRATIVE_PROJECTION_MODE}`,
     `- head: ${result.headSha}`,
+    `- recovery_source: ${result.recoverySource ?? "none"}`,
+    `- recovery_goal: ${result.recoveryGoal ?? "none"}`,
+    `- recovery_priority_items: ${result.recoveryPriorityItems ?? 0}`,
     `- window_rev_range: ${result.window.revRange ?? "HEAD"}`,
     `- selected_snapshots: ${result.window.selectedSnapshotShas.length}`,
     `- missing_snapshot_commits: ${result.window.missingSnapshotCommits}`,

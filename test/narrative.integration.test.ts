@@ -237,6 +237,9 @@ Ship the recovery changes in two deliberate phases.
       expect(html).toContain('id="decision-evolution"');
       expect(html).toContain('id="intent-panel"');
       expect(html).toContain('id="operational-timeline"');
+      expect(html).toContain("Recover Now");
+      expect(html).toContain("What To Trust");
+      expect(html).toContain("How We Got Here");
       expect(html).toContain("Auth Boundary");
       expect(html).toContain("Auth Rollout");
       expect(html).toContain("badge-trust");
