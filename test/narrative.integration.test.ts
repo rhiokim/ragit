@@ -227,6 +227,12 @@ Ship the recovery changes in two deliberate phases.
       expect(modelJson.producerVersion).toBe(RAGIT_VERSION);
       expect(modelJson.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
       expect(modelJson.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
+      expect(modelJson.recovery.empty).toBe(false);
+      expect(modelJson.recovery.recoverNow.items.length).toBeGreaterThan(0);
+      expect(modelJson.recovery.whatToTrust.items.length).toBeGreaterThan(0);
+      expect(modelJson.recovery.howWeGotHere.steps.length).toBeGreaterThan(0);
+      expect(modelJson.recovery.recoverNow.source).toBeTypeOf("string");
+      expect(modelJson.recovery.recoverNow.currentGoal).toContain("auth recovery work");
       expect(html).toContain('id="report-summary"');
       expect(html).toContain('id="decision-evolution"');
       expect(html).toContain('id="intent-panel"');

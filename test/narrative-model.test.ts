@@ -103,6 +103,16 @@ Keep report synthesis separate from viewer rendering.
       expect(built.viewModel.snapshots).toHaveLength(1);
       expect(built.viewModel.threads.length).toBeGreaterThan(0);
       expect(built.viewModel.intentItems.length).toBeGreaterThan(0);
+      expect(built.viewModel.recovery.empty).toBe(false);
+      expect(built.viewModel.recovery.recoverNow.items.length).toBeGreaterThan(0);
+      expect(built.viewModel.recovery.whatToTrust.items.length).toBeGreaterThan(0);
+      expect(built.viewModel.recovery.howWeGotHere.steps.length).toBeGreaterThan(0);
+      expect(built.viewModel.recovery.recoverNow.source).toBeTypeOf("string");
+      expect(built.viewModel.recovery.whatToTrust.freshnessCounts).toMatchObject({
+        fresh: expect.any(Number),
+        suspect: expect.any(Number),
+        stale: expect.any(Number),
+      });
       expect("goalIds" in built.viewModel.threads[0]).toBe(false);
       expect("goalId" in built.viewModel.intentItems[0]).toBe(false);
       expect("sourceSessionId" in built.viewModel.intentItems[0]).toBe(false);
@@ -170,6 +180,10 @@ Keep report synthesis separate from viewer rendering.
         attention: 0,
         unverified: 0,
       });
+      expect(normalized.value?.recovery.empty).toBe(true);
+      expect(normalized.value?.recovery.recoverNow.items).toEqual([]);
+      expect(normalized.value?.recovery.whatToTrust.items).toEqual([]);
+      expect(normalized.value?.recovery.howWeGotHere.steps).toEqual([]);
       expect(normalized.warnings[0]).toContain("legacy-unversioned");
     });
 
@@ -224,6 +238,8 @@ Keep report synthesis separate from viewer rendering.
     expect(normalized.value?.nodes[0].validationStatus).toBeNull();
     expect(normalized.value?.intentItems[0].validationEvidenceRefs).toEqual([]);
     expect(normalized.value?.intentItems[0].driftSourceRefs).toEqual([]);
+    expect(normalized.value?.recovery.empty).toBe(true);
+    expect(normalized.value?.recovery.recoverNow.items).toEqual([]);
     expect(normalized.value?.summary.freshnessCounts).toEqual({
       fresh: 2,
       suspect: 1,

@@ -3,6 +3,12 @@ import path from "node:path";
 import { listArtifactRecords, loadArtifactRecord } from "./artifacts.js";
 import { getHeadSha, listGitCommits } from "./git.js";
 import { loadSnapshotManifestIfExists } from "./manifest.js";
+import { buildRecoveryView } from "./recovery-view.js";
+import {
+  buildNarrativeRecoveryProfile,
+  normalizeNarrativeRecoveryProfile,
+  type NarrativeRecoveryProfile,
+} from "./recovery-profile.js";
 import { sanitizeStructuredValue } from "./security.js";
 import {
   ArtifactRecord,
@@ -14,6 +20,8 @@ import {
   SnapshotManifest,
 } from "./types.js";
 import { RAGIT_VERSION } from "./version.js";
+
+export type { NarrativeRecoveryProfile } from "./recovery-profile.js";
 
 const DECISION_DOC_TYPES = new Set<DocType>(["adr", "plan", "spec", "pbd"]);
 const INTENT_KINDS = new Set<ArtifactRecord["kind"]>(["feedback", "constraint", "insight", "openLoop", "failure"]);
@@ -52,6 +60,121 @@ export interface NarrativeValidationCounts {
   unverified: number;
 }
 
+export type NarrativeRecoverySource = "working-memory" | "latest-session" | "recall" | "narrative" | "none";
+export type NarrativeRecoveryPriorityKind =
+  | "constraint"
+  | "open-loop"
+  | "next-action"
+  | "decision"
+  | "retrieval-hit"
+  | "thread"
+  | "intent";
+export type NarrativeRecoveryTrustKind = "thread" | "node" | "intent" | "event";
+export type NarrativeRecoveryFormationKind = "snapshot" | "memory" | "decision" | "intent" | "event";
+
+export interface NarrativeRecoveryPriorityItem {
+  id: string;
+  kind: NarrativeRecoveryPriorityKind;
+  title: string;
+  summary: string;
+  source: NarrativeRecoverySource;
+  threadId: string | null;
+  path: string | null;
+  artifactId: string | null;
+  snapshotSha: string | null;
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  validationStatus: NarrativeValidationStatus | null;
+  trust: NarrativeTrustBadge | null;
+  sensitivity: NarrativeSensitivityBadge | null;
+  reasonCodes: string[];
+  recommendedActions: string[];
+}
+
+export interface NarrativeRecoveryOpenLoop {
+  id: string;
+  title: string;
+  status: string;
+  nextAction: string;
+  sourceSessionId: string | null;
+  relatedFiles: string[];
+}
+
+export interface NarrativeRecoveryDecision {
+  id: string;
+  title: string;
+  summary: string;
+  relatedFiles: string[];
+}
+
+export interface NarrativeRecoveryHit {
+  id: string;
+  path: string;
+  sectionTitle: string;
+  excerpt: string;
+  scoreFinal: number;
+  originType: string;
+  artifactId: string | null;
+}
+
+export interface NarrativeRecoveryRecoverNow {
+  source: NarrativeRecoverySource;
+  goal: string | null;
+  summary: string | null;
+  latestSessionId: string | null;
+  episodeId: string | null;
+  sourceHeadSha: string | null;
+  updatedAt: string | null;
+  constraints: string[];
+  openLoops: NarrativeRecoveryOpenLoop[];
+  nextActions: string[];
+  durableDecisions: NarrativeRecoveryDecision[];
+  retrievedHits: NarrativeRecoveryHit[];
+  priorityItems: NarrativeRecoveryPriorityItem[];
+}
+
+export interface NarrativeRecoveryTrustItem {
+  id: string;
+  kind: NarrativeRecoveryTrustKind;
+  title: string;
+  summary: string;
+  threadId: string | null;
+  path: string | null;
+  artifactId: string | null;
+  snapshotSha: string | null;
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  validationStatus: NarrativeValidationStatus | null;
+  trust: NarrativeTrustBadge | null;
+  sensitivity: NarrativeSensitivityBadge | null;
+  lineage: string | null;
+  reasonCodes: string[];
+  evidenceRefs: string[];
+  recommendedActions: string[];
+}
+
+export interface NarrativeRecoveryFormationStep {
+  id: string;
+  kind: NarrativeRecoveryFormationKind;
+  title: string;
+  summary: string;
+  recordedAt: string | null;
+  threadId: string | null;
+  snapshotSha: string | null;
+  path: string | null;
+  artifactId: string | null;
+  freshnessStatus: NarrativeFreshnessStatus | null;
+  validationStatus: NarrativeValidationStatus | null;
+  trust: NarrativeTrustBadge | null;
+  sensitivity: NarrativeSensitivityBadge | null;
+  lineage: string | null;
+}
+
+export interface NarrativeRecoveryView {
+  recoverNow: NarrativeRecoveryRecoverNow;
+  trustItems: NarrativeRecoveryTrustItem[];
+  formationSteps: NarrativeRecoveryFormationStep[];
+  warnings: string[];
+}
+
 export interface NarrativeOptions {
   revRange?: string;
   maxCommits?: number;
@@ -84,6 +207,9 @@ export interface NarrativeResult {
   headSha: string;
   window: NarrativeWindowSummary;
   summary: NarrativeSummary;
+  recoverySource: NarrativeRecoverySource;
+  recoveryGoal: string | null;
+  recoveryPriorityItems: number;
   warnings: string[];
 }
 
@@ -314,6 +440,8 @@ export interface NarrativeViewModel {
   intentItems: NarrativeIntentItem[];
   unassignedIntentItems: NarrativeIntentItem[];
   timelineEvents: NarrativeEventItem[];
+  recovery: NarrativeRecoveryProfile;
+  recoveryProfile: NarrativeRecoveryView;
   warnings: string[];
   empty: boolean;
 }
@@ -380,6 +508,27 @@ const emptyValidationCounts = (): NarrativeValidationCounts => ({
   verified: 0,
   attention: 0,
   unverified: 0,
+});
+
+const emptyRecoveryView = (): NarrativeRecoveryView => ({
+  recoverNow: {
+    source: "none",
+    goal: null,
+    summary: null,
+    latestSessionId: null,
+    episodeId: null,
+    sourceHeadSha: null,
+    updatedAt: null,
+    constraints: [],
+    openLoops: [],
+    nextActions: [],
+    durableDecisions: [],
+    retrievedHits: [],
+    priorityItems: [],
+  },
+  trustItems: [],
+  formationSteps: [],
+  warnings: [],
 });
 
 const emptyDriftOverlayFields = (): {
@@ -486,6 +635,217 @@ const attachNarrativeValidationDefaults = <T extends object>(value: T): T & Retu
   ...coerceValidationOverlayFields(value),
 });
 
+const coerceRecoveryPriorityItems = (value: unknown): NarrativeRecoveryPriorityItem[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => isPlainObject(item))
+    .map((item) => ({
+      id: typeof item.id === "string" ? item.id : "",
+      kind:
+        item.kind === "constraint" ||
+        item.kind === "open-loop" ||
+        item.kind === "next-action" ||
+        item.kind === "decision" ||
+        item.kind === "retrieval-hit" ||
+        item.kind === "thread" ||
+        item.kind === "intent"
+          ? item.kind
+          : "decision",
+      title: typeof item.title === "string" ? item.title : "",
+      summary: typeof item.summary === "string" ? item.summary : "",
+      source:
+        item.source === "working-memory" ||
+        item.source === "latest-session" ||
+        item.source === "recall" ||
+        item.source === "narrative" ||
+        item.source === "none"
+          ? item.source
+          : "none",
+      threadId: typeof item.threadId === "string" ? item.threadId : null,
+      path: typeof item.path === "string" ? item.path : null,
+      artifactId: typeof item.artifactId === "string" ? item.artifactId : null,
+      snapshotSha: typeof item.snapshotSha === "string" ? item.snapshotSha : null,
+      ...coerceDriftOverlayFields(item),
+      validationStatus: coerceValidationOverlayFields(item).validationStatus,
+      trust:
+        item.trust === "durable-doc" ||
+        item.trust === "reviewed-artifact" ||
+        item.trust === "promoted-artifact" ||
+        item.trust === "operational-event"
+          ? item.trust
+          : null,
+      sensitivity:
+        item.sensitivity === "standard" || item.sensitivity === "redacted" || item.sensitivity === "restricted"
+          ? item.sensitivity
+          : null,
+      reasonCodes: Array.isArray(item.reasonCodes) ? item.reasonCodes.filter((entry): entry is string => typeof entry === "string") : [],
+      recommendedActions: Array.isArray(item.recommendedActions)
+        ? item.recommendedActions.filter((entry): entry is string => typeof entry === "string")
+        : [],
+    }));
+};
+
+const coerceRecoveryOpenLoops = (value: unknown): NarrativeRecoveryOpenLoop[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => isPlainObject(item))
+    .map((item) => ({
+      id: typeof item.id === "string" ? item.id : "",
+      title: typeof item.title === "string" ? item.title : "",
+      status: typeof item.status === "string" ? item.status : "open",
+      nextAction: typeof item.nextAction === "string" ? item.nextAction : "",
+      sourceSessionId: typeof item.sourceSessionId === "string" ? item.sourceSessionId : null,
+      relatedFiles: Array.isArray(item.relatedFiles)
+        ? item.relatedFiles.filter((entry): entry is string => typeof entry === "string")
+        : [],
+    }));
+};
+
+const coerceRecoveryDecisions = (value: unknown): NarrativeRecoveryDecision[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => isPlainObject(item))
+    .map((item) => ({
+      id: typeof item.id === "string" ? item.id : "",
+      title: typeof item.title === "string" ? item.title : "",
+      summary: typeof item.summary === "string" ? item.summary : "",
+      relatedFiles: Array.isArray(item.relatedFiles)
+        ? item.relatedFiles.filter((entry): entry is string => typeof entry === "string")
+        : [],
+    }));
+};
+
+const coerceRecoveryHits = (value: unknown): NarrativeRecoveryHit[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => isPlainObject(item))
+    .map((item) => ({
+      id: typeof item.id === "string" ? item.id : "",
+      path: typeof item.path === "string" ? item.path : "",
+      sectionTitle: typeof item.sectionTitle === "string" ? item.sectionTitle : "",
+      excerpt: typeof item.excerpt === "string" ? item.excerpt : "",
+      scoreFinal: typeof item.scoreFinal === "number" && Number.isFinite(item.scoreFinal) ? item.scoreFinal : 0,
+      originType: typeof item.originType === "string" ? item.originType : "document",
+      artifactId: typeof item.artifactId === "string" ? item.artifactId : null,
+    }));
+};
+
+const coerceRecoveryTrustItems = (value: unknown): NarrativeRecoveryTrustItem[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => isPlainObject(item))
+    .map((item) => {
+      const validation = coerceValidationOverlayFields(item);
+      return {
+        id: typeof item.id === "string" ? item.id : "",
+        kind: item.kind === "thread" || item.kind === "node" || item.kind === "intent" || item.kind === "event" ? item.kind : "thread",
+        title: typeof item.title === "string" ? item.title : "",
+        summary: typeof item.summary === "string" ? item.summary : "",
+        threadId: typeof item.threadId === "string" ? item.threadId : null,
+        path: typeof item.path === "string" ? item.path : null,
+        artifactId: typeof item.artifactId === "string" ? item.artifactId : null,
+        snapshotSha: typeof item.snapshotSha === "string" ? item.snapshotSha : null,
+        ...coerceDriftOverlayFields(item),
+        validationStatus: validation.validationStatus,
+        trust:
+          item.trust === "durable-doc" ||
+          item.trust === "reviewed-artifact" ||
+          item.trust === "promoted-artifact" ||
+          item.trust === "operational-event"
+            ? item.trust
+            : null,
+        sensitivity:
+          item.sensitivity === "standard" || item.sensitivity === "redacted" || item.sensitivity === "restricted"
+            ? item.sensitivity
+            : null,
+        lineage: typeof item.lineage === "string" ? item.lineage : null,
+        reasonCodes: Array.isArray(item.reasonCodes) ? item.reasonCodes.filter((entry): entry is string => typeof entry === "string") : [],
+        evidenceRefs: Array.isArray(item.evidenceRefs)
+          ? item.evidenceRefs.filter((entry): entry is string => typeof entry === "string")
+          : [],
+        recommendedActions: Array.isArray(item.recommendedActions)
+          ? item.recommendedActions.filter((entry): entry is string => typeof entry === "string")
+          : [],
+      };
+    });
+};
+
+const coerceRecoveryFormationSteps = (value: unknown): NarrativeRecoveryFormationStep[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => isPlainObject(item))
+    .map((item) => {
+      const validation = coerceValidationOverlayFields(item);
+      return {
+        id: typeof item.id === "string" ? item.id : "",
+        kind:
+          item.kind === "memory" || item.kind === "decision" || item.kind === "intent" || item.kind === "event"
+            ? item.kind
+            : "event",
+        title: typeof item.title === "string" ? item.title : "",
+        summary: typeof item.summary === "string" ? item.summary : "",
+        recordedAt: typeof item.recordedAt === "string" ? item.recordedAt : null,
+        threadId: typeof item.threadId === "string" ? item.threadId : null,
+        snapshotSha: typeof item.snapshotSha === "string" ? item.snapshotSha : null,
+        path: typeof item.path === "string" ? item.path : null,
+        artifactId: typeof item.artifactId === "string" ? item.artifactId : null,
+        ...coerceDriftOverlayFields(item),
+        validationStatus: validation.validationStatus,
+        trust:
+          item.trust === "durable-doc" ||
+          item.trust === "reviewed-artifact" ||
+          item.trust === "promoted-artifact" ||
+          item.trust === "operational-event"
+            ? item.trust
+            : null,
+        sensitivity:
+          item.sensitivity === "standard" || item.sensitivity === "redacted" || item.sensitivity === "restricted"
+            ? item.sensitivity
+            : null,
+        lineage: typeof item.lineage === "string" ? item.lineage : null,
+      };
+    });
+};
+
+const coerceRecoveryView = (value: unknown): NarrativeRecoveryView => {
+  if (!isPlainObject(value)) return emptyRecoveryView();
+  const fallback = emptyRecoveryView();
+  const recoverNowValue = isPlainObject(value.recoverNow) ? value.recoverNow : {};
+  return {
+    recoverNow: {
+      source:
+        recoverNowValue.source === "working-memory" ||
+        recoverNowValue.source === "latest-session" ||
+        recoverNowValue.source === "recall" ||
+        recoverNowValue.source === "narrative" ||
+        recoverNowValue.source === "none"
+          ? recoverNowValue.source
+          : fallback.recoverNow.source,
+      goal: typeof recoverNowValue.goal === "string" ? recoverNowValue.goal : fallback.recoverNow.goal,
+      summary: typeof recoverNowValue.summary === "string" ? recoverNowValue.summary : fallback.recoverNow.summary,
+      latestSessionId:
+        typeof recoverNowValue.latestSessionId === "string" ? recoverNowValue.latestSessionId : fallback.recoverNow.latestSessionId,
+      episodeId: typeof recoverNowValue.episodeId === "string" ? recoverNowValue.episodeId : fallback.recoverNow.episodeId,
+      sourceHeadSha:
+        typeof recoverNowValue.sourceHeadSha === "string" ? recoverNowValue.sourceHeadSha : fallback.recoverNow.sourceHeadSha,
+      updatedAt: typeof recoverNowValue.updatedAt === "string" ? recoverNowValue.updatedAt : fallback.recoverNow.updatedAt,
+      constraints: Array.isArray(recoverNowValue.constraints)
+        ? recoverNowValue.constraints.filter((entry): entry is string => typeof entry === "string")
+        : [],
+      openLoops: coerceRecoveryOpenLoops(recoverNowValue.openLoops),
+      nextActions: Array.isArray(recoverNowValue.nextActions)
+        ? recoverNowValue.nextActions.filter((entry): entry is string => typeof entry === "string")
+        : [],
+      durableDecisions: coerceRecoveryDecisions(recoverNowValue.durableDecisions),
+      retrievedHits: coerceRecoveryHits(recoverNowValue.retrievedHits),
+      priorityItems: coerceRecoveryPriorityItems(recoverNowValue.priorityItems),
+    },
+    trustItems: coerceRecoveryTrustItems(value.trustItems),
+    formationSteps: coerceRecoveryFormationSteps(value.formationSteps),
+    warnings: Array.isArray(value.warnings) ? value.warnings.filter((entry): entry is string => typeof entry === "string") : [],
+  };
+};
+
 const hasNarrativeViewModelCoreShape = (value: Record<string, unknown>): boolean =>
   typeof value.repoName === "string" &&
   typeof value.headSha === "string" &&
@@ -544,6 +904,9 @@ export const normalizeNarrativeViewModel = (
           ? (legacyValue.unassignedIntentItems.map((item) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(item))) as NarrativeIntentItem[])
           : [],
         timelineEvents: Array.isArray(legacyValue.timelineEvents) ? legacyValue.timelineEvents : [],
+        recovery: normalizeNarrativeRecoveryProfile(
+          (legacyValue as Record<string, unknown>).recovery ?? (legacyValue as Record<string, unknown>).recoveryProfile,
+        ),
       },
       compatibility: "legacy-unversioned",
       warnings: ["narrative model payload had no schemaVersion and was coerced as legacy-unversioned"],
@@ -588,6 +951,7 @@ export const normalizeNarrativeViewModel = (
         ? value.unassignedIntentItems.map((item) => attachNarrativeValidationDefaults(attachNarrativeDriftDefaults(item)))
         : [],
       timelineEvents: Array.isArray(value.timelineEvents) ? value.timelineEvents : [],
+      recovery: normalizeNarrativeRecoveryProfile(value.recovery ?? value.recoveryProfile),
     },
     compatibility: "versioned",
     warnings,
@@ -1283,9 +1647,10 @@ const projectEventItemForViewerSafe = (event: NarrativeSynthesisEventItem): Narr
   };
 };
 
-export const projectNarrativeViewModelForViewerSafe = (
+export const projectNarrativeViewModelForViewerSafe = async (
+  cwd: string,
   synthesis: NarrativeSynthesisViewModel,
-): NarrativeViewModel => {
+): Promise<NarrativeViewModel> => {
   const snapshots = synthesis.snapshots.map(projectSnapshotForViewerSafe);
   const nodes = synthesis.nodes.map(projectDecisionNodeForViewerSafe);
   const threads = synthesis.threads.map((thread) => projectThreadForViewerSafe(thread, synthesis.nodes));
@@ -1298,7 +1663,7 @@ export const projectNarrativeViewModelForViewerSafe = (
     "narrative.warnings",
   ).value ?? []) as string[];
 
-  return {
+  const baseViewModel = {
     schemaVersion: NARRATIVE_MODEL_SCHEMA_VERSION,
     producerVersion: RAGIT_VERSION,
     projectionPolicyVersion: NARRATIVE_PROJECTION_POLICY_VERSION,
@@ -1316,6 +1681,13 @@ export const projectNarrativeViewModelForViewerSafe = (
     timelineEvents,
     warnings,
     empty: synthesis.empty,
+  } satisfies Omit<NarrativeViewModel, "recovery" | "recoveryProfile">;
+  const recoveryProfile = await buildRecoveryView(cwd, baseViewModel);
+  const recovery = await buildNarrativeRecoveryProfile(cwd, baseViewModel, recoveryProfile);
+  return {
+    ...baseViewModel,
+    recovery,
+    recoveryProfile,
   };
 };
 
@@ -1367,7 +1739,7 @@ export const buildNarrativeViewModel = async (
     warnings,
     empty: snapshots.length === 0 || threads.length === 0,
   };
-  const viewModel = projectNarrativeViewModelForViewerSafe(synthesis);
+  const viewModel = await projectNarrativeViewModelForViewerSafe(cwd, synthesis);
   const result: NarrativeResult = {
     dryRun: Boolean(options.dryRun),
     reportPath: outputTarget.displayPath,
@@ -1375,6 +1747,9 @@ export const buildNarrativeViewModel = async (
     headSha,
     window: viewModel.window,
     summary: viewModel.summary,
+    recoverySource: viewModel.recovery.recoverNow.source,
+    recoveryGoal: viewModel.recovery.recoverNow.currentGoal,
+    recoveryPriorityItems: viewModel.recovery.recoverNow.items.length,
     warnings: viewModel.warnings,
   };
   return {
