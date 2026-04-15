@@ -355,6 +355,182 @@
       "badges": { "trust": "operational-event", "sensitivity": "restricted" }
     }
   ],
+  "recovery": {
+    "recoverNow": {
+      "source": "narrative",
+      "items": [
+        {
+          "itemId": "recovery_goal",
+          "kind": "working-goal",
+          "title": "Restore recovery-first viewer",
+          "summary": "Keep the OpenTUI surface aligned to Recover Now, What To Trust, How We Got Here, Intent, and Timeline.",
+          "rank": 1,
+          "source": "working-memory",
+          "sourceRef": "working-memory:goal",
+          "snapshotSha": "abc1234",
+          "threadId": "thread_2",
+          "nodeId": "node_4",
+          "relatedPaths": ["tools/narrative-tui/src/index.ts"],
+          "status": "active"
+        },
+        {
+          "itemId": "recovery_session",
+          "kind": "latest-session",
+          "title": "Latest session wrap",
+          "summary": "Resume from the last session wrap before exploring trust and formation traces.",
+          "rank": 2,
+          "source": "latest-session",
+          "sourceRef": "session_viewer",
+          "snapshotSha": "abc1234",
+          "threadId": "thread_2",
+          "nodeId": null,
+          "relatedPaths": ["tools/narrative-tui/src/model.ts"],
+          "status": "stable"
+        },
+        {
+          "itemId": "recovery_loop",
+          "kind": "open-loop",
+          "title": "Future root CLI bridge",
+          "summary": "The optional `ragit narrative tui` bridge remains a future phase and should stay out of v1.",
+          "rank": 3,
+          "source": "recall",
+          "sourceRef": "recovery:future-bridge",
+          "snapshotSha": "abc1234",
+          "threadId": "thread_1",
+          "nodeId": "node_3",
+          "relatedPaths": ["src/cli.ts"],
+          "status": "reviewed"
+        }
+      ],
+      "currentGoal": "Keep the viewer recovery-first",
+      "currentSummary": "The current session should restore the sanitized recovery packet before exploring intent or timeline.",
+      "latestSessionId": "session_viewer",
+      "openLoopCount": 1,
+      "nextActionCount": 2,
+      "stableDecisionCount": 2
+    },
+    "whatToTrust": {
+      "items": [
+        {
+          "itemId": "trust_thread_1",
+          "kind": "thread",
+          "title": "Narrative report architecture",
+          "summary": "This thread captures the canonical export boundary and its security posture.",
+          "rank": 1,
+          "threadId": "thread_1",
+          "freshnessStatus": "suspect",
+          "validationStatus": "attention",
+          "trustBadge": "durable-doc",
+          "sensitivity": "restricted",
+          "lineageKinds": ["root", "path-continuity"],
+          "sourceRef": "docs/adr/001-narrative-report.md",
+          "relatedPaths": ["docs/adr/001-narrative-report.md"],
+          "reasonCodes": ["tracked_path_changed"],
+          "evidenceRefs": ["src/core/narrative.ts"],
+          "recommendedActions": ["doc refresh"]
+        },
+        {
+          "itemId": "trust_intent_1",
+          "kind": "intent",
+          "title": "Viewer must read sanitized JSON only",
+          "summary": "The viewer should stay isolated from raw workspace files and manifest data.",
+          "rank": 2,
+          "threadId": "thread_1",
+          "freshnessStatus": "fresh",
+          "validationStatus": "verified",
+          "trustBadge": "promoted-artifact",
+          "sensitivity": "restricted",
+          "lineageKinds": ["explicit"],
+          "sourceRef": "tools/narrative-tui/src/index.ts",
+          "relatedPaths": ["tools/narrative-tui/src/index.ts"],
+          "reasonCodes": [],
+          "evidenceRefs": ["tools/narrative-tui/src/model.ts"],
+          "recommendedActions": []
+        },
+        {
+          "itemId": "trust_event_1",
+          "kind": "event",
+          "title": "security.admission",
+          "summary": "Admission control blocked an unsafe attempt to embed a raw operational payload in the viewer.",
+          "rank": 3,
+          "threadId": "thread_2",
+          "freshnessStatus": "stale",
+          "validationStatus": "unverified",
+          "trustBadge": "operational-event",
+          "sensitivity": "restricted",
+          "lineageKinds": ["explicit"],
+          "sourceRef": "event_2",
+          "relatedPaths": ["tools/narrative-tui/src/index.ts"],
+          "reasonCodes": ["failure_evidence_present"],
+          "evidenceRefs": ["tools/narrative-tui/src/index.ts"],
+          "recommendedActions": ["harness verify"]
+        }
+      ],
+      "freshnessCounts": {
+        "fresh": 4,
+        "suspect": 4,
+        "stale": 2
+      },
+      "validationCounts": {
+        "verified": 5,
+        "attention": 3,
+        "unverified": 2
+      }
+    },
+    "howWeGotHere": {
+      "steps": [
+        {
+          "itemId": "step_snapshot_1",
+          "kind": "snapshot",
+          "title": "First recovery snapshot",
+          "summary": "Capture the current narrative state before rearranging the explorer.",
+          "rank": 1,
+          "refId": "fedcba9",
+          "when": "2026-04-10T09:30:00.000Z",
+          "relatedPaths": ["docs/adr/001-narrative-report.md"],
+          "threadId": "thread_1"
+        },
+        {
+          "itemId": "step_thread_1",
+          "kind": "thread",
+          "title": "Narrative report architecture thread",
+          "summary": "Keep HTML canonical while the TUI stays a local explorer.",
+          "rank": 2,
+          "refId": "thread_1",
+          "when": "2026-04-10T09:45:00.000Z",
+          "relatedPaths": ["docs/adr/001-narrative-report.md"],
+          "threadId": "thread_1"
+        },
+        {
+          "itemId": "step_intent_1",
+          "kind": "intent",
+          "title": "Viewer isolated from raw workspace",
+          "summary": "Promote the sanitized JSON-only rule into long-term memory.",
+          "rank": 3,
+          "refId": "artifact_3",
+          "when": "2026-04-11T00:05:00.000Z",
+          "relatedPaths": ["tools/narrative-tui/src/index.ts"],
+          "threadId": "thread_1"
+        },
+        {
+          "itemId": "step_event_1",
+          "kind": "event",
+          "title": "Recovery indexing completed",
+          "summary": "Record the point where the recovery packet became readable in the viewer.",
+          "rank": 4,
+          "refId": "event_3",
+          "when": "2026-04-11T00:12:00.000Z",
+          "relatedPaths": ["tools/narrative-tui/src/index.ts", "docs/plans/narrative-viewer-rollout.md"],
+          "threadId": "thread_2"
+        }
+      ],
+      "snapshotCount": 2,
+      "threadCount": 2,
+      "intentCount": 3,
+      "eventCount": 3
+    },
+    "empty": false
+  },
   "warnings": [
     "One recent git commit did not produce a manifest snapshot and is counted only as missingSnapshotCommits."
   ],

@@ -11,28 +11,25 @@ import {
   TextRenderable,
 } from "@opentui/core";
 import {
-  buildEventOptionDescription,
-  buildEventOptionName,
+  buildExplorerView,
+  buildFormationOptionDescription,
+  buildFormationOptionName,
   buildFreshnessBadgeLabel,
   buildFreshnessDetailLines,
   buildFreshnessSummary,
-  buildExplorerView,
-  buildIntentOptionDescription,
-  buildIntentOptionName,
-  buildPlaceholderThreadOption,
-  buildThreadOptionDescription,
-  buildThreadOptionName,
+  buildRecoveryOptionDescription,
+  buildRecoveryOptionName,
+  buildTrustOptionDescription,
+  buildTrustOptionName,
   buildValidationBadgeLabel,
   buildValidationDetailLines,
   buildValidationSummary,
-  isEventLinkedToThread,
-  isIntentLinkedToThread,
   loadNarrativeModel,
   type ExplorerDetail,
-  type ExplorerEventView,
-  type ExplorerIntentView,
+  type ExplorerFormationStepView,
+  type ExplorerRecoveryItemView,
   type ExplorerState,
-  type ExplorerThreadView,
+  type ExplorerTrustItemView,
   type FilterScope,
   type NarrativeModel,
 } from "./model";
@@ -75,14 +72,12 @@ const parseArgs = (argv: string[]): ParsedArgs => {
 
 const formatScopeLabel = (scope: FilterScope): string => {
   switch (scope) {
-    case "threads":
-      return "threads";
-    case "decisions":
-      return "decisions";
-    case "intent":
-      return "intent";
-    case "events":
-      return "events";
+    case "recover":
+      return "recover";
+    case "trust":
+      return "trust";
+    case "formation":
+      return "formation";
     default:
       return "all";
   }
@@ -106,22 +101,20 @@ const createPanel = (
 const formatSummary = (
   model: NarrativeModel,
   state: ExplorerState,
-  selectedThread: ExplorerThreadView | null,
+  selectedRecoveryItem: ExplorerRecoveryItemView | null,
 ): string => {
   const warningLines =
-    model.warnings.length > 0
-      ? model.warnings.map((warning) => `- ${warning}`).join("\n")
-      : "- none";
+    model.warnings.length > 0 ? model.warnings.map((warning) => `- ${warning}`).join("\n") : "- none";
 
   return [
     `${model.repoName} · HEAD ${model.headSha}`,
     `schema=${model.schemaVersion} · projection=${model.projectionMode} · policy=${model.projectionPolicyVersion}`,
-    `window: ${model.window.selectedSnapshotShas.length} snapshot(s), ${model.window.missingSnapshotCommits} missing manifest commit(s)`,
-    `threads=${model.summary.decisionThreads} · nodes=${model.summary.decisionNodes} · intent=${model.summary.intentItems} · events=${model.summary.timelineEvents}`,
-    `freshness: fresh=${model.summary.freshnessCounts.fresh} · suspect=${model.summary.freshnessCounts.suspect} · stale=${model.summary.freshnessCounts.stale}`,
-    `validation: verified=${model.summary.validationCounts.verified} · attention=${model.summary.validationCounts.attention} · unverified=${model.summary.validationCounts.unverified}`,
+    `recovery: source=${model.recovery.recoverNow.source} · goal=${model.recovery.recoverNow.currentGoal ?? "none"}`,
+    `recover=${model.recovery.recoverNow.items.length} · trust=${model.recovery.whatToTrust.items.length} · formation=${model.recovery.howWeGotHere.steps.length}`,
+    `freshness: fresh=${model.recovery.whatToTrust.freshnessCounts.fresh} · suspect=${model.recovery.whatToTrust.freshnessCounts.suspect} · stale=${model.recovery.whatToTrust.freshnessCounts.stale}`,
+    `validation: verified=${model.recovery.whatToTrust.validationCounts.verified} · attention=${model.recovery.whatToTrust.validationCounts.attention} · unverified=${model.recovery.whatToTrust.validationCounts.unverified}`,
     `filter: ${formatScopeLabel(state.scope)} · query=${state.query.trim().length > 0 ? state.query : "(none)"}`,
-    `selected: ${selectedThread ? `${selectedThread.title} [${selectedThread.docType}]` : "(none)"}`,
+    `selected: ${selectedRecoveryItem ? selectedRecoveryItem.title : "(none)"}`,
     "",
     "Tab focus · arrows move · Enter select · Esc clears search · q quits",
     "",
@@ -130,65 +123,54 @@ const formatSummary = (
   ].join("\n");
 };
 
-const formatDecisionEvolution = (thread: ExplorerThreadView | null): string => {
-  if (!thread) {
-    return [
-      "No decision thread is visible in the current filter.",
-      "",
-      "Clear the query or switch the scope back to `all`, `threads`, or `decisions`.",
-    ].join("\n");
-  }
-
-  const lines: string[] = [
-    `${thread.title}`,
-    `${thread.docType} thread · ${thread.nodes.length} node(s) · ${thread.snapshotShas.length} snapshot(s)`,
-    `paths: ${thread.docPaths.join(", ")}`,
-    `trust: ${thread.badges.trust} · sensitivity: ${thread.badges.sensitivity}`,
-    `freshness: ${buildFreshnessSummary(thread.freshnessStatus, thread.driftReasonCodes, thread.recommendedActions)}`,
-    `validation: ${buildValidationSummary(
-      thread.validationStatus,
-      thread.validationReasonCodes,
-      thread.validationEvidenceRefs,
-      thread.validationRecommendedActions,
-    )}`,
-    `bindings: goals=${thread.binding.goalCount}, episodes=${thread.binding.episodeCount}, sessions=${thread.binding.sessionCount}, relatedPaths=${thread.binding.relatedPathCount}`,
+const formatRecoverNow = (
+  model: NarrativeModel,
+  selectedRecoveryItem: ExplorerRecoveryItemView | null,
+): string => {
+  const lines = [
+    `Goal: ${model.recovery.recoverNow.currentGoal ?? "none"}`,
+    `Summary: ${model.recovery.recoverNow.currentSummary ?? "none"}`,
+    `Source: ${model.recovery.recoverNow.source}`,
+    `Latest Session: ${model.recovery.recoverNow.latestSessionId ?? "none"}`,
+    `Open Loops: ${model.recovery.recoverNow.openLoopCount}`,
+    `Next Actions: ${model.recovery.recoverNow.nextActionCount}`,
+    `Stable Decisions: ${model.recovery.recoverNow.stableDecisionCount}`,
     "",
   ];
 
-  const orderedNodes = [...thread.nodes].sort((left, right) => {
-    const byTime = left.authoredAt.localeCompare(right.authoredAt);
-    if (byTime !== 0) return byTime;
-    return left.path.localeCompare(right.path);
-  });
+  if (!selectedRecoveryItem) {
+    lines.push("No recovery item is visible in the current filter.");
+    return lines.join("\n");
+  }
 
-  orderedNodes.forEach((node, index) => {
-    const badge = node.relationKind === "root" ? "root" : node.relationKind;
+  lines.push(
+    `Selected: #${selectedRecoveryItem.rank} ${selectedRecoveryItem.title}`,
+    `Kind: ${selectedRecoveryItem.kind} · source=${selectedRecoveryItem.source} · status=${selectedRecoveryItem.status ?? "none"}`,
+    `Summary: ${selectedRecoveryItem.summary}`,
+    `Source Ref: ${selectedRecoveryItem.sourceRef}`,
+    `Snapshot: ${selectedRecoveryItem.snapshotSha ?? "none"}`,
+    `Related Paths: ${selectedRecoveryItem.relatedPaths.length > 0 ? selectedRecoveryItem.relatedPaths.join(", ") : "none"}`,
+    `Linked Thread: ${selectedRecoveryItem.linkedThread?.title ?? "none"}`,
+  );
+
+  if (selectedRecoveryItem.linkedThread) {
     lines.push(
-      `${index + 1}. ${node.commitSha.slice(0, 7)} · ${node.changeType} · [${badge}] · ${buildFreshnessBadgeLabel(node.freshnessStatus)}`,
-      `   ${node.title}`,
-      `   ${node.path}`,
-      `   ${node.summary}`,
-      `   artifact=${node.sourceArtifactId ?? "none"} · confidence=${node.confidence.toFixed(2)}`,
-      `   trust=${node.badges.trust} · sensitivity=${node.badges.sensitivity}`,
-      `   freshness: ${buildFreshnessSummary(node.freshnessStatus, node.driftReasonCodes, node.recommendedActions)}`,
-      `   validation: ${buildValidationSummary(
-        node.validationStatus,
-        node.validationReasonCodes,
-        node.validationEvidenceRefs,
-        node.validationRecommendedActions,
+      "",
+      `Thread Freshness: ${buildFreshnessSummary(
+        selectedRecoveryItem.linkedThread.freshnessStatus,
+        selectedRecoveryItem.linkedThread.driftReasonCodes,
+        selectedRecoveryItem.linkedThread.recommendedActions,
       )}`,
-      `   bindings=goals=${node.binding.goalCount}, episodes=${node.binding.episodeCount}, sessions=${node.binding.sessionCount}, relatedPaths=${node.binding.relatedPathCount}`,
+      `Thread Validation: ${buildValidationSummary(
+        selectedRecoveryItem.linkedThread.validationStatus,
+        selectedRecoveryItem.linkedThread.validationReasonCodes,
+        selectedRecoveryItem.linkedThread.validationEvidenceRefs,
+        selectedRecoveryItem.linkedThread.validationRecommendedActions,
+      )}`,
     );
-    if (node.predecessorNodeId) {
-      lines.push(`   predecessor=${node.predecessorNodeId}`);
-    }
-    if (node.relatedPaths && node.relatedPaths.length > 0) {
-      lines.push(`   related=${node.relatedPaths.join(", ")}`);
-    }
-    lines.push("");
-  });
+  }
 
-  return lines.join("\n").trimEnd();
+  return lines.join("\n");
 };
 
 const formatDetail = (detail: ExplorerDetail): string => {
@@ -204,7 +186,10 @@ const formatDetail = (detail: ExplorerDetail): string => {
     `confidence: ${detail.confidence}`,
   ];
 
-  lines.push("", ...buildFreshnessDetailLines(detail.freshnessStatus, detail.driftReasonCodes, detail.recommendedActions, detail.driftSourceRefs));
+  lines.push(
+    "",
+    ...buildFreshnessDetailLines(detail.freshnessStatus, detail.driftReasonCodes, detail.recommendedActions, detail.driftSourceRefs),
+  );
   lines.push(
     "",
     ...buildValidationDetailLines(
@@ -223,76 +208,57 @@ const formatDetail = (detail: ExplorerDetail): string => {
   return lines.join("\n");
 };
 
-const formatValidationPanel = (thread: ExplorerThreadView | null, detail: ExplorerDetail): string => {
-  if (!thread) {
+const formatTrustPanel = (selectedTrustItem: ExplorerTrustItemView | null): string => {
+  if (!selectedTrustItem) {
     return [
-      "No thread selected.",
+      "No trust item selected.",
       "",
-      "Select a decision thread to inspect its validation posture and linked evidence.",
+      "Select a trust item to inspect its freshness, validation, and source posture.",
     ].join("\n");
   }
 
   return [
-    `${buildValidationBadgeLabel(thread.validationStatus)} ${thread.title}`,
+    `${buildFreshnessBadgeLabel(selectedTrustItem.freshnessStatus)} ${buildValidationBadgeLabel(selectedTrustItem.validationStatus)} ${selectedTrustItem.title}`,
     "",
+    buildFreshnessSummary(
+      selectedTrustItem.freshnessStatus,
+      selectedTrustItem.reasonCodes,
+      selectedTrustItem.recommendedActions,
+    ),
     buildValidationSummary(
-      thread.validationStatus,
-      thread.validationReasonCodes,
-      thread.validationEvidenceRefs,
-      thread.validationRecommendedActions,
+      selectedTrustItem.validationStatus,
+      selectedTrustItem.reasonCodes,
+      selectedTrustItem.evidenceRefs,
+      selectedTrustItem.recommendedActions,
     ),
     "",
-    `detail: ${buildValidationSummary(
-      detail.validationStatus,
-      detail.validationReasonCodes,
-      detail.validationEvidenceRefs,
-      detail.validationRecommendedActions,
-    )}`,
-    `evidence refs: ${thread.validationEvidenceRefs.length > 0 ? thread.validationEvidenceRefs.join(", ") : "none"}`,
-    `recommended actions: ${
-      thread.validationRecommendedActions.length > 0 ? thread.validationRecommendedActions.join(", ") : "none"
-    }`,
+    `trust=${selectedTrustItem.trustBadge ?? "none"} · sensitivity=${selectedTrustItem.sensitivity ?? "standard"}`,
+    `lineage=${selectedTrustItem.lineageKinds.length > 0 ? selectedTrustItem.lineageKinds.join(", ") : "none"}`,
+    `source ref=${selectedTrustItem.sourceRef}`,
+    `linked thread=${selectedTrustItem.linkedThread?.title ?? "none"}`,
   ].join("\n");
 };
 
-const buildIntentOptions = (
-  selectedThread: ExplorerThreadView | null,
-  assigned: ExplorerIntentView[],
-  unassigned: ExplorerIntentView[],
-): NamedOption[] => {
-  const assignedOptions = assigned.map((item) => {
-    const linked = selectedThread ? isIntentLinkedToThread(selectedThread, item) : false;
-    return {
-      name: buildIntentOptionName(item, linked),
-      description: `${buildIntentOptionDescription(item, linked)} · assigned`,
-      value: item.itemId,
-    };
-  });
+const formatFormationPanel = (selectedFormationStep: ExplorerFormationStepView | null): string => {
+  if (!selectedFormationStep) {
+    return [
+      "No formation step selected.",
+      "",
+      "Select a formation step to inspect how the current recovery state was shaped.",
+    ].join("\n");
+  }
 
-  const unassignedOptions = unassigned.map((item) => {
-    const linked = selectedThread ? isIntentLinkedToThread(selectedThread, item) : false;
-    return {
-      name: `○ ${buildIntentOptionName(item, linked)}`,
-      description: `${buildIntentOptionDescription(item, linked)} · unassigned`,
-      value: item.itemId,
-    };
-  });
-
-  return [...assignedOptions, ...unassignedOptions];
+  return [
+    `#${selectedFormationStep.rank} ${selectedFormationStep.kind} · ${selectedFormationStep.title}`,
+    "",
+    selectedFormationStep.summary,
+    "",
+    `when=${selectedFormationStep.when ?? "none"}`,
+    `ref=${selectedFormationStep.refId}`,
+    `paths=${selectedFormationStep.relatedPaths.length > 0 ? selectedFormationStep.relatedPaths.join(", ") : "none"}`,
+    `linked thread=${selectedFormationStep.linkedThread?.title ?? "none"}`,
+  ].join("\n");
 };
-
-const buildEventOptions = (
-  selectedThread: ExplorerThreadView | null,
-  events: ExplorerEventView[],
-): NamedOption[] =>
-  events.map((event) => {
-    const linked = selectedThread ? isEventLinkedToThread(selectedThread, event) : false;
-    return {
-      name: buildEventOptionName(event, linked),
-      description: buildEventOptionDescription(event, linked),
-      value: event.eventId,
-    };
-  });
 
 const optionIndexForValue = (options: NamedOption[], value: string | null): number => {
   if (!value) return 0;
@@ -300,19 +266,18 @@ const optionIndexForValue = (options: NamedOption[], value: string | null): numb
   return index >= 0 ? index : 0;
 };
 
-const scopeOptions: NamedOption[] = [
-  { name: "All", description: "Search every narrative panel", value: "all" },
-  { name: "Threads", description: "Apply the query to decision threads", value: "threads" },
-  { name: "Decisions", description: "Apply the query to decision evolution nodes", value: "decisions" },
-  { name: "Intent", description: "Apply the query to reviewed/promoted intent items", value: "intent" },
-  { name: "Events", description: "Apply the query to operational timeline events", value: "events" },
-];
-
 const buildPlaceholderOption = (name: string, description: string): NamedOption => ({
   name,
   description,
   value: "__empty__",
 });
+
+const scopeOptions: NamedOption[] = [
+  { name: "All", description: "Search every recovery panel", value: "all" },
+  { name: "Recover", description: "Apply the query to Recover Now items", value: "recover" },
+  { name: "Trust", description: "Apply the query to What To Trust items", value: "trust" },
+  { name: "Formation", description: "Apply the query to How We Got Here steps", value: "formation" },
+];
 
 const renderModel = async (modelPath: string): Promise<void> => {
   const model = await loadNarrativeModel(modelPath);
@@ -329,12 +294,12 @@ const renderModel = async (modelPath: string): Promise<void> => {
   const state: ExplorerState = {
     query: "",
     scope: "all",
-    selectedThreadId: null,
-    selectedIntentId: null,
-    selectedEventId: null,
+    selectedRecoveryItemId: null,
+    selectedTrustItemId: null,
+    selectedFormationStepId: null,
   };
 
-  const summaryPanel = createPanel(renderer, "summary-panel", "Narrative Explorer", {
+  const summaryPanel = createPanel(renderer, "summary-panel", "Recovery Explorer", {
     height: 9,
     padding: 1,
   });
@@ -358,7 +323,7 @@ const renderModel = async (modelPath: string): Promise<void> => {
   const searchInput = new InputRenderable(renderer, {
     id: "search-input",
     width: "100%",
-    placeholder: "Filter threads, intent, and events",
+    placeholder: "Filter recovery, trust, and formation",
     value: "",
   });
   searchPanel.add(searchInput);
@@ -378,77 +343,40 @@ const renderModel = async (modelPath: string): Promise<void> => {
   controlsRow.add(searchPanel);
   controlsRow.add(scopePanel);
 
-  const mainRow = createPanel(renderer, "main-row", "Explorer", {
+  const mainRow = createPanel(renderer, "main-row", "Recovery View", {
     flexDirection: "row",
     flexGrow: 1,
     gap: 1,
   });
 
-  const threadPanel = createPanel(renderer, "thread-panel", "Decision Threads", {
-    width: "28%",
+  const recoverPanel = createPanel(renderer, "recover-panel", "Recover Now", {
+    width: "30%",
   });
-  const threadSelect = new SelectRenderable(renderer, {
-    id: "thread-select",
+  const recoverSelect = new SelectRenderable(renderer, {
+    id: "recover-select",
     width: "100%",
     height: "100%",
     showDescription: true,
     wrapSelection: true,
-    options: [buildPlaceholderThreadOption()],
+    options: [buildPlaceholderOption("No recovery item", "No recovery packet item matches the current filter.")],
   });
-  threadPanel.add(threadSelect);
+  recoverPanel.add(recoverSelect);
 
-  const decisionPanel = createPanel(renderer, "decision-panel", "Decision Evolution", {
+  const centerColumn = createPanel(renderer, "center-column", "Recover Now · Current Packet", {
     width: "34%",
-    padding: 1,
-  });
-  const decisionText = new TextRenderable(renderer, {
-    id: "decision-text",
-    width: "100%",
-    content: "",
-  });
-  decisionPanel.add(decisionText);
-
-  const rightColumn = createPanel(renderer, "right-column", "Context · Intent | Validation | Timeline", {
-    width: "38%",
     flexDirection: "column",
     gap: 1,
   });
-
-  const intentPanel = createPanel(renderer, "intent-panel", "Intent Panel", {
-    height: "40%",
+  const recoverTextPanel = createPanel(renderer, "recover-text-panel", "Recover Now", {
+    height: "50%",
+    padding: 1,
   });
-  const intentSelect = new SelectRenderable(renderer, {
-    id: "intent-select",
-    width: "100%",
-    height: "100%",
-    showDescription: true,
-    wrapSelection: true,
-    options: [buildPlaceholderOption("No intent item", "The current model has no visible reviewed/promoted intent item.")],
-  });
-  intentPanel.add(intentSelect);
-
-  const validationPanel = createPanel(renderer, "validation-panel", "Validation Panel", {
-    height: "26%",
-  });
-  const validationText = new TextRenderable(renderer, {
-    id: "validation-text",
+  const recoverText = new TextRenderable(renderer, {
+    id: "recover-text",
     width: "100%",
     content: "",
   });
-  validationPanel.add(validationText);
-
-  const eventPanel = createPanel(renderer, "event-panel", "Timeline", {
-    height: "28%",
-  });
-  const eventSelect = new SelectRenderable(renderer, {
-    id: "event-select",
-    width: "100%",
-    height: "100%",
-    showDescription: true,
-    wrapSelection: true,
-    options: [buildPlaceholderOption("No event", "The current model has no visible event in the selected filter.")],
-  });
-  eventPanel.add(eventSelect);
+  recoverTextPanel.add(recoverText);
 
   const detailPanel = createPanel(renderer, "detail-panel", "Detail", {
     flexGrow: 1,
@@ -460,21 +388,65 @@ const renderModel = async (modelPath: string): Promise<void> => {
     content: "",
   });
   detailPanel.add(detailText);
+  centerColumn.add(recoverTextPanel);
+  centerColumn.add(detailPanel);
 
-  rightColumn.add(intentPanel);
-  rightColumn.add(validationPanel);
-  rightColumn.add(eventPanel);
-  rightColumn.add(detailPanel);
+  const rightColumn = createPanel(renderer, "right-column", "What To Trust · How We Got Here", {
+    width: "36%",
+    flexDirection: "column",
+    gap: 1,
+  });
 
-  mainRow.add(threadPanel);
-  mainRow.add(decisionPanel);
+  const trustPanel = createPanel(renderer, "trust-panel", "What To Trust", {
+    height: "38%",
+  });
+  const trustSelect = new SelectRenderable(renderer, {
+    id: "trust-select",
+    width: "100%",
+    height: "100%",
+    showDescription: true,
+    wrapSelection: true,
+    options: [buildPlaceholderOption("No trust item", "No trust item matches the current filter.")],
+  });
+  trustPanel.add(trustSelect);
+
+  const trustSummaryPanel = createPanel(renderer, "trust-summary-panel", "Trust Summary", {
+    height: "20%",
+    padding: 1,
+  });
+  const trustSummaryText = new TextRenderable(renderer, {
+    id: "trust-summary-text",
+    width: "100%",
+    content: "",
+  });
+  trustSummaryPanel.add(trustSummaryText);
+
+  const formationPanel = createPanel(renderer, "formation-panel", "How We Got Here", {
+    flexGrow: 1,
+  });
+  const formationSelect = new SelectRenderable(renderer, {
+    id: "formation-select",
+    width: "100%",
+    height: "100%",
+    showDescription: true,
+    wrapSelection: true,
+    options: [buildPlaceholderOption("No formation step", "No formation step matches the current filter.")],
+  });
+  formationPanel.add(formationSelect);
+
+  rightColumn.add(trustPanel);
+  rightColumn.add(trustSummaryPanel);
+  rightColumn.add(formationPanel);
+
+  mainRow.add(recoverPanel);
+  mainRow.add(centerColumn);
   mainRow.add(rightColumn);
 
   renderer.root.add(summaryPanel);
   renderer.root.add(controlsRow);
   renderer.root.add(mainRow);
 
-  const focusables = [searchInput, scopeTabs, threadSelect, intentSelect, eventSelect];
+  const focusables = [searchInput, scopeTabs, recoverSelect, trustSelect, formationSelect];
   const cycleFocus = (currentIndex: number, direction: -1 | 1): void => {
     const nextIndex = (currentIndex + direction + focusables.length) % focusables.length;
     focusables[nextIndex]?.focus();
@@ -506,9 +478,9 @@ const renderModel = async (modelPath: string): Promise<void> => {
 
   searchInput.onKeyDown = bindSharedKeys(0, true);
   scopeTabs.onKeyDown = bindSharedKeys(1);
-  threadSelect.onKeyDown = bindSharedKeys(2);
-  intentSelect.onKeyDown = bindSharedKeys(3);
-  eventSelect.onKeyDown = bindSharedKeys(4);
+  recoverSelect.onKeyDown = bindSharedKeys(2);
+  trustSelect.onKeyDown = bindSharedKeys(3);
+  formationSelect.onKeyDown = bindSharedKeys(4);
 
   let isRefreshing = false;
 
@@ -517,71 +489,69 @@ const renderModel = async (modelPath: string): Promise<void> => {
     isRefreshing = true;
 
     let view = buildExplorerView(model, state);
-    const validIntentIds = new Set(
-      [...view.assignedIntentItems, ...view.unassignedIntentItems].map((item) => item.itemId),
-    );
-    const validEventIds = new Set(view.timelineEvents.map((event) => event.eventId));
+    const validRecoveryIds = new Set(view.visibleRecoveryItems.map((item) => item.itemId));
+    const validTrustIds = new Set(view.visibleTrustItems.map((item) => item.itemId));
+    const validFormationIds = new Set(view.visibleFormationSteps.map((item) => item.itemId));
 
-    state.selectedThreadId = view.selectedThread?.threadId ?? null;
-    if (state.selectedIntentId && !validIntentIds.has(state.selectedIntentId)) {
-      state.selectedIntentId = null;
+    if (state.selectedRecoveryItemId && !validRecoveryIds.has(state.selectedRecoveryItemId)) {
+      state.selectedRecoveryItemId = null;
     }
-    if (state.selectedEventId && !validEventIds.has(state.selectedEventId)) {
-      state.selectedEventId = null;
+    if (state.selectedTrustItemId && !validTrustIds.has(state.selectedTrustItemId)) {
+      state.selectedTrustItemId = null;
+    }
+    if (state.selectedFormationStepId && !validFormationIds.has(state.selectedFormationStepId)) {
+      state.selectedFormationStepId = null;
     }
     view = buildExplorerView(model, state);
 
-    const threadOptions =
-      view.visibleThreads.length > 0
-        ? view.visibleThreads.map((thread) => ({
-            name: buildThreadOptionName(thread, thread.threadId === view.selectedThread?.threadId),
-            description: buildThreadOptionDescription(thread, thread.threadId === view.selectedThread?.threadId),
-            value: thread.threadId,
+    const recoveryOptions =
+      view.visibleRecoveryItems.length > 0
+        ? view.visibleRecoveryItems.map((item) => ({
+            name: buildRecoveryOptionName(item, item.itemId === view.selectedRecoveryItem?.itemId),
+            description: buildRecoveryOptionDescription(item),
+            value: item.itemId,
           }))
-        : [buildPlaceholderThreadOption()];
+        : [buildPlaceholderOption("No recovery item", "No recovery packet item matches the current filter.")];
 
-    const intentOptions = buildIntentOptions(
-      view.selectedThread,
-      view.assignedIntentItems,
-      view.unassignedIntentItems,
-    );
-    const safeIntentOptions =
-      intentOptions.length > 0
-        ? intentOptions
-        : [buildPlaceholderOption("No intent item", "No reviewed/promoted intent item matches the current filter.")];
+    const trustOptions =
+      view.visibleTrustItems.length > 0
+        ? view.visibleTrustItems.map((item) => ({
+            name: buildTrustOptionName(item, item.itemId === view.selectedTrustItem?.itemId),
+            description: buildTrustOptionDescription(item),
+            value: item.itemId,
+          }))
+        : [buildPlaceholderOption("No trust item", "No trust item matches the current filter.")];
 
-    const eventOptions = buildEventOptions(view.selectedThread, view.timelineEvents);
-    const safeEventOptions =
-      eventOptions.length > 0
-        ? eventOptions
-        : [buildPlaceholderOption("No event", "No operational timeline event matches the current filter.")];
+    const formationOptions =
+      view.visibleFormationSteps.length > 0
+        ? view.visibleFormationSteps.map((item) => ({
+            name: buildFormationOptionName(item, item.itemId === view.selectedFormationStep?.itemId),
+            description: buildFormationOptionDescription(item),
+            value: item.itemId,
+          }))
+        : [buildPlaceholderOption("No formation step", "No formation step matches the current filter.")];
 
-    summaryText.content = formatSummary(model, state, view.selectedThread);
-    decisionText.content = formatDecisionEvolution(view.selectedThread);
-    validationText.content = formatValidationPanel(view.selectedThread, view.detail);
+    summaryText.content = formatSummary(model, state, view.selectedRecoveryItem);
+    recoverText.content = formatRecoverNow(model, view.selectedRecoveryItem);
+    trustSummaryText.content = formatTrustPanel(view.selectedTrustItem);
     detailText.content = formatDetail(view.detail);
 
-    summaryPanel.title = model.empty ? "Narrative Explorer · empty state" : "Narrative Explorer";
-    threadPanel.title = `Decision Threads (${view.visibleThreads.length}/${view.threads.length})`;
-    decisionPanel.title = view.selectedThread
-      ? `Decision Evolution · ${view.selectedThread.title}`
-      : "Decision Evolution";
-    intentPanel.title = `Intent Panel (${view.assignedIntentItems.length + view.unassignedIntentItems.length})`;
-    validationPanel.title = `Validation Panel (${view.selectedThread ? buildValidationBadgeLabel(view.selectedThread.validationStatus) : "[none]"})`;
-    eventPanel.title = `Timeline (${view.timelineEvents.length})`;
+    summaryPanel.title = model.empty || model.recovery.empty ? "Recovery Explorer · empty state" : "Recovery Explorer";
+    recoverPanel.title = `Recover Now (${view.visibleRecoveryItems.length}/${view.recoveryItems.length})`;
+    trustPanel.title = `What To Trust (${view.visibleTrustItems.length}/${view.trustItems.length})`;
+    formationPanel.title = `How We Got Here (${view.visibleFormationSteps.length}/${view.formationSteps.length})`;
     detailPanel.title = `Detail · ${view.detail.kind}`;
 
-    threadSelect.options = threadOptions;
-    threadSelect.setSelectedIndex(optionIndexForValue(threadOptions, state.selectedThreadId));
+    recoverSelect.options = recoveryOptions;
+    recoverSelect.setSelectedIndex(optionIndexForValue(recoveryOptions, state.selectedRecoveryItemId));
 
-    intentSelect.options = safeIntentOptions;
-    intentSelect.setSelectedIndex(optionIndexForValue(safeIntentOptions, state.selectedIntentId));
+    trustSelect.options = trustOptions;
+    trustSelect.setSelectedIndex(optionIndexForValue(trustOptions, state.selectedTrustItemId));
 
-    eventSelect.options = safeEventOptions;
-    eventSelect.setSelectedIndex(optionIndexForValue(safeEventOptions, state.selectedEventId));
+    formationSelect.options = formationOptions;
+    formationSelect.setSelectedIndex(optionIndexForValue(formationOptions, state.selectedFormationStepId));
 
-    const scopeIndex = optionIndexForValue(scopeOptions, state.scope);
-    scopeTabs.setSelectedIndex(scopeIndex);
+    scopeTabs.setSelectedIndex(optionIndexForValue(scopeOptions, state.scope));
 
     isRefreshing = false;
   };
@@ -599,30 +569,31 @@ const renderModel = async (modelPath: string): Promise<void> => {
     refresh();
   });
 
-  threadSelect.on(SelectRenderableEvents.SELECTION_CHANGED, () => {
+  recoverSelect.on(SelectRenderableEvents.SELECTION_CHANGED, () => {
     if (isRefreshing) return;
-    const selected = threadSelect.getSelectedOption();
-    state.selectedThreadId = typeof selected?.value === "string" && selected.value !== "__empty__" ? selected.value : null;
-    state.selectedIntentId = null;
-    state.selectedEventId = null;
+    const selected = recoverSelect.getSelectedOption();
+    state.selectedRecoveryItemId =
+      typeof selected?.value === "string" && selected.value !== "__empty__" ? selected.value : null;
+    state.selectedTrustItemId = null;
+    state.selectedFormationStepId = null;
     refresh();
   });
 
-  intentSelect.on(SelectRenderableEvents.SELECTION_CHANGED, () => {
+  trustSelect.on(SelectRenderableEvents.SELECTION_CHANGED, () => {
     if (isRefreshing) return;
-    const selected = intentSelect.getSelectedOption();
-    state.selectedIntentId =
+    const selected = trustSelect.getSelectedOption();
+    state.selectedTrustItemId =
       typeof selected?.value === "string" && selected.value !== "__empty__" ? selected.value : null;
-    state.selectedEventId = null;
+    state.selectedFormationStepId = null;
     refresh();
   });
 
-  eventSelect.on(SelectRenderableEvents.SELECTION_CHANGED, () => {
+  formationSelect.on(SelectRenderableEvents.SELECTION_CHANGED, () => {
     if (isRefreshing) return;
-    const selected = eventSelect.getSelectedOption();
-    state.selectedEventId =
+    const selected = formationSelect.getSelectedOption();
+    state.selectedFormationStepId =
       typeof selected?.value === "string" && selected.value !== "__empty__" ? selected.value : null;
-    state.selectedIntentId = null;
+    state.selectedTrustItemId = null;
     refresh();
   });
 

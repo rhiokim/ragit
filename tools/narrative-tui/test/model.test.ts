@@ -4,17 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildExplorerView,
-  buildIntentOptionDescription,
+  buildFormationOptionDescription,
+  buildRecoveryOptionDescription,
+  buildTrustOptionDescription,
   buildValidationBadgeLabel,
   buildValidationSummary,
-  buildThreadOptionDescription,
-  buildThreadViews,
-  isEventLinkedToThread,
-  isIntentLinkedToThread,
-  NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION,
-  NARRATIVE_MODEL_SCHEMA_VERSION,
-  NARRATIVE_PROJECTION_MODE,
-  NARRATIVE_PROJECTION_POLICY_VERSION,
   loadNarrativeModel,
   type ExplorerState,
 } from "../src/model";
@@ -23,120 +17,90 @@ const fixturePath = path.join(import.meta.dir, "..", "fixtures", "sample-model.j
 
 const loadFixture = async () => loadNarrativeModel(fixturePath);
 
-describe("narrative-tui model explorer", () => {
-  it("loads the current versioned narrative model fixture", async () => {
+const emptyState = (): ExplorerState => ({
+  query: "",
+  scope: "all",
+  selectedRecoveryItemId: null,
+  selectedTrustItemId: null,
+  selectedFormationStepId: null,
+});
+
+describe("narrative-tui recovery explorer", () => {
+  it("loads the current versioned narrative model fixture with recovery data", async () => {
     const model = await loadFixture();
 
-    expect(model.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
-    expect(typeof model.producerVersion).toBe("string");
-    expect(model.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
-    expect(model.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
-    expect(model.summary.freshnessCounts).toEqual({
+    expect(model.schemaVersion).toBe(1);
+    expect(model.projectionMode).toBe("viewer-safe");
+    expect(model.recovery.recoverNow.items.length).toBeGreaterThan(0);
+    expect(model.recovery.whatToTrust.items.length).toBeGreaterThan(0);
+    expect(model.recovery.howWeGotHere.steps.length).toBeGreaterThan(0);
+    expect(model.recovery.recoverNow.currentGoal).toContain("viewer recovery-first");
+    expect(model.recovery.whatToTrust.freshnessCounts).toEqual({
       fresh: 4,
       suspect: 4,
       stale: 2,
     });
-    expect(model.summary.validationCounts).toEqual({
+    expect(model.recovery.whatToTrust.validationCounts).toEqual({
       verified: 5,
       attention: 3,
       unverified: 2,
     });
   });
 
-  it("builds a default view with the first visible thread selected", async () => {
+  it("builds a recovery-first view with Recover Now as the primary selection", async () => {
     const model = await loadFixture();
-    const state: ExplorerState = {
-      query: "",
-      scope: "all",
-      selectedThreadId: null,
-      selectedIntentId: null,
-      selectedEventId: null,
-    };
-
-    const view = buildExplorerView(model, state);
+    const view = buildExplorerView(model, emptyState());
 
     expect(view.empty).toBe(false);
-    expect(view.visibleThreads.length).toBe(2);
-    expect(view.selectedThread?.threadId).toBe("thread_1");
-    expect(view.detail.kind).toBe("thread");
-    expect(view.selectedThread?.freshnessStatus).toBe("suspect");
-    expect(view.selectedThread?.validationStatus).toBe("attention");
-    expect(buildThreadOptionDescription(view.selectedThread!, true)).toContain("freshness:suspect");
-    expect(buildThreadOptionDescription(view.selectedThread!, true)).toContain("validation:attention");
-    expect(buildValidationSummary(
-      view.selectedThread!.validationStatus,
-      view.selectedThread!.validationReasonCodes,
-      view.selectedThread!.validationEvidenceRefs,
-      view.selectedThread!.validationRecommendedActions,
-    )).toContain("validation: attention");
-    expect(view.detail.extra.join("\n")).toContain("freshness: suspect");
-    expect(view.detail.extra.join("\n")).not.toContain("nodeIds:");
-    expect(view.detail.extra.join("\n")).not.toContain("threadIds:");
-  });
-
-  it("filters threads by query when the scope targets decision threads", async () => {
-    const model = await loadFixture();
-    const state: ExplorerState = {
-      query: "viewer rollout",
-      scope: "threads",
-      selectedThreadId: null,
-      selectedIntentId: null,
-      selectedEventId: null,
-    };
-
-    const view = buildExplorerView(model, state);
-
-    expect(view.visibleThreads.map((thread) => thread.threadId)).toEqual(["thread_2"]);
+    expect(view.visibleRecoveryItems.length).toBe(3);
+    expect(view.selectedRecoveryItem?.itemId).toBe("recovery_goal");
+    expect(view.selectedTrustItem).toBeNull();
+    expect(view.selectedFormationStep).toBeNull();
+    expect(view.detail.kind).toBe("recovery");
+    expect(view.detail.extra.join("\n")).toContain("source: working-memory");
     expect(view.selectedThread?.threadId).toBe("thread_2");
+    expect(buildRecoveryOptionDescription(view.selectedRecoveryItem!)).toContain("working-memory");
   });
 
-  it("switches detail focus to the selected intent or event item", async () => {
+  it("switches detail focus across trust and formation selections", async () => {
     const model = await loadFixture();
-    const intentState: ExplorerState = {
-      query: "",
-      scope: "all",
-      selectedThreadId: "thread_1",
-      selectedIntentId: "artifact_3",
-      selectedEventId: null,
-    };
 
-    const intentView = buildExplorerView(model, intentState);
-    expect(intentView.detail.kind).toBe("intent");
-    expect(intentView.detail.title).toContain("Viewer must read sanitized JSON only");
-    expect(intentView.detail.freshnessStatus).toBe("suspect");
-    expect(intentView.detail.validationStatus).toBe("attention");
-    expect(buildIntentOptionDescription(intentView.assignedIntentItems[0]!, true)).toContain("freshness:fresh");
-    expect(buildIntentOptionDescription(intentView.assignedIntentItems[0]!, true)).toContain("validation:verified");
-    expect(buildValidationBadgeLabel(intentView.detail.validationStatus)).toBe("[attention]");
-    expect(intentView.detail.extra.join("\n")).toContain("freshness: suspect");
+    const trustView = buildExplorerView(model, {
+      ...emptyState(),
+      selectedTrustItemId: "trust_event_1",
+    });
+    expect(trustView.detail.kind).toBe("trust");
+    expect(trustView.detail.title).toContain("security.admission");
+    expect(buildValidationBadgeLabel(trustView.detail.validationStatus)).toBe("[unverified]");
+    expect(
+      buildValidationSummary(
+        trustView.detail.validationStatus,
+        trustView.detail.validationReasonCodes,
+        trustView.detail.validationEvidenceRefs,
+        trustView.detail.validationRecommendedActions,
+      ),
+    ).toContain("validation: unverified");
+    expect(buildTrustOptionDescription(trustView.visibleTrustItems[0]!)).toContain("durable-doc");
 
-    const eventState: ExplorerState = {
-      query: "",
-      scope: "all",
-      selectedThreadId: "thread_2",
-      selectedIntentId: null,
-      selectedEventId: "event_2",
-    };
-
-    const eventView = buildExplorerView(model, eventState);
-    expect(eventView.detail.kind).toBe("event");
-    expect(eventView.detail.title).toContain("security.admission");
+    const formationView = buildExplorerView(model, {
+      ...emptyState(),
+      selectedFormationStepId: "step_thread_1",
+    });
+    expect(formationView.detail.kind).toBe("formation");
+    expect(formationView.detail.title).toContain("Narrative report architecture thread");
+    expect(buildFormationOptionDescription(formationView.visibleFormationSteps[1]!)).toContain("2026-04-10");
   });
 
-  it("computes linked intent and event relationships from the selected thread", async () => {
+  it("filters recovery items by query in recovery scope", async () => {
     const model = await loadFixture();
-    const [threadOne] = buildThreadViews(model);
     const view = buildExplorerView(model, {
-      query: "",
-      scope: "all",
-      selectedThreadId: "thread_1",
-      selectedIntentId: null,
-      selectedEventId: null,
+      ...emptyState(),
+      query: "future bridge",
+      scope: "recover",
     });
 
-    expect(threadOne.threadId).toBe("thread_1");
-    expect(isIntentLinkedToThread(threadOne, view.assignedIntentItems[0]!)).toBe(true);
-    expect(isEventLinkedToThread(threadOne, view.timelineEvents[0]!)).toBe(true);
+    expect(view.visibleRecoveryItems.map((item) => item.itemId)).toEqual(["recovery_loop"]);
+    expect(view.selectedRecoveryItem?.itemId).toBe("recovery_loop");
   });
 
   it("coerces a legacy unversioned narrative model through the compatibility path", async () => {
@@ -175,20 +139,12 @@ describe("narrative-tui model explorer", () => {
 
     const legacy = await loadNarrativeModel(legacyPath);
 
-    expect(legacy.schemaVersion).toBe(NARRATIVE_MODEL_SCHEMA_VERSION);
-    expect(legacy.producerVersion).toBe(NARRATIVE_MODEL_LEGACY_PRODUCER_VERSION);
-    expect(legacy.projectionPolicyVersion).toBe(NARRATIVE_PROJECTION_POLICY_VERSION);
-    expect(legacy.projectionMode).toBe(NARRATIVE_PROJECTION_MODE);
-    expect(legacy.summary.freshnessCounts).toEqual({
-      fresh: 0,
-      suspect: 0,
-      stale: 0,
-    });
-    expect(legacy.summary.validationCounts).toEqual({
-      verified: 0,
-      attention: 0,
-      unverified: 0,
-    });
+    expect(legacy.schemaVersion).toBe(1);
+    expect(legacy.producerVersion).toBe("legacy-unversioned");
+    expect(legacy.recovery.empty).toBe(true);
+    expect(legacy.recovery.recoverNow.items).toEqual([]);
+    expect(legacy.recovery.whatToTrust.items).toEqual([]);
+    expect(legacy.recovery.howWeGotHere.steps).toEqual([]);
   });
 
   it("fails fast on unsupported narrative model major versions", async () => {
@@ -268,6 +224,8 @@ describe("narrative-tui model explorer", () => {
       "utf8",
     );
 
-    await expect(loadNarrativeModel(unsupportedPath)).rejects.toThrow(/Unsupported narrative projectionPolicyVersion=2/);
+    await expect(loadNarrativeModel(unsupportedPath)).rejects.toThrow(
+      /Unsupported narrative projectionPolicyVersion=2/,
+    );
   });
 });
