@@ -8,6 +8,8 @@ command_path: narrative
 
 `narrative`는 선택된 snapshot history, commit에 결속된 문서, artifact record, event data를 읽어 self-contained HTML narrative report를 생성합니다. 이 리포트는 협업 과정을 처음부터 다시 훑지 않아도 프로젝트의 의도, 결정, 시간축을 이해해야 하는 신규 참여자나 에이전트를 위한 것입니다.
 
+이 리포트의 canonical face는 Recovery View이며, `Recover Now`, `What To Trust`, `How We Got Here`의 3단 구조로 읽습니다.
+
 운영 관점에서는 두 층으로 해석하시면 됩니다.
 
 - HTML 파일이 canonical report입니다.
@@ -74,6 +76,7 @@ pnpm ragit narrative [revRange] [--max-commits <n>] \
 ## Canonical HTML과 Experimental Viewer의 경계
 
 - self-contained HTML report가 canonical narrative 산출물입니다.
+- canonical narrative face는 `Recover Now`, `What To Trust`, `How We Got Here`로 구성된 Recovery View입니다.
 - `--emit-model`은 분리된 local OpenTUI explorer를 위한 viewer input일 뿐입니다.
 - emitted model은 versioned이며 viewer-safe projection을 따릅니다.
 - `schemaVersion`은 구조 호환성 키입니다.
@@ -83,6 +86,14 @@ pnpm ragit narrative [revRange] [--max-commits <n>] \
 - 현재 `ragit narrative --emit-model`은 versioned model과 versioned projection policy를 함께 씁니다. schemaVersion이 없는 legacy model은 viewer의 backward-compatible read 경로에서만 허용합니다.
 - viewer는 의도적으로 `tools/narrative-tui/` 아래에 분리되어 있으며, `.ragit`나 git 상태를 직접 읽지 않습니다.
 - 공유 가능한 결과만 필요하면 HTML만 생성하면 됩니다.
+
+## Recovery View
+
+- `Recover Now`는 현재 목표, 활성 제약, 열린 루프, 다음 행동, 가장 짧은 재진입 경로를 보여줍니다.
+- `What To Trust`는 projected memory state에서 나온 freshness, validation, trust badge를 보여줍니다.
+- `How We Got Here`는 lineage, formation step, drift 또는 repair, 그리고 현재 상태를 만든 근거를 압축해 보여줍니다.
+- Recovery View는 `ragit`의 기존 memory model을 다시 투영한 형상이며, 새로운 저장소나 별도 memory system을 만들지 않습니다.
+- active memory와 durable memory의 분리는 <a href="/ko/docs/memory-model">Memory Model Guide</a>를 참고하십시오.
 
 ## Freshness Overlay
 

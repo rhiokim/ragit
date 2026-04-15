@@ -8,6 +8,8 @@ command_path: narrative
 
 `narrative` reads selected snapshot history, commit-bound documents, artifact records, and event data, then writes a self-contained HTML narrative report. The report is designed for a new contributor or agent that needs to understand the project's intent, decisions, and timeline without replaying the entire collaboration history.
 
+The canonical face of that report is the Recovery View: `Recover Now`, `What To Trust`, and `How We Got Here`.
+
 Operationally, treat the command in two layers:
 
 - The HTML file is the canonical report.
@@ -74,6 +76,7 @@ pnpm ragit narrative [revRange] [--max-commits <n>] \
 ## Canonical HTML vs Experimental Viewer
 
 - The self-contained HTML report is the canonical narrative artifact.
+- The canonical narrative face is the Recovery View, organized as `Recover Now`, `What To Trust`, and `How We Got Here`.
 - `--emit-model` exists only to support a separate local OpenTUI explorer.
 - The emitted model is versioned and viewer-safe.
 - `schemaVersion` is the structural compatibility key.
@@ -83,6 +86,14 @@ pnpm ragit narrative [revRange] [--max-commits <n>] \
 - Current `ragit narrative --emit-model` writes a versioned model with a versioned projection policy. Legacy unversioned models exist only for backward-compatible viewer reads.
 - The viewer is intentionally isolated under `tools/narrative-tui/` and does not read `.ragit` or git state directly.
 - If you only need a shareable report, generate HTML and stop there.
+
+## Recovery View
+
+- `Recover Now` shows the current goal, active constraints, open loops, the next action, and the shortest re-entry path.
+- `What To Trust` shows freshness, validation, and trust badges from the projected memory state.
+- `How We Got Here` compresses lineage, formation steps, drift or repair, and the evidence that shaped the current state.
+- The Recovery View reuses the same projected memory model that powers the rest of `ragit`; it does not introduce a new store or a parallel memory system.
+- For the split between active and durable memory, see <a href="/en/docs/memory-model">Memory Model Guide</a>.
 
 ## Freshness Overlay
 

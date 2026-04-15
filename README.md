@@ -247,6 +247,7 @@ pnpm ragit doctor --format json
 `ragit narrative` usage boundary:
 
 - Canonical artifact: self-contained HTML report
+- Recovery View guide: the `narrative` command docs describe the canonical `Recover Now / What To Trust / How We Got Here` face and how it reuses the existing memory model
 - Optional viewer input: viewer-safe model export at `.ragit/reports/narrative/current.model.json`
 - Experimental local explorer: isolated OpenTUI viewer under `tools/narrative-tui/`
 - Freshness axis: the narrative model and report also carry `fresh|suspect|stale` freshness state derived from `ragit drift`; this is a separate axis from `trust`, `sensitivity`, and `lineage`
