@@ -216,48 +216,80 @@ git tag "v${VERSION}"
 git push origin --tags
 ```
 
-## Core Commands
+## Canonical Workflows
+
+The README shows the canonical first-use workflow for RAGit.
+Use [Getting Started](https://rhiokim.github.io/ragit/en/docs/getting-started/) for project onboarding, [Commands](https://rhiokim.github.io/ragit/en/docs/commands/) for the full command map, and [Agent CLI Contract](https://rhiokim.github.io/ragit/en/docs/agent-cli/) for machine-safe integration rules.
+
+### Happy Path
+
+`init` prepares the repository, but it does not make the repo search-ready.
+Retrieval starts only after `ingest` writes snapshot-backed knowledge state.
+
+```bash
+pnpm ragit init
+pnpm ragit ingest --all
+pnpm ragit status --format json
+pnpm ragit query "project goal" --view minimal --format both
+```
+
+### Choose the Retrieval Command
+
+`query` returns raw retrieval hits from indexed knowledge at a snapshot.
+
+```bash
+pnpm ragit query "DDD bounded context principles" --view minimal --format both
+```
+
+`context pack` turns retrieval hits into a budgeted handoff packet for the next agent step.
+
+```bash
+pnpm ragit context pack "Implementation plan for this sprint" --budget 1200 --view minimal --format both
+```
+
+`memory recall` rebuilds a resume packet by layering working state on top of retrieval.
+
+```bash
+pnpm ragit memory recall "resume auth flow" --view minimal --format both
+```
+
+### Optional Agent / Automation
+
+Use `describe` as the first step when wiring RAGit into an agent workflow.
+Install managed hooks only after the first successful ingest if you want automatic post-commit or post-merge indexing.
 
 ```bash
 pnpm ragit describe query --format json
-pnpm ragit init
-pnpm ragit init --yes --output json
-pnpm ragit init --yes --git-init
+pnpm ragit hooks install --dry-run --format json
+```
+
+### Observe / Recover
+
+Use these commands after the happy path when you need history, trust checks, recovery views, or safe remediation planning.
+
+```bash
 pnpm ragit log --max-count 5 --view default --format both
 pnpm ragit narrative --format both
-pnpm ragit narrative --emit-model .ragit/reports/narrative/current.model.json
 pnpm ragit drift --scope all --view default --format both
 pnpm ragit repair --scope all --format json
 pnpm ragit security audit --format json
-pnpm ragit security purge --target control-plane --dry-run --format json
-pnpm ragit config set retrieval.top_k 8
-pnpm ragit hooks install --dry-run --format json
-pnpm ragit ingest --all --dry-run --format json
-pnpm ragit query "DDD bounded context principles" --view minimal --format both
-pnpm ragit context pack "Implementation plan for this sprint" --budget 1200 --view minimal --format both
-pnpm ragit memory wrap --input session-wrap.json --dry-run --format json
-pnpm ragit memory recall "resume auth flow" --view minimal --format both
-pnpm ragit memory promote --input promotion-batch.json --dry-run --format json
-pnpm ragit migrate from-json-store --dry-run
-pnpm ragit migrate from-sqlitevss --dry-run
-pnpm ragit status --format json
-pnpm ragit doctor --format json
 ```
 
-`ragit narrative` usage boundary:
+`narrative` writes a self-contained HTML recovery report from snapshots, artifacts, and events.
+Use `--emit-model` only when you want the isolated OpenTUI explorer under `tools/narrative-tui`; the HTML report remains the canonical artifact.
+For Recovery View details, freshness and validation axes, and viewer boundaries, see the [narrative command docs](https://rhiokim.github.io/ragit/en/docs/commands/narrative/).
 
-- Canonical artifact: self-contained HTML report
-- Recovery View guide: the `narrative` command docs describe the canonical `Recover Now / What To Trust / How We Got Here` face and how it reuses the existing memory model
-- Optional viewer input: viewer-safe model export at `.ragit/reports/narrative/current.model.json`
-- Experimental local explorer: isolated OpenTUI viewer under `tools/narrative-tui/`
-- Freshness axis: the narrative model and report also carry `fresh|suspect|stale` freshness state derived from `ragit drift`; this is a separate axis from `trust`, `sensitivity`, and `lineage`
-- Validation axis: the narrative model and report also carry `verified|attention|unverified` validation posture derived from harness/drift assets; this is a separate axis from `freshness`, `trust`, `sensitivity`, and `lineage`
-- User-facing IA: the HTML report includes a dedicated Validation Panel, and the OpenTUI right rail is `Intent | Validation | Timeline`
+### Admin / Migration
+
+These commands are not part of the first-use path.
+Use them for configuration, deeper diagnosis, purge/remediation work, or legacy store migration.
 
 ```bash
-pnpm ragit narrative --emit-model .ragit/reports/narrative/current.model.json
-cd tools/narrative-tui
-bun run start -- --model ../../.ragit/reports/narrative/current.model.json
+pnpm ragit config set retrieval.top_k 8
+pnpm ragit doctor --format json
+pnpm ragit security purge --target control-plane --dry-run --format json
+pnpm ragit migrate from-json-store --dry-run
+pnpm ragit migrate from-sqlitevss --dry-run
 ```
 
 ## How Ingest Works
