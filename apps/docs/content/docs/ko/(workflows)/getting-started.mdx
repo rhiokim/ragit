@@ -80,6 +80,8 @@ ragit hooks install
 - `query`가 방금 추가한 문서에서 관련 chunk를 반환합니다.
 - 팀이 bootstrap 과정을 다시 읽지 않아도 문서만으로 다음 작업을 이어갈 수 있습니다.
 
+첫 검증이 끝난 뒤에는 intent 기준으로 retrieval을 고르십시오. raw indexed hit가 필요하면 `query`, 다음 에이전트 단계에 넘길 bounded packet이 필요하면 `context pack`, working state까지 포함해 활성 작업을 재개해야 하면 `memory recall`을 사용하십시오.
+
 검증이 실패하면 워크플로를 바꾸기 전에 <a href="/ko/docs/commands/doctor">doctor</a>로 먼저 진단하십시오.
 
 ## 다음 문서

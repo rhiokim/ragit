@@ -3,8 +3,8 @@ title: Commands
 description: 실행 가능한 모든 RAGit CLI 명령의 상세 가이드
 ---
 
-`commands` 그룹은 개별 명령 상세 문서의 새 진입점입니다.
-각 leaf 페이지는 한 개의 실행 가능한 CLI 명령을 사용자 관점과 에이전트 연동 관점에서 함께 설명합니다.
+`commands` 그룹은 RAGit CLI 전체 명령 맵이자 상세 참조입니다.
+저장소 README는 canonical first-use workflow만 보여주며, 그 이후의 명령 라우팅과 세부 의미/옵션은 여기서 정리합니다.
 
 <MermaidDiagram
   caption="겉모습이 아니라, 지금 필요한 질문 기준으로 명령을 고르십시오."
@@ -23,6 +23,8 @@ flowchart LR
 />
 
 ## 여기서 시작하십시오
+
+README의 happy path에서 넘어와 다음 retrieval 명령을 골라야 한다면, 아래의 `query`, `context pack`, `memory recall` 설명부터 보십시오.
 
 - 저장소를 처음 설정할 때는 <a href="/ko/docs/commands/init">`init`</a>부터 읽으십시오.
 - 커밋 사이에서 snapshot 지식과 결속된 beliefs/open loops가 의미적으로 어떻게 달라졌는지 보고 싶을 때는 <a href="/ko/docs/commands/log">`log`</a>를 읽으십시오.
