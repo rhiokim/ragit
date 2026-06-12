@@ -10,7 +10,7 @@ description: RAGit CLI 핵심 아키텍처
 - `.ragit/memory/` 기준 메모리 제어면
 - `docs/memory/` 기준 검색 가능한 장기기억 코퍼스
 - `local-placeholder`, `openai`, `ollama`를 갖는 embedding provider facade
-- `.ragit/manifest/` Git 추적 스냅샷
+- `.ragit/manifest/` 기준 commit-bound manifest. init gitignore 정책에서 snapshot history를 Git에 남기도록 선택한 경우 추적 가능
 
 ## 검색
 

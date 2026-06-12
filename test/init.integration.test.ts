@@ -26,11 +26,18 @@ describe("init command integration", () => {
     expect(summary.bootstrap.storage.collections).toEqual(["documents", "chunks"]);
     expect(summary.bootstrap.storage.searchReady).toBe(false);
     expect(summary.bootstrap.docsAuthority.indexPath).toBe(".ragit/docs/index.json");
+    expect(summary.bootstrap.gitignore.policy).toBe("safe");
+    expect(summary.bootstrap.gitignore.addedEntries).toContain(".ragit/manifest/");
+    expect(summary.bootstrap.gitignore.addedEntries).toContain(".ragit/log/");
     await access(path.join(temp, ".ragit", "docs", "index.json"), constants.F_OK);
 
     const ragitContent = await readFile(path.join(temp, "RAGIT.md"), "utf8");
     expect(ragitContent).toContain("status: draft");
     expect(ragitContent).toContain("last_generated_by: ragit init");
+    const gitignoreContent = await readFile(path.join(temp, ".gitignore"), "utf8");
+    expect(gitignoreContent).toContain(".ragit/store/");
+    expect(gitignoreContent).toContain(".ragit/manifest/");
+    expect(gitignoreContent).toContain(".ragit/artifacts/harness/");
   });
 
   it("anchors nested git paths to the repository root", async () => {
@@ -119,8 +126,11 @@ describe("init command integration", () => {
     expect(summary.actions.created).toContain("RAGIT.md");
     expect(summary.bootstrap.agents.mode).toBe("planned");
     expect(summary.bootstrap.storage.status).toBe("planned");
+    expect(summary.bootstrap.gitignore.policy).toBe("safe");
+    expect(summary.bootstrap.gitignore.addedEntries).toContain(".ragit/manifest/");
     await expect(access(path.join(temp, "RAGIT.md"), constants.F_OK)).rejects.toThrow();
     await expect(access(path.join(temp, ".ragit"), constants.F_OK)).rejects.toThrow();
+    await expect(access(path.join(temp, ".gitignore"), constants.F_OK)).rejects.toThrow();
   });
 
   it("fails in non-git without --git-init and reports legacy store migration", async () => {

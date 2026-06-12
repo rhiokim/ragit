@@ -14,8 +14,10 @@ description: Discover-first 저장소 초기화 흐름
 4. 문서 census, coverage 평가, maturity 평가 수행
 5. 기존 저장소 소스로 knowledge-slot map 구성
 6. 누락된 기초 문서를 계획하고 기존 문서를 먼저 재사용
-7. 1단계 draft 문서 작성, `.ragit/**` bootstrap, zvec store bootstrap
-8. 최종 리포트와 next actions 출력
+7. 1단계 draft 문서 작성 및 `.ragit/**` bootstrap
+8. RAGit runtime data에 대한 `.gitignore` 정책 선택
+9. zvec store bootstrap
+10. 최종 리포트와 next actions 출력
 
 ## 1단계 생성 문서
 
@@ -37,6 +39,7 @@ description: Discover-first 저장소 초기화 흐름
 - `.ragit/config.toml`
 - `.ragit/guide/templates/*`
 - `.ragit/guide/guide-index.json`
+- 선택된 runtime-data 정책에 따른 `.gitignore` entries
 - `.ragit/store/meta.json`
 - `documents`, `chunks` 빈 zvec 컬렉션
 
@@ -48,6 +51,18 @@ description: Discover-first 저장소 초기화 흐름
 - query-ready knowledge state 생성 없음
 
 즉, `init`은 저장소 문서를 읽고 분류할 수는 있지만, searchable knowledge는 여전히 <a href="/ko/docs/commands/ingest">`ingest`</a>부터 시작합니다.
+
+## Git 추적 선택
+
+`init`은 durable project knowledge와 local runtime state를 분리합니다. `--yes`와 `--non-interactive`의 기본값은 safe policy이며, 생성된 runtime state를 Git 밖에 둡니다. 대화형 터미널 실행에서 manifest와 harness 질문에 다른 답을 해야 하는 경우는 해당 파일들이 저장소 계약의 일부일 때입니다.
+
+| 저장소 형태 | 권장 policy | 이유 |
+| --- | --- | --- |
+| 제품 또는 애플리케이션 저장소 | `safe` | log, report, security ledger, session state, manifest, harness artifact, store, cache를 로컬에만 둡니다. |
+| snapshot history를 팀이 공유하는 저장소 | `snapshot-history` | `.ragit/manifest/**`는 추적 가능하게 두고 runtime state는 로컬에 둡니다. |
+| RAGit dogfooding 또는 testbed 저장소 | `dogfood` | manifest와 reviewed harness artifact를 리뷰/재현 대상으로 추적할 수 있게 둡니다. |
+
+`init` 이후 `git status`에는 보통 `.ragit/config.toml`, `.ragit/guide/**`, `.ragit/docs/index.json`, `AGENTS.md`, `RAGIT.md`, 생성된 `docs/**` draft 같은 project-facing file이 보여야 합니다. `.ragit/store/**`, `.ragit/cache/**`, `.ragit/log/**`, `.ragit/reports/**`, `.ragit/security/**`, `.ragit/memory/sessions/**`, `.ragit/memory/working/**`, `.ragit/artifacts/session/**`는 보이지 않아야 합니다.
 
 ## 대표 시나리오
 
@@ -85,6 +100,7 @@ pnpm ragit init --dry-run --output json
 
 - 전체 scan/coverage/maturity report 반환
 - create/reuse/skip 계획 반환
+- `bootstrap.gitignore` 아래에 planned `.gitignore` policy와 entries 반환
 - 파일 시스템 변경 없음
 
 ## 비대화형 예시

@@ -13,8 +13,25 @@ import {
   writeGuideIndex,
 } from "../core/guide.js";
 import { initGitRepository, isGitRepository, tryGetGitRoot } from "../core/git.js";
-import { ensureGitIgnoreEntries, ensureRagitDirectories, writeRagitConfig } from "../core/project.js";
-import { bootstrapCanonicalStore, canonicalStoreSummary, closeCanonicalStore, ensureZvecRuntime, hasLegacyJsonStore } from "../core/store.js";
+import {
+  buildRagitGitIgnorePlan,
+  DEFAULT_RAGIT_GITIGNORE_CHOICE,
+  RagitGitIgnorePlan,
+  RagitGitIgnorePolicyChoice,
+} from "../core/gitignore-policy.js";
+import {
+  ensureGitIgnoreEntries,
+  ensureRagitDirectories,
+  inspectGitIgnoreEntries,
+  writeRagitConfig,
+} from "../core/project.js";
+import {
+  bootstrapCanonicalStore,
+  canonicalStoreSummary,
+  closeCanonicalStore,
+  ensureZvecRuntime,
+  hasLegacyJsonStore,
+} from "../core/store.js";
 import { confirmStep, printStep } from "../core/wizard.js";
 import { censusDocumentation } from "../core/init/doc-census.js";
 import { planGapFill } from "../core/init/gap-fill.js";
@@ -40,7 +57,7 @@ export interface InitOptions {
 
 export type InitSummary = InitReport;
 
-const totalSteps = 8;
+const totalSteps = 9;
 
 export const resolveInitRoot = async (cwd: string): Promise<string> => (await tryGetGitRoot(cwd)) ?? cwd;
 
@@ -117,10 +134,26 @@ const buildInitConfig = (root: string, summary: Pick<InitReport, "repositoryMode
   return config;
 };
 
+const chooseGitIgnorePolicy = async (interactive: boolean, quiet: boolean): Promise<RagitGitIgnorePlan> => {
+  if (!interactive) return buildRagitGitIgnorePlan(DEFAULT_RAGIT_GITIGNORE_CHOICE);
+
+  if (!quiet) {
+    console.log("RAGit runtime 데이터의 Git 보관 정책을 선택합니다. 기본값은 로컬 실행 상태를 ignore하는 안전 정책입니다.");
+  }
+  const trackManifests = await confirmStep("commit-bound snapshot manifest(.ragit/manifest/)를 Git에 보관하시겠습니까?", false);
+  const trackHarnessArtifacts = await confirmStep("reviewed harness artifact(.ragit/artifacts/harness/)를 Git에 보관하시겠습니까?", false);
+  const choice: RagitGitIgnorePolicyChoice = {
+    trackManifests,
+    trackHarnessArtifacts,
+  };
+  return buildRagitGitIgnorePlan(choice);
+};
+
 const inspectBootstrapSummary = async (
   root: string,
   git: InitBootstrapSummary["git"],
   config: RagitConfig,
+  gitignore: RagitGitIgnorePlan,
 ): Promise<InitBootstrapSummary> => {
   const [agents, guide, migrationRequired] = await Promise.all([
     inspectAgentsInstruction(root),
@@ -149,6 +182,7 @@ const inspectBootstrapSummary = async (
     }
   })();
   const docsAuthority = await inspectDocAuthority(root);
+  const gitignoreSummary = await inspectGitIgnoreEntries(root, gitignore.entries, gitignore.policy);
 
   return {
     git,
@@ -171,6 +205,7 @@ const inspectBootstrapSummary = async (
       violations: docsAuthority.violations,
       lastReconciledAt: docsAuthority.lastReconciledAt,
     },
+    gitignore: gitignoreSummary,
   };
 };
 
@@ -178,9 +213,10 @@ const applyBootstrap = async (
   root: string,
   git: InitBootstrapSummary["git"],
   config: RagitConfig,
+  gitignore: RagitGitIgnorePlan,
 ): Promise<InitBootstrapSummary> => {
   await ensureRagitDirectories(root);
-  await ensureGitIgnoreEntries(root);
+  const gitignoreSummary = await ensureGitIgnoreEntries(root, gitignore.entries, gitignore.policy);
   await writeRagitConfig(root, config);
 
   const agents = await ensureAgentsInstruction(root);
@@ -219,6 +255,7 @@ const applyBootstrap = async (
         violations: docsAuthority.violations,
         lastReconciledAt: docsAuthority.lastReconciledAt,
       },
+      gitignore: gitignoreSummary,
     };
   } finally {
     closeCanonicalStore(store);
@@ -270,7 +307,10 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
 
   const config = buildInitConfig(root, { repositoryMode, strategy, scan }, mergeExisting);
 
-  logStep(7, dryRun ? "bootstrap 계획 계산" : "control-plane 및 저장소 bootstrap");
+  logStep(7, ".gitignore 정책 선택");
+  const gitignore = await chooseGitIgnorePolicy(interactive, quiet);
+
+  logStep(8, dryRun ? "bootstrap 계획 계산" : "control-plane 및 저장소 bootstrap");
   if (!dryRun) {
     await applyGapFillActions({
       cwd: root,
@@ -283,10 +323,10 @@ export const runInit = async (cwd: string, options: InitOptions = {}): Promise<I
     });
   }
   const bootstrap = dryRun
-    ? await inspectBootstrapSummary(root, git, config)
-    : await applyBootstrap(root, git, config);
+    ? await inspectBootstrapSummary(root, git, config, gitignore)
+    : await applyBootstrap(root, git, config, gitignore);
 
-  logStep(8, "결과 요약");
+  logStep(9, "결과 요약");
   const nextActions = dryRun
     ? ["rerun ragit init without --dry-run to apply changes"]
     : bootstrap.storage.migrationRequired

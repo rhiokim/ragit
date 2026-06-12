@@ -36,6 +36,8 @@ export const formatInitSummaryTable = (summary: InitReport): string => {
     `- guide-index: ${summary.bootstrap.guide.indexPath}`,
     `- docs-authority-index: ${summary.bootstrap.docsAuthority.status} (${summary.bootstrap.docsAuthority.indexPath})`,
     `- docs-authority-tracked: ${summary.bootstrap.docsAuthority.tracked}, violations=${summary.bootstrap.docsAuthority.violations}`,
+    `- gitignore: ${summary.bootstrap.gitignore.policy} (${summary.bootstrap.gitignore.path})`,
+    `- gitignore-added: ${summary.bootstrap.gitignore.addedEntries.length}`,
     `- zvec: ${summary.bootstrap.storage.status} (${summary.bootstrap.storage.collections.join(", ") || "documents,chunks"})`,
     "",
     "next actions:",

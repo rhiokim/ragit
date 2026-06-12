@@ -368,11 +368,17 @@ The flow below shows how `ragit ingest` turns repository documents and bound art
 ```text
 .ragit/
   config.toml
+  docs/index.json
   guide/guide-index.json
   guide/templates/
+  log/
   manifest/<commit-sha>.json
+  reports/
+  security/
   memory/sessions/
   memory/working/
+  artifacts/session/
+  artifacts/harness/
   store/meta.json
   store/documents/
   store/chunks/
@@ -385,8 +391,16 @@ docs/
     plans/
 ```
 
-- Recommended for Git tracking: `.ragit/config.toml`, `.ragit/manifest/**`, `.ragit/memory/**`, `docs/memory/**`
-- Local-only (default `.gitignore`): `.ragit/store/**`, `.ragit/cache/**`
+Git tracking policy:
+
+| Category | Paths | Default |
+| --- | --- | --- |
+| Project contract | `.ragit/config.toml`, `.ragit/guide/**`, `.ragit/docs/index.json`, `AGENTS.md`, `RAGIT.md`, durable docs under `docs/**` | Track |
+| Local runtime state | `.ragit/store/**`, `.ragit/cache/**`, `.ragit/log/**`, `.ragit/reports/**`, `.ragit/security/**`, `.ragit/memory/sessions/**`, `.ragit/memory/working/**`, `.ragit/artifacts/session/**` | Ignore |
+| Optional snapshot history | `.ragit/manifest/**` | Ignore in `safe`; track in `snapshot-history` or `dogfood` |
+| Optional reviewed harness assets | `.ragit/artifacts/harness/**` | Ignore in `safe` and `snapshot-history`; track in `dogfood` |
+
+For a normal product repository, accept the `safe` policy. For a repository that reviews RAGit snapshot history, keep manifests tracked. For a dogfooding/testbed repository, keep both manifests and reviewed harness artifacts tracked.
 
 ## Memory OS MVP
 
@@ -396,7 +410,7 @@ docs/
 
 This split is intentional:
 
-- `.ragit/memory/**` is the tracked control plane for working state and session history
+- `.ragit/memory/**` is the local control plane for working state and session history; promote durable knowledge into `docs/memory/**` when it should be reviewed and tracked
 - `docs/memory/**` is the searchable long-term memory corpus that participates in normal ingest/query flows
 
 ## Agent CLI Contract
@@ -426,8 +440,9 @@ Default flow:
 4. Compute documentation coverage, maturity, and knowledge-slot mapping
 5. Reuse existing repository docs first and plan missing foundational docs
 6. Write stage-1 draft docs plus `.ragit/**`
-7. Bootstrap the zvec canonical store
-8. Print the final summary and next actions
+7. Choose the `.gitignore` policy for RAGit runtime data
+8. Bootstrap the zvec canonical store
+9. Print the final summary and next actions
 
 What `init` prepares:
 
@@ -440,6 +455,7 @@ What `init` prepares:
   - `docs/known-gaps.md`
   - `docs/adr/README.md`
 - `.ragit/config.toml`, `.ragit/guide/templates/*`, and `.ragit/guide/guide-index.json`
+- `.gitignore` entries for local-only RAGit runtime state, with interactive choices for manifest and harness artifact tracking
 - Empty zvec collections under `.ragit/store/`
 - Next-action guidance for `hooks install` and `ingest`
 

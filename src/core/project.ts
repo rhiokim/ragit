@@ -2,7 +2,10 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { CONFIG_PATH, RAGIT_DIR, defaultConfig, stringifyToml } from "./config.js";
+import { buildRagitGitIgnorePlan, RagitGitIgnorePolicy } from "./gitignore-policy.js";
 import { RagitConfig } from "./types.js";
+
+const DEFAULT_GITIGNORE_PLAN = buildRagitGitIgnorePlan();
 
 export interface RagitPaths {
   root: string;
@@ -114,9 +117,19 @@ export const ensureRagitStructure = async (cwd: string, config: RagitConfig = de
   return paths;
 };
 
-const gitIgnoreEntries = [".ragit/store/", ".ragit/store.next/", ".ragit/store.prev/", ".ragit/cache/"];
+export interface GitIgnoreUpdateSummary {
+  path: string;
+  policy: RagitGitIgnorePolicy;
+  plannedEntries: string[];
+  addedEntries: string[];
+  existingEntries: string[];
+}
 
-export const ensureGitIgnoreEntries = async (cwd: string): Promise<void> => {
+export const inspectGitIgnoreEntries = async (
+  cwd: string,
+  entries = DEFAULT_GITIGNORE_PLAN.entries,
+  policy: RagitGitIgnorePolicy = DEFAULT_GITIGNORE_PLAN.policy,
+): Promise<GitIgnoreUpdateSummary> => {
   const gitIgnorePath = path.join(cwd, ".gitignore");
   let content = "";
   try {
@@ -125,10 +138,34 @@ export const ensureGitIgnoreEntries = async (cwd: string): Promise<void> => {
     content = "";
   }
   const existingLines = new Set(content.split(/\r?\n/));
-  const missingEntries = gitIgnoreEntries.filter((entry) => !existingLines.has(entry));
-  if (missingEntries.length === 0) return;
+  const addedEntries = entries.filter((entry) => !existingLines.has(entry));
+  const existingEntries = entries.filter((entry) => existingLines.has(entry));
+  return {
+    path: path.relative(cwd, gitIgnorePath) || ".gitignore",
+    policy,
+    plannedEntries: entries,
+    addedEntries,
+    existingEntries,
+  };
+};
+
+export const ensureGitIgnoreEntries = async (
+  cwd: string,
+  entries = DEFAULT_GITIGNORE_PLAN.entries,
+  policy: RagitGitIgnorePolicy = DEFAULT_GITIGNORE_PLAN.policy,
+): Promise<GitIgnoreUpdateSummary> => {
+  const gitIgnorePath = path.join(cwd, ".gitignore");
+  let content = "";
+  try {
+    content = await readFile(gitIgnorePath, "utf8");
+  } catch {
+    content = "";
+  }
+  const summary = await inspectGitIgnoreEntries(cwd, entries, policy);
+  if (summary.addedEntries.length === 0) return summary;
 
   const prefix = content.length === 0 ? "" : content.endsWith("\n") ? "" : "\n";
-  const appended = `${missingEntries.join("\n")}\n`;
+  const appended = `${summary.addedEntries.join("\n")}\n`;
   await writeFile(gitIgnorePath, `${content}${prefix}${appended}`, "utf8");
+  return summary;
 };

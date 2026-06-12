@@ -205,7 +205,10 @@ Those states still belong to `ragit ingest`.
 - Create or update `.ragit/store/meta.json`
 - Create or open `.ragit/store/documents/` and `.ragit/store/chunks/`
 - Create or load root `AGENTS.md`
-- Update `.gitignore` for local-only `.ragit/store/` and `.ragit/cache/`
+- Update `.gitignore` from the selected RAGit runtime policy:
+  - `safe`: normal project default; ignore store/cache/log/report/security/session runtime state plus `.ragit/manifest/` and `.ragit/artifacts/harness/`
+  - `snapshot-history`: keep `.ragit/manifest/` trackable while runtime state remains ignored
+  - `dogfood`: keep both `.ragit/manifest/` and reviewed `.ragit/artifacts/harness/` trackable for self-referential test beds
 
 ### Explicit Non-Effects
 
