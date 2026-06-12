@@ -20,3 +20,4 @@ pnpm ragit harness capture --input <path|-> \
 - Use it when you want to materialize a suite before review or execution.
 - `--dry-run` validates payload shape and planned artifact ids without writing files.
 - `capture` does not execute the suite. Use <a href="/en/docs/commands/harness/run">`harness run`</a> for execution.
+- The safe `init` gitignore policy keeps `.ragit/artifacts/harness/**` local. Choose the dogfood policy during <a href="/en/docs/commands/init">`init`</a> only when reviewed harness assets should become part of the repository contract.

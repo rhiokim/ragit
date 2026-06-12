@@ -205,7 +205,10 @@
 - `.ragit/store/meta.json` 생성 또는 갱신
 - `.ragit/store/documents/`, `.ragit/store/chunks/` 생성 또는 오픈
 - 루트 `AGENTS.md` 생성 또는 로드
-- `.gitignore`에 로컬 전용 `.ragit/store/`, `.ragit/cache/` 항목 반영
+- 선택된 RAGit runtime policy에 따라 `.gitignore`를 갱신합니다.
+  - `safe`: 일반 프로젝트 기본값. store/cache/log/report/security/session runtime state와 `.ragit/manifest/`, `.ragit/artifacts/harness/`를 ignore합니다.
+  - `snapshot-history`: runtime state는 ignore하되 `.ragit/manifest/`는 추적 가능하게 둡니다.
+  - `dogfood`: self-referential test bed를 위해 `.ragit/manifest/`와 reviewed `.ragit/artifacts/harness/`를 모두 추적 가능하게 둡니다.
 
 ### 명시적 Non-Effect
 

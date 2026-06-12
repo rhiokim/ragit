@@ -57,6 +57,7 @@ pnpm ragit migrate embeddings
 - The source store must still contain every chunk referenced by the manifests. Missing chunks fail fast.
 - The command creates `.ragit/store.next` and `.ragit/store.prev` during the swap.
 - Provider credentials are still env-only. For OpenAI, set `OPENAI_API_KEY` before apply.
+- If `init` used the safe gitignore policy, manifests may be local-only. Share or track `.ragit/manifest/**` with the `snapshot-history` or `dogfood` policy when other machines must reproduce the same snapshot corpus.
 
 ## Related Commands
 

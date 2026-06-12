@@ -59,7 +59,54 @@ pnpm ragit init [--cwd <path>] [--yes|--non-interactive] \
   - `bootstrap`
   - `nextActions`
 - `actions` reports planned create/reuse/skip outcomes for stage-1 foundational docs.
-- `bootstrap` reports the AGENTS/guide/zvec state or planned state during `--dry-run`.
+- `bootstrap` reports the AGENTS/guide/zvec/gitignore state or planned state during `--dry-run`.
+- `bootstrap.gitignore` includes the selected policy, all planned entries, entries already present, and entries that were or would be added.
+
+## Gitignore Policy
+
+Interactive `init` asks whether to keep commit-bound snapshot manifests and reviewed harness artifacts in Git. The safe default ignores local runtime state:
+
+- `.ragit/store/`, `.ragit/store.next/`, `.ragit/store.prev/`
+- `.ragit/cache/`
+- `.ragit/log/`
+- `.ragit/reports/`
+- `.ragit/security/`
+- `.ragit/memory/sessions/`, `.ragit/memory/working/`
+- `.ragit/artifacts/session/`
+- `.ragit/manifest/`
+- `.ragit/artifacts/harness/`
+
+Use `--yes` or `--non-interactive` to accept that safe policy without prompts. In interactive dogfooding workflows, choose to keep `.ragit/manifest/` or `.ragit/artifacts/harness/` tracked when snapshot history or reviewed harness assets are part of the repository contract.
+
+Choose the policy by repository type:
+
+| Policy | Choose it when | Git ignores |
+| --- | --- | --- |
+| `safe` | You are initializing a normal product/application repository and want generated runtime state to stay local. This is the non-interactive default. | Runtime state plus `.ragit/manifest/` and `.ragit/artifacts/harness/` |
+| `snapshot-history` | Your team reviews or shares snapshot manifests as part of reproducible RAGit history. | Runtime state, but not `.ragit/manifest/` |
+| `dogfood` | The repository is itself exercising RAGit workflows and reviewed harness assets are part of the repo contract. | Runtime state, but not `.ragit/manifest/` or `.ragit/artifacts/harness/` |
+
+During a human terminal run, the prompts map to those policies:
+
+```text
+commit-bound snapshot manifest(.ragit/manifest/)를 Git에 보관하시겠습니까? [y/N]
+reviewed harness artifact(.ragit/artifacts/harness/)를 Git에 보관하시겠습니까? [y/N]
+```
+
+Use `--dry-run --output json` to preview the exact entries before mutating `.gitignore`. The relevant fields are:
+
+```json
+{
+  "bootstrap": {
+    "gitignore": {
+      "policy": "safe",
+      "plannedEntries": [".ragit/store/", ".ragit/manifest/"],
+      "addedEntries": [".ragit/manifest/"],
+      "existingEntries": [".ragit/store/"]
+    }
+  }
+}
+```
 
 ## Examples
 
@@ -86,6 +133,7 @@ pnpm ragit init --dry-run --output json
 - In non-interactive mode, `init` fails if the directory is not a git repository and `--git-init` is missing.
 - In TTY-less environments, interactive mode is not available.
 - `--dry-run` performs repository analysis but does not write files or create the zvec store.
+- `--dry-run` reports the `.gitignore` policy and entries that would be added, but does not edit `.gitignore`.
 - zvec bootstrap currently supports `darwin/arm64`, `linux/arm64`, and `linux/x64`.
 - `init` can inspect repository docs, but it still does **not** make the repository search-ready. Run <a href="/en/docs/commands/ingest">`ingest`</a> after setup.
 

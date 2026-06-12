@@ -113,6 +113,13 @@ export interface InitBootstrapSummary {
     violations: number;
     lastReconciledAt: string | null;
   };
+  gitignore: {
+    path: string;
+    policy: "safe" | "snapshot-history" | "dogfood";
+    plannedEntries: string[];
+    addedEntries: string[];
+    existingEntries: string[];
+  };
 }
 
 export interface InitReport {

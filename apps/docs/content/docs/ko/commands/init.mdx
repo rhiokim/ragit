@@ -59,7 +59,54 @@ pnpm ragit init [--cwd <path>] [--yes|--non-interactive] \
   - `bootstrap`
   - `nextActions`
 - `actions`는 1단계 기초 문서에 대한 create/reuse/skip 계획을 보고합니다.
-- `bootstrap`은 실제 AGENTS/guide/zvec 상태 또는 `--dry-run`일 때 계획 상태를 보고합니다.
+- `bootstrap`은 실제 AGENTS/guide/zvec/gitignore 상태 또는 `--dry-run`일 때 계획 상태를 보고합니다.
+- `bootstrap.gitignore`에는 선택된 policy, 전체 planned entries, 이미 있던 entries, 실제 추가됐거나 추가될 entries가 포함됩니다.
+
+## Gitignore 정책
+
+대화형 `init`은 commit-bound snapshot manifest와 reviewed harness artifact를 Git에 보관할지 묻습니다. 안전 기본값은 다음 로컬 실행 상태를 ignore합니다.
+
+- `.ragit/store/`, `.ragit/store.next/`, `.ragit/store.prev/`
+- `.ragit/cache/`
+- `.ragit/log/`
+- `.ragit/reports/`
+- `.ragit/security/`
+- `.ragit/memory/sessions/`, `.ragit/memory/working/`
+- `.ragit/artifacts/session/`
+- `.ragit/manifest/`
+- `.ragit/artifacts/harness/`
+
+`--yes` 또는 `--non-interactive`를 쓰면 질문 없이 이 안전 정책을 적용합니다. dogfooding 저장소처럼 snapshot history 또는 reviewed harness asset이 저장소 계약의 일부라면 대화형 선택에서 `.ragit/manifest/` 또는 `.ragit/artifacts/harness/`를 Git에 남기도록 선택하십시오.
+
+저장소 성격에 따라 정책을 고르십시오.
+
+| Policy | 선택할 때 | Git ignore 대상 |
+| --- | --- | --- |
+| `safe` | 일반 제품/애플리케이션 저장소를 초기화하고 생성된 runtime state를 로컬에만 두고 싶을 때. 비대화형 기본값입니다. | runtime state와 `.ragit/manifest/`, `.ragit/artifacts/harness/` |
+| `snapshot-history` | 팀이 snapshot manifest를 재현 가능한 RAGit history의 일부로 리뷰하거나 공유할 때 | runtime state. 단, `.ragit/manifest/`는 제외 |
+| `dogfood` | 저장소 자체가 RAGit workflow를 dogfooding하고 reviewed harness asset이 repo contract의 일부일 때 | runtime state. 단, `.ragit/manifest/`, `.ragit/artifacts/harness/`는 제외 |
+
+사람이 터미널에서 실행하면 다음 질문이 정책으로 매핑됩니다.
+
+```text
+commit-bound snapshot manifest(.ragit/manifest/)를 Git에 보관하시겠습니까? [y/N]
+reviewed harness artifact(.ragit/artifacts/harness/)를 Git에 보관하시겠습니까? [y/N]
+```
+
+`.gitignore`를 실제로 바꾸기 전에 정확한 entries를 보려면 `--dry-run --output json`을 사용하십시오. 관련 필드는 다음과 같습니다.
+
+```json
+{
+  "bootstrap": {
+    "gitignore": {
+      "policy": "safe",
+      "plannedEntries": [".ragit/store/", ".ragit/manifest/"],
+      "addedEntries": [".ragit/manifest/"],
+      "existingEntries": [".ragit/store/"]
+    }
+  }
+}
+```
 
 ## 대표 사용 예시
 
@@ -86,6 +133,7 @@ pnpm ragit init --dry-run --output json
 - 비대화형 모드에서 git 저장소가 아니고 `--git-init`도 없으면 실패합니다.
 - TTY가 없는 환경에서는 대화형 모드를 사용할 수 없습니다.
 - `--dry-run`은 저장소 분석은 수행하지만 파일과 zvec store는 만들지 않습니다.
+- `--dry-run`은 `.gitignore`에 추가될 policy와 entries를 보고하지만 `.gitignore` 파일은 수정하지 않습니다.
 - zvec bootstrap은 현재 `darwin/arm64`, `linux/arm64`, `linux/x64`만 지원합니다.
 - `init`은 저장소 문서를 읽고 분류할 수 있지만, 저장소를 search-ready 상태로 만들지는 않습니다. 초기화 후 <a href="/ko/docs/commands/ingest">`ingest`</a>를 실행하십시오.
 

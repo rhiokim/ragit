@@ -14,8 +14,10 @@ The repository init command is now a discover-first bootstrap flow. It still anc
 4. Run documentation census, coverage scoring, and maturity scoring
 5. Build a knowledge-slot map from existing repository sources
 6. Plan missing foundational docs and reuse existing sources first
-7. Write stage-1 drafts, bootstrap `.ragit/**`, and bootstrap the zvec store
-8. Print the final report and next actions
+7. Write stage-1 drafts and bootstrap `.ragit/**`
+8. Select the `.gitignore` policy for RAGit runtime data
+9. Bootstrap the zvec store
+10. Print the final report and next actions
 
 ## Stage-1 generated docs
 
@@ -37,6 +39,7 @@ Every generated doc is marked as inferred draft content so humans can distinguis
 - `.ragit/config.toml`
 - `.ragit/guide/templates/*`
 - `.ragit/guide/guide-index.json`
+- `.gitignore` entries for the selected runtime-data policy
 - `.ragit/store/meta.json`
 - Empty zvec collections for `documents` and `chunks`
 
@@ -48,6 +51,18 @@ Every generated doc is marked as inferred draft content so humans can distinguis
 - No query-ready knowledge state
 
 `init` can inspect repository docs, but searchable knowledge still begins with <a href="/en/docs/commands/ingest">`ingest`</a>.
+
+## Git Tracking Choices
+
+`init` separates durable project knowledge from local runtime state. The safe policy is the default for `--yes` and `--non-interactive`; it keeps generated runtime state out of Git. In an interactive terminal run, answer the manifest and harness questions differently only when those files are part of your repository contract.
+
+| Repository shape | Recommended policy | Why |
+| --- | --- | --- |
+| Product or application repo | `safe` | Keeps logs, reports, security ledgers, session state, manifests, harness artifacts, store, and cache local. |
+| Team sharing snapshot history | `snapshot-history` | Keeps `.ragit/manifest/**` trackable while runtime state remains local. |
+| RAGit dogfooding or testbed repo | `dogfood` | Keeps manifests and reviewed harness artifacts trackable for review/reproduction. |
+
+After `init`, `git status` should normally show project-facing files such as `.ragit/config.toml`, `.ragit/guide/**`, `.ragit/docs/index.json`, `AGENTS.md`, `RAGIT.md`, and generated `docs/**` drafts. It should not show `.ragit/store/**`, `.ragit/cache/**`, `.ragit/log/**`, `.ragit/reports/**`, `.ragit/security/**`, `.ragit/memory/sessions/**`, `.ragit/memory/working/**`, or `.ragit/artifacts/session/**`.
 
 ## Representative scenarios
 
@@ -85,6 +100,7 @@ Expected result:
 
 - full scan/coverage/maturity report
 - planned create/reuse/skip actions
+- planned `.gitignore` policy and entries under `bootstrap.gitignore`
 - no file system mutations
 
 ## Non-interactive examples
