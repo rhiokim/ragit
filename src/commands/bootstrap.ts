@@ -9,9 +9,11 @@ import {
   readEmbeddingCacheSummary,
   resolveEmbeddingConfiguredState,
   resolveEmbeddingProfile,
+  toEmbeddingContract,
 } from "../core/embedding.js";
+import { isRagitOperationalError } from "../core/errors.js";
 import { readEventLedgerStats } from "../core/event-ledger.js";
-import { ensureGitRepository, currentBranch, getHeadSha, tryGetGitRoot } from "../core/git.js";
+import { ensureGitRepository, tryGetGitRoot } from "../core/git.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
 import {
@@ -29,6 +31,7 @@ import {
   hasLegacyJsonStore,
   readCanonicalStoreMeta,
 } from "../core/store.js";
+import { resolveRepositoryContext, type SnapshotMetadata } from "../core/snapshot.js";
 
 export const runConfigSet = async (cwd: string, key: string, value: string): Promise<void> => {
   await ensureRagitStructure(cwd);
@@ -54,6 +57,22 @@ type StatusEmbeddingState = {
 const hasCredentialForProfile = (profile: ReturnType<typeof resolveEmbeddingProfile>): boolean =>
   profile.provider !== "openai" || Boolean(process.env.OPENAI_API_KEY?.trim());
 
+const hasReadableStoreMeta = (
+  storeMeta: Awaited<ReturnType<typeof readCanonicalStoreMeta>>,
+): storeMeta is NonNullable<Awaited<ReturnType<typeof readCanonicalStoreMeta>>> => {
+  if (typeof storeMeta !== "object" || storeMeta === null) return false;
+  const candidate = storeMeta as unknown as Record<string, unknown>;
+  const contract = candidate.embeddingContract;
+  if (typeof contract !== "object" || contract === null) return false;
+  const embeddingContract = contract as Record<string, unknown>;
+  return (
+    typeof candidate.schemaVersion === "number" &&
+    typeof embeddingContract.provider === "string" &&
+    typeof embeddingContract.dimensions === "number" &&
+    typeof embeddingContract.version === "string"
+  );
+};
+
 const embeddingNeedsMigration = (
   profile: ReturnType<typeof resolveEmbeddingProfile>,
   storeMeta: Awaited<ReturnType<typeof readCanonicalStoreMeta>>,
@@ -64,8 +83,9 @@ const embeddingNeedsMigration = (
     storeMeta.embeddingContract.version !== profile.version);
 
 export interface StatusResult {
-  branch: string;
-  head: string;
+  branch: string | null;
+  head: string | null;
+  snapshot: SnapshotMetadata;
   backend: string;
   zvec: {
     status: "missing" | "loaded";
@@ -114,28 +134,41 @@ export interface StatusResult {
 }
 
 export const runStatus = async (cwd: string): Promise<StatusResult> => {
+  const context = await resolveRepositoryContext(cwd);
+  cwd = context.gitRoot;
   await ensureRagitStructure(cwd);
   const paths = resolveRagitPaths(cwd);
   const config = await loadConfig(cwd);
   const configuredProfile = resolveEmbeddingProfile(config);
-  const storeMeta = await readCanonicalStoreMeta(cwd);
+  const rawStoreMeta = await readCanonicalStoreMeta(cwd);
+  const storeMeta = hasReadableStoreMeta(rawStoreMeta) ? rawStoreMeta : null;
   const cache = await readEmbeddingCacheSummary(cwd, configuredProfile);
   const needsMigration = embeddingNeedsMigration(configuredProfile, storeMeta);
   const securityState = await readSecurityState(cwd);
   const quarantineEntries = await countQuarantineEntries(cwd);
   const admissionStats = await readAdmissionStats(cwd);
   const manifests = (await readdir(paths.manifestDir)).filter((name) => name.endsWith(".json"));
-  const branch = await currentBranch(cwd);
-  const sha = await getHeadSha(cwd);
+  let exactManifestState: "missing" | "invalid" | "valid" = context.headSha === null ? "missing" : "valid";
+  if (context.headSha !== null) {
+    try {
+      await loadSnapshotManifest(cwd, context.headSha);
+    } catch (error) {
+      if (!isRagitOperationalError(error)) throw error;
+      if (error.code === "SNAPSHOT_NOT_INDEXED") {
+        exactManifestState = "missing";
+      } else if (error.code === "SNAPSHOT_MANIFEST_INVALID" || error.code === "SNAPSHOT_SCHEMA_UNSUPPORTED") {
+        exactManifestState = "invalid";
+      } else {
+        throw error;
+      }
+    }
+  }
   let zvecStatus: "missing" | "loaded" = "missing";
   let collections: string[] = [];
   let schemaVersion: number | null = null;
   let stats: Record<string, unknown> | null = null;
   try {
-    if (!storeMeta) {
-      throw new Error("store meta missing");
-    }
-    const store = await bootstrapCanonicalStore(cwd, storeMeta.embeddingContract, true);
+    const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(configuredProfile), true);
     try {
       zvecStatus = "loaded";
       collections = [store.meta.collections.documents, store.meta.collections.chunks];
@@ -150,15 +183,34 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   } catch {
     zvecStatus = "missing";
   }
+  const snapshotStatus: SnapshotMetadata["status"] =
+    exactManifestState === "missing"
+      ? "missing"
+      : exactManifestState === "invalid"
+        ? "invalid"
+        : zvecStatus === "loaded"
+          ? "indexed"
+          : "store-unavailable";
+  const snapshot: SnapshotMetadata = {
+    requestedRef: "HEAD",
+    resolvedSha: context.headSha,
+    selection: "head-exact",
+    status: snapshotStatus,
+    branch: context.branch,
+    detached: context.detached,
+    worktreeDirty: context.worktreeDirty,
+  };
+  const snapshotReady = snapshotStatus === "indexed";
   const status: StatusResult = {
-    branch,
-    head: sha,
+    branch: context.branch,
+    head: context.headSha,
+    snapshot,
     backend: config.storage.backend,
     zvec: {
       status: zvecStatus,
       collections,
       schemaVersion,
-      searchReady: manifests.length > 0,
+      searchReady: snapshotReady,
       migrationRequired: await hasLegacyJsonStore(cwd),
       stats,
     },
@@ -170,7 +222,7 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
       indexPath: ".ragit/docs/index.json",
     },
     knowledge: {
-      durableReady: manifests.length > 0,
+      durableReady: snapshotReady,
       sessionArtifactCount: 0,
       harnessArtifactCount: 0,
       pendingBindings: 0,
@@ -222,7 +274,7 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
       }
     : status.docsAuthority;
   status.knowledge = {
-    durableReady: manifests.length > 0,
+    durableReady: snapshotReady,
     ...(await countArtifactState(cwd)),
   };
   status.events = await readEventLedgerStats(cwd);
