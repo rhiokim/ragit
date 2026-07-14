@@ -69,6 +69,9 @@ Recall packets should restore active work instead of replaying raw logs.`,
       git(temp, ["commit", "-m", "seed docs"]);
 
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "initialize ragit"]);
+      const headSha = git(temp, ["rev-parse", "HEAD"]);
       await runIngest(temp, { all: true });
       await runMemoryWrap(temp, {
         goal: "resume auth flow",
@@ -174,9 +177,29 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(queryOutput.ok).toBe(true);
       expect(queryOutput.version).toBeTruthy();
       expect(queryOutput.cwd).toBe(git(nestedQueryCwd, ["rev-parse", "--show-toplevel"]));
+      expect(queryOutput.data.snapshotSha).toBe(headSha);
+      expect(queryOutput.data.snapshot).toMatchObject({
+        requestedRef: "HEAD",
+        resolvedSha: headSha,
+        selection: "head-exact",
+        status: "indexed",
+        detached: false,
+      });
       expect(queryOutput.data.hits[0].excerpt).toBeTruthy();
       expect(queryOutput.data.hits[0].scope).toBe("durable");
       expect(queryOutput.data.hits[0].text).toBeUndefined();
+      expect(queryOutput.warnings).toEqual(queryOutput.data.warnings);
+      const queryTextOutput = runCli([
+        "query",
+        "restore active work",
+        "--cwd",
+        temp,
+        "--format",
+        "text",
+      ]);
+      expect(queryTextOutput).toContain(`- resolved_sha: ${headSha}`);
+      expect(queryTextOutput).toContain("- selection: head-exact");
+      expect(queryTextOutput).toContain("- worktree_dirty: true");
 
       const contextOutput = JSON.parse(
         runCli(["context", "pack", "--input", "context-pack.json", "--cwd", temp, "--format", "json", "--view", "minimal"]),
@@ -184,7 +207,21 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(contextOutput.command).toBe("context pack");
       expect(contextOutput.ok).toBe(true);
       expect(contextOutput.data.goal).toBe("resume auth flow");
+      expect(contextOutput.data.snapshotSha).toBe(headSha);
+      expect(contextOutput.data.snapshot.resolvedSha).toBe(headSha);
       expect(contextOutput.data.selectedHits).toBeGreaterThan(0);
+      expect(contextOutput.warnings).toEqual(contextOutput.data.warnings);
+      const contextTextOutput = runCli([
+        "context",
+        "pack",
+        "resume auth flow",
+        "--cwd",
+        temp,
+        "--format",
+        "text",
+      ]);
+      expect(contextTextOutput).toContain(`- resolved_sha: ${headSha}`);
+      expect(contextTextOutput).toContain("- status: indexed");
 
       const recallOutput = JSON.parse(
         runCli(["memory", "recall", "resume auth flow", "--cwd", temp, "--format", "json", "--view", "minimal"]),

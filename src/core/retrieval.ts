@@ -5,9 +5,19 @@ import {
   pathForArtifact,
 } from "./artifacts.js";
 import { loadConfig } from "./config.js";
-import { getHeadSha } from "./git.js";
-import { latestSnapshotSha, loadSnapshotManifest, resolveSnapshotRef } from "./manifest.js";
-import { bootstrapCanonicalStore, closeCanonicalStore } from "./store.js";
+import { isRagitOperationalError, RagitOperationalError } from "./errors.js";
+import {
+  closeCanonicalStore,
+  openCanonicalStoreWithContract,
+  type CanonicalStore,
+} from "./store.js";
+import {
+  resolveRepositoryContext,
+  selectSnapshot,
+  snapshotMetadataForUnavailable,
+  type SnapshotMetadata,
+  type SnapshotSelection,
+} from "./snapshot.js";
 import {
   ArtifactAuthority,
   ArtifactRecord,
@@ -59,27 +69,6 @@ const keywordScore = (query: string, target: string): number => {
 export const calculateHybridScore = (scoreVector: number, scoreKeyword: number, alpha: number): number =>
   alpha * scoreVector + (1 - alpha) * scoreKeyword;
 
-const resolveSnapshotSha = async (cwd: string, at?: string): Promise<string> => {
-  if (at) return resolveSnapshotRef(cwd, at);
-  try {
-    const head = await getHeadSha(cwd);
-    return resolveSnapshotRef(cwd, head);
-  } catch {
-    const latest = await latestSnapshotSha(cwd);
-    if (!latest) throw new Error("사용 가능한 snapshot이 없습니다.");
-    return latest;
-  }
-};
-
-const isRecoverableSnapshotError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    message.includes("사용 가능한 snapshot이 없습니다.") ||
-    message.includes("snapshot을 찾을 수 없습니다") ||
-    message.includes("zvec store가 아직 초기화되지 않았습니다.")
-  );
-};
-
 export interface QueryOptions {
   topK?: number;
   at?: string;
@@ -88,7 +77,9 @@ export interface QueryOptions {
 
 export interface QueryResult {
   snapshotSha: string;
+  snapshot: SnapshotMetadata;
   hits: RetrievalHit[];
+  warnings: string[];
   redactionSummary: RedactionSummary;
 }
 
@@ -109,6 +100,7 @@ export interface UnifiedRetrievalRequest {
 
 export interface UnifiedRetrievalResult {
   snapshotSha: string | null;
+  snapshot: SnapshotMetadata;
   hits: RetrievalHit[];
   warnings: string[];
   redactionSummary: RedactionSummary;
@@ -358,15 +350,14 @@ const buildArtifactHits = async (
 
 const buildSnapshotHits = async (
   cwd: string,
-  snapshotSha: string,
+  store: CanonicalStore,
+  snapshot: SnapshotManifest,
   query: string,
   queryEmbedding: number[],
   alpha: number,
-  embeddingProfile: ReturnType<typeof resolveEmbeddingProfile>,
   topK: number,
   scope: RetrievalScope,
 ): Promise<RetrievalHit[]> => {
-  const snapshot = await loadSnapshotManifest(cwd, snapshotSha);
   const { ids: manifestChunkIds, scopeById } = resolveChunkIdsForScope(snapshot, scope);
   const artifactEntryByChunkId = new Map(
     (snapshot.artifactEntries ?? []).flatMap((entry) => entry.chunkIds.map((chunkId) => [chunkId, entry] as const)),
@@ -381,36 +372,31 @@ const buildSnapshotHits = async (
   );
   if (manifestChunkIds.length === 0 || scopedPaths.length === 0) return [];
 
-  const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), true);
-  try {
-    const batchSize = 200;
-    const candidateLimit = Math.min(manifestChunkIds.length, Math.max(topK * 20, 100));
-    const candidates = new Map<string, RetrievalHit>();
+  const batchSize = 200;
+  const candidateLimit = Math.min(manifestChunkIds.length, Math.max(topK * 20, 100));
+  const candidates = new Map<string, RetrievalHit>();
 
-    for (let cursor = 0; cursor < scopedPaths.length; cursor += batchSize) {
-      const slice = scopedPaths.slice(cursor, cursor + batchSize);
-      const filter = buildSnapshotPathFilter(slice);
-      const result = store.chunks.querySync({
-        fieldName: "embedding",
-        vector: queryEmbedding,
-        topk: candidateLimit,
-        filter,
-        outputFields: SNAPSHOT_QUERY_OUTPUT_FIELDS as unknown as string[],
-      });
-      for (const raw of result) {
-        const chunk = hydrateChunk(raw);
-        if (!scopedVersionIds.has(chunk.documentVersionId)) continue;
-        const hit = await buildSnapshotHit(cwd, raw, query, alpha, scopeById, artifactEntryByChunkId);
-        const existing = candidates.get(hit.chunkId);
-        if (existing && existing.scoreFinal >= hit.scoreFinal) continue;
-        candidates.set(hit.chunkId, hit);
-      }
+  for (let cursor = 0; cursor < scopedPaths.length; cursor += batchSize) {
+    const slice = scopedPaths.slice(cursor, cursor + batchSize);
+    const filter = buildSnapshotPathFilter(slice);
+    const result = store.chunks.querySync({
+      fieldName: "embedding",
+      vector: queryEmbedding,
+      topk: candidateLimit,
+      filter,
+      outputFields: SNAPSHOT_QUERY_OUTPUT_FIELDS as unknown as string[],
+    });
+    for (const raw of result) {
+      const chunk = hydrateChunk(raw);
+      if (!scopedVersionIds.has(chunk.documentVersionId)) continue;
+      const hit = await buildSnapshotHit(cwd, raw, query, alpha, scopeById, artifactEntryByChunkId);
+      const existing = candidates.get(hit.chunkId);
+      if (existing && existing.scoreFinal >= hit.scoreFinal) continue;
+      candidates.set(hit.chunkId, hit);
     }
-
-    return Array.from(candidates.values());
-  } finally {
-    closeCanonicalStore(store);
   }
+
+  return Array.from(candidates.values());
 };
 
 const retrievalIdentity = (hit: RetrievalHit): string =>
@@ -445,78 +431,155 @@ export const selectHitsWithinBudget = (hits: RetrievalHit[], budget: number): { 
   return { hits: selected, usedTokens };
 };
 
+const unavailableSnapshotMetadata = (at?: string): SnapshotMetadata => ({
+  requestedRef: at ?? "HEAD",
+  resolvedSha: null,
+  selection: at === undefined ? "head-exact" : "explicit-exact",
+  status: "unavailable",
+  branch: null,
+  detached: false,
+  worktreeDirty: false,
+});
+
+const snapshotStoreUnavailable = (
+  selection: SnapshotSelection,
+  error: unknown,
+): RagitOperationalError =>
+  new RagitOperationalError(
+    "SNAPSHOT_STORE_UNAVAILABLE",
+    `snapshot의 canonical store를 열 수 없습니다: ${selection.snapshotSha}`,
+    {
+      details: {
+        resolvedSha: selection.snapshotSha,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+      recovery: { command: "ragit ingest --all" },
+      cause: error,
+    },
+  );
+
 export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrievalRequest): Promise<UnifiedRetrievalResult> => {
-  const config = await loadConfig(cwd);
-  const embeddingProfile = resolveEmbeddingProfile(config);
-  const topK = request.topK ?? config.retrieval.top_k;
-  const sanitizedQuery = sanitizeKnowledgeText(request.query, "retrieval.query", "query");
-  if (!canUseRemoteEmbedding(config, embeddingProfile, "query")) {
-    throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
-  }
-  const queryEmbedding = await embedText(sanitizedQuery.text, embeddingProfile, { cwd });
-  const hits: RetrievalHit[] = [];
   const warnings: string[] = [];
+  const recallCompatibility = request.artifactOptions?.mode === "recall";
+  let retrievalRoot = cwd;
+  let selection: SnapshotSelection | null = null;
+  let store: CanonicalStore | null = null;
   let snapshotSha: string | null = null;
+  let snapshot = unavailableSnapshotMetadata(request.at);
 
   if (request.includeSnapshot !== false) {
     try {
-      snapshotSha = await resolveSnapshotSha(cwd, request.at);
-      hits.push(
-        ...(await buildSnapshotHits(
-          cwd,
-          snapshotSha,
-          sanitizedQuery.text,
-          queryEmbedding,
-          config.retrieval.alpha,
-          embeddingProfile,
-          topK,
-          request.scope ?? "durable",
-        )),
-      );
+      selection = await selectSnapshot(cwd, request.at);
+      retrievalRoot = selection.context.gitRoot;
+      snapshotSha = selection.snapshotSha;
+      snapshot = selection.snapshot;
+      warnings.push(...selection.warnings);
     } catch (error) {
-      if (!request.artifactOptions || !isRecoverableSnapshotError(error)) {
+      const recoverableForRecall =
+        recallCompatibility &&
+        (!isRagitOperationalError(error) || error.code === "SNAPSHOT_NOT_INDEXED");
+      if (!recoverableForRecall) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
       warnings.push(`검색 snapshot이 없어 artifact source만 사용했습니다: ${message}`);
+      try {
+        const context = await resolveRepositoryContext(cwd);
+        retrievalRoot = context.gitRoot;
+        snapshot = snapshotMetadataForUnavailable(context, request.at);
+      } catch {
+        // The compatibility path also supports memory recall outside a Git repository.
+      }
     }
   }
 
-  if (request.artifactOptions) {
-    const candidates =
-      request.artifactOptions.mode === "recall"
-        ? await buildRecallArtifactCandidates(cwd, request.artifactOptions.goal ?? sanitizedQuery.text)
-        : await buildExplicitArtifactCandidates(cwd, request.artifactOptions.scope ?? "all");
-    const allowsArtifactEmbedding = canUseRemoteEmbedding(
-      config,
-      embeddingProfile,
-      request.artifactOptions.scope === "evidence" ? "evidence" : "artifact",
-    );
-    if (!allowsArtifactEmbedding && candidates.length > 0) {
-      warnings.push("security policy 때문에 artifact/evidence semantic embedding을 건너뛰고 keyword fallback으로 검색했습니다.");
+  const config = await loadConfig(retrievalRoot);
+  const embeddingProfile = resolveEmbeddingProfile(config);
+  if (!canUseRemoteEmbedding(config, embeddingProfile, "query")) {
+    throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
+  }
+
+  if (selection !== null) {
+    try {
+      store = await openCanonicalStoreWithContract(
+        retrievalRoot,
+        toEmbeddingContract(embeddingProfile),
+        true,
+      );
+    } catch (error) {
+      const mapped = snapshotStoreUnavailable(selection, error);
+      if (!recallCompatibility) throw mapped;
+      snapshot = { ...selection.snapshot, status: "store-unavailable" };
+      warnings.push(`검색 snapshot이 없어 artifact source만 사용했습니다: ${mapped.message}`);
     }
-    hits.push(
-      ...(await buildArtifactHits(
-        cwd,
+  }
+
+  try {
+    const topK = request.topK ?? config.retrieval.top_k;
+    const sanitizedQuery = sanitizeKnowledgeText(request.query, "retrieval.query", "query");
+    const queryEmbedding = await embedText(sanitizedQuery.text, embeddingProfile, { cwd: retrievalRoot });
+    const hits: RetrievalHit[] = [];
+
+    if (selection !== null && store !== null) {
+      hits.push(
+        ...(await buildSnapshotHits(
+          retrievalRoot,
+          store,
+          selection.manifest,
+          sanitizedQuery.text,
+          queryEmbedding,
+          config.retrieval.alpha,
+          topK,
+          request.scope ?? "durable",
+        )),
+      );
+    }
+
+    if (request.artifactOptions) {
+      const candidates =
+        request.artifactOptions.mode === "recall"
+          ? await buildRecallArtifactCandidates(
+              retrievalRoot,
+              request.artifactOptions.goal ?? sanitizedQuery.text,
+            )
+          : await buildExplicitArtifactCandidates(
+              retrievalRoot,
+              request.artifactOptions.scope ?? "all",
+            );
+      const allowsArtifactEmbedding = canUseRemoteEmbedding(
         config,
-        sanitizedQuery.text,
-        queryEmbedding,
-        config.retrieval.alpha,
         embeddingProfile,
-        candidates,
-      )),
-    );
+        request.artifactOptions.scope === "evidence" ? "evidence" : "artifact",
+      );
+      if (!allowsArtifactEmbedding && candidates.length > 0) {
+        warnings.push("security policy 때문에 artifact/evidence semantic embedding을 건너뛰고 keyword fallback으로 검색했습니다.");
+      }
+      hits.push(
+        ...(await buildArtifactHits(
+          retrievalRoot,
+          config,
+          sanitizedQuery.text,
+          queryEmbedding,
+          config.retrieval.alpha,
+          embeddingProfile,
+          candidates,
+        )),
+      );
+    }
+
+    const finalizedHits = finalizeHits(hits, topK);
+    const sanitizedHits = sanitizeStructuredValue(finalizedHits, "retrieval.hit", "hits");
+
+    return {
+      snapshotSha,
+      snapshot,
+      hits: sanitizedHits.value,
+      warnings,
+      redactionSummary: mergeRedactionSummaries(sanitizedQuery.summary, sanitizedHits.summary),
+    };
+  } finally {
+    if (store !== null) closeCanonicalStore(store);
   }
-
-  const finalizedHits = finalizeHits(hits, topK);
-  const sanitizedHits = sanitizeStructuredValue(finalizedHits, "retrieval.hit", "hits");
-
-  return {
-    snapshotSha,
-    hits: sanitizedHits.value,
-    warnings,
-    redactionSummary: mergeRedactionSummaries(sanitizedQuery.summary, sanitizedHits.summary),
-  };
 };
 
 export const searchKnowledge = async (cwd: string, query: string, options: QueryOptions): Promise<QueryResult> => {
@@ -533,7 +596,9 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
   }
   return {
     snapshotSha: result.snapshotSha,
+    snapshot: result.snapshot,
     hits: result.hits,
+    warnings: result.warnings,
     redactionSummary: result.redactionSummary,
   };
 };
