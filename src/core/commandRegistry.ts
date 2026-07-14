@@ -485,7 +485,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: true,
     supportsDryRun: true,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["mode", "processed", "skipped", "masked", "commitSha", "manifestPath", "plannedFiles", "deletedDocumentIds", "docAuthority", "admission", "warnings"],
+    outputSchemaSummary: ["mode", "processed", "skipped", "masked", "commitSha", "manifestPath", "plannedFiles", "deletedDocumentIds", "dirtyCandidates", "wouldFail", "docAuthority", "admission", "warnings"],
     arguments: [],
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
@@ -512,7 +512,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["query", "snapshotSha", "hits[]", "redactionSummary"],
+    outputSchemaSummary: ["query", "snapshotSha", "snapshot", "hits[]", "redactionSummary"],
     arguments: [{ name: "question", type: "string", required: false, description: "검색 질문" }],
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
@@ -540,6 +540,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     outputSchemaSummary: [
       "branch",
       "head",
+      "snapshot",
       "backend",
       "zvec",
       "supported_types",
@@ -595,7 +596,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["goal", "snapshotSha", "budget", "usedTokens", "selectedHits", "hits[]", "redactionSummary"],
+    outputSchemaSummary: ["goal", "snapshotSha", "snapshot", "budget", "usedTokens", "selectedHits", "hits[]", "redactionSummary"],
     arguments: [{ name: "goal", type: "string", required: false, description: "컨텍스트를 만들 목표" }],
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
@@ -793,7 +794,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: false,
-    outputSchemaSummary: ["goal", "constraints", "openLoops", "relatedDecisions", "retrievedHits", "nextActions", "redactionSummary"],
+    outputSchemaSummary: ["goal", "snapshot", "constraints", "openLoops", "relatedDecisions", "retrievedHits", "nextActions", "redactionSummary"],
     arguments: [{ name: "goal", type: "string", required: true, description: "복원할 목표" }],
     options: [
       { name: "--view", type: "enum", description: "출력 축소 수준", enum: ["minimal", "default", "full"], defaultValue: "default" },
