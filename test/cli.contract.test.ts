@@ -95,6 +95,8 @@ Recall packets should restore active work instead of replaying raw logs.`,
 
       await writeFile(path.join(temp, "query.json"), JSON.stringify({ question: "restore active work", topK: 2 }, null, 2), "utf8");
       await writeFile(path.join(temp, "context-pack.json"), JSON.stringify({ goal: "resume auth flow", budget: 80 }, null, 2), "utf8");
+      const nestedQueryCwd = path.join(temp, "packages", "app");
+      await mkdir(nestedQueryCwd, { recursive: true });
 
       const describeOutput = JSON.parse(runCli(["describe", "query", "--format", "json"]));
       expect(describeOutput.command).toBe("describe");
@@ -165,11 +167,13 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeDocOutput.data.spec.path).toBe("doc create");
       expect(describeDocOutput.data.spec.options.some((option: { name: string }) => option.name === "--type")).toBe(true);
 
-      const queryOutput = JSON.parse(runCli(["query", "--input", "query.json", "--cwd", temp, "--format", "json", "--view", "minimal"]));
+      const queryOutput = JSON.parse(
+        runCli(["query", "--input", "query.json", "--cwd", nestedQueryCwd, "--format", "json", "--view", "minimal"]),
+      );
       expect(queryOutput.command).toBe("query");
       expect(queryOutput.ok).toBe(true);
       expect(queryOutput.version).toBeTruthy();
-      expect(queryOutput.cwd).toBe(temp);
+      expect(queryOutput.cwd).toBe(git(nestedQueryCwd, ["rev-parse", "--show-toplevel"]));
       expect(queryOutput.data.hits[0].excerpt).toBeTruthy();
       expect(queryOutput.data.hits[0].scope).toBe("durable");
       expect(queryOutput.data.hits[0].text).toBeUndefined();
