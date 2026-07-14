@@ -1,4 +1,5 @@
 import { AdmissionSummary, RedactionSummary, RetrievalHit } from "./types.js";
+import type { SnapshotMetadata } from "./snapshot.js";
 
 export type MemoryOpenLoopStatus = "open" | "blocked" | "in_progress" | "closed";
 
@@ -125,6 +126,7 @@ export interface RecallPacket {
   latestSessionId: string | null;
   sourceHeadSha: string | null;
   snapshotSha: string | null;
+  snapshot: SnapshotMetadata;
   createdAt: string;
   warnings: string[];
   redactionSummary?: RedactionSummary;

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runInit } from "../src/commands/init.js";
-import { promoteMemory } from "../src/core/memory.js";
+import { promoteMemory, recallMemory, runMemoryWrap } from "../src/core/memory.js";
 import { searchKnowledge } from "../src/core/retrieval.js";
 
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -18,6 +18,36 @@ const fileExists = async (target: string): Promise<boolean> => {
 };
 
 describe("memory integration", () => {
+  it("keeps query strict while recall degrades for the same unborn repository", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-memory-strict-vs-recall-"));
+    git(temp, ["init", "-b", "main"]);
+    await runMemoryWrap(temp, {
+      goal: "resume auth refactor",
+      summary: "Keep working memory available before the first snapshot.",
+      constraints: [],
+      decisions: [],
+      openLoops: [],
+      nextActions: ["Create the first committed snapshot"],
+      promotionCandidates: [],
+    });
+
+    await expect(searchKnowledge(temp, "resume auth refactor", { topK: 3 })).rejects.toMatchObject({
+      code: "SNAPSHOT_NOT_INDEXED",
+      exitCode: 3,
+    });
+
+    const recall = await recallMemory(temp, "resume auth refactor");
+    expect(recall.packet.snapshotSha).toBeNull();
+    expect(recall.packet.snapshot).toMatchObject({
+      requestedRef: "HEAD",
+      selection: "head-exact",
+      status: "unavailable",
+      branch: "main",
+      detached: false,
+    });
+    expect(recall.packet.warnings).toContainEqual(expect.stringContaining("SNAPSHOT_NOT_INDEXED"));
+  });
+
   it(
     "promotes candidates into searchable memory docs and ingests them immediately",
     async () => {

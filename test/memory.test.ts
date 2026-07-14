@@ -1,9 +1,23 @@
+import { execFileSync } from "node:child_process";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { parseToml } from "../src/core/config.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { reviewArtifacts, sessionMaterialize } from "../src/core/artifacts.js";
+import { defaultConfig, parseToml, writeConfig } from "../src/core/config.js";
 import { loadLatestSessionWrap, loadOpenLoopRegistry, loadWorkingMemoryState, recallMemory, runMemoryWrap } from "../src/core/memory.js";
+
+const ORIGINAL_FETCH = globalThis.fetch;
+const ORIGINAL_OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  globalThis.fetch = ORIGINAL_FETCH;
+  if (ORIGINAL_OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = ORIGINAL_OPENAI_API_KEY;
+});
 
 describe("memory core", () => {
   it("parses memory config section", () => {
@@ -59,6 +73,7 @@ recall_top_k = 12
 
   it("assembles recall packet from working memory without snapshots", async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-memory-recall-"));
+    git(temp, ["init", "-b", "main"]);
     await runMemoryWrap(temp, {
       goal: "resume auth refactor",
       summary: "Track open loops before indexing exists",
@@ -83,12 +98,71 @@ recall_top_k = 12
       promotionCandidates: [],
     });
 
+    const materialized = await sessionMaterialize(temp, {
+      goal: "resume auth refactor",
+      createdAt: "2026-07-14T12:00:00.000Z",
+      turns: [
+        {
+          turnId: "turn-1",
+          role: "assistant",
+          content: "Key insight: resume auth refactor uses the reviewed artifact keyword path.",
+          createdAt: "2026-07-14T12:00:00.000Z",
+        },
+      ],
+    });
+    await reviewArtifacts(temp, {
+      updates: materialized.artifactIds.map((artifactId) => ({
+        artifactId,
+        nextStatus: "reviewed" as const,
+      })),
+    });
+
+    const config = defaultConfig();
+    config.embedding.provider = "openai";
+    delete config.embedding.dimensions;
+    delete config.embedding.version;
+    await writeConfig(temp, config);
+    process.env.OPENAI_API_KEY = "test-key";
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { input: string[] };
+      return new Response(
+        JSON.stringify({ data: body.input.map(() => ({ embedding: Array(1536).fill(0.1) })) }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    globalThis.fetch = fetchSpy as typeof fetch;
+
     const result = await recallMemory(temp, "resume auth refactor");
+    const artifactHit = result.packet.retrievedHits.find((hit) => hit.originType === "artifact");
     expect(result.packet.goal).toBe("resume auth refactor");
     expect(result.packet.openLoops[0]?.status).toBe("blocked");
     expect(result.packet.relatedDecisions[0]?.title).toBe("Use additive memory commands");
-    expect(result.packet.retrievedHits).toHaveLength(0);
-    expect(result.packet.warnings[0]).toContain("검색 snapshot이 없어 artifact source만 사용했습니다");
+    expect(artifactHit).toMatchObject({
+      scope: "session",
+      originType: "artifact",
+      scoreVector: 0,
+    });
+    expect(artifactHit?.scoreKeyword).toBeGreaterThan(0);
+    expect(result.packet.snapshotSha).toBeNull();
+    expect(result.packet.snapshot).toEqual({
+      requestedRef: "HEAD",
+      resolvedSha: null,
+      selection: "head-exact",
+      status: "unavailable",
+      branch: "main",
+      detached: false,
+      worktreeDirty: true,
+    });
+    expect(result.packet.warnings).toContainEqual(expect.stringContaining("SNAPSHOT_NOT_INDEXED"));
+    expect(result.packet.warnings).toContainEqual(expect.stringContaining("working memory"));
+    expect(result.packet.warnings).toContainEqual(expect.stringContaining("artifact-derived"));
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(result.markdown).toContain("ragit memory recall");
+    expect(result.markdown).toContain("- snapshot_status: unavailable");
+    expect(result.markdown).toContain("- snapshot_sha: none");
+    expect(result.markdown).toContain("- branch: main");
+    expect(result.markdown).toContain("- detached: false");
+    expect(result.markdown).toContain("- worktree_dirty: true");
+    expect(JSON.parse(result.json).snapshot).toEqual(result.packet.snapshot);
   });
 });

@@ -230,6 +230,29 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(recallOutput.ok).toBe(true);
       expect(recallOutput.data.openLoops[0].title).toContain("refresh-token");
       expect(recallOutput.data.retrievedHits[0].excerpt).toBeTruthy();
+      expect(recallOutput.data.snapshotSha).toBe(headSha);
+      expect(recallOutput.data.snapshot).toMatchObject({
+        requestedRef: "HEAD",
+        resolvedSha: headSha,
+        selection: "head-exact",
+        status: "indexed",
+        detached: false,
+        worktreeDirty: true,
+      });
+      const recallTextOutput = runCli([
+        "memory",
+        "recall",
+        "resume auth flow",
+        "--cwd",
+        temp,
+        "--format",
+        "text",
+      ]);
+      expect(recallTextOutput).toContain("- snapshot_status: indexed");
+      expect(recallTextOutput).toContain(`- snapshot_sha: ${headSha}`);
+      expect(recallTextOutput).toContain("- branch:");
+      expect(recallTextOutput).toContain("- detached: false");
+      expect(recallTextOutput).toContain("- worktree_dirty: true");
 
       const logOutput = JSON.parse(runCli(["log", "--cwd", temp, "--format", "json", "--view", "default", "--max-count", "3"]));
       expect(logOutput.command).toBe("log");

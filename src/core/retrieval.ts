@@ -5,7 +5,7 @@ import {
   pathForArtifact,
 } from "./artifacts.js";
 import { loadConfig } from "./config.js";
-import { isRagitOperationalError, RagitOperationalError } from "./errors.js";
+import { isRagitOperationalError, RagitOperationalError, type RagitErrorCode } from "./errors.js";
 import {
   closeCanonicalStore,
   openCanonicalStoreWithContract,
@@ -105,6 +105,20 @@ export interface UnifiedRetrievalResult {
   warnings: string[];
   redactionSummary: RedactionSummary;
 }
+
+interface ArtifactSemanticContext {
+  queryEmbedding: number[];
+  embeddingProfile: ReturnType<typeof resolveEmbeddingProfile>;
+  config: Awaited<ReturnType<typeof loadConfig>>;
+}
+
+const DEGRADABLE_RECALL_CODES = new Set<RagitErrorCode>([
+  "SNAPSHOT_NOT_INDEXED",
+  "SNAPSHOT_MANIFEST_INVALID",
+  "SNAPSHOT_SCHEMA_UNSUPPORTED",
+  "SNAPSHOT_STORE_UNAVAILABLE",
+  "REPOSITORY_STATE_CHANGED",
+]);
 
 const resolveArtifactOptionsForScope = (
   scope?: RetrievalScope,
@@ -302,29 +316,33 @@ const buildRecallArtifactCandidates = async (cwd: string, goal: string): Promise
 
 const buildArtifactHits = async (
   cwd: string,
-  config: Awaited<ReturnType<typeof loadConfig>>,
   query: string,
-  queryEmbedding: number[],
   alpha: number,
-  embeddingProfile: ReturnType<typeof resolveEmbeddingProfile>,
   candidates: ArtifactCandidate[],
+  semanticContext: ArtifactSemanticContext | null,
 ): Promise<RetrievalHit[]> => {
   if (candidates.length === 0) return [];
   const payloadClass = candidates.some((candidate) => candidate.scopeValue === "evidence") ? "evidence" : "artifact";
-  const canEmbedCandidates = canUseRemoteEmbedding(config, embeddingProfile, payloadClass);
+  const canEmbedCandidates =
+    semanticContext !== null &&
+    canUseRemoteEmbedding(semanticContext.config, semanticContext.embeddingProfile, payloadClass);
   const candidateEmbeddings = canEmbedCandidates
     ? await embedTexts(
         candidates.map((candidate) => candidate.text),
-        embeddingProfile,
+        semanticContext.embeddingProfile,
         { cwd },
       )
     : [];
   return candidates.map((candidate, index) => {
-    const semantic = canEmbedCandidates ? cosineSimilarity(queryEmbedding, candidateEmbeddings[index] ?? []) : 0;
+    const semantic = canEmbedCandidates
+      ? cosineSimilarity(semanticContext.queryEmbedding, candidateEmbeddings[index] ?? [])
+      : 0;
     const keyword = keywordScore(query, candidate.text);
-    const semanticHybrid = calculateHybridScore(semantic, keyword, alpha);
+    const retrievalScore = semanticContext === null
+      ? keyword
+      : calculateHybridScore(semantic, keyword, alpha);
     const scoreFinal =
-      0.8 * semanticHybrid +
+      0.8 * retrievalScore +
       0.15 * authorityWeightForArtifact(candidate.artifact, candidate.scopeValue) +
       0.05 * recencyWeight(candidate.artifact.updatedAt);
     return {
@@ -458,76 +476,91 @@ const snapshotStoreUnavailable = (
     },
   );
 
+const isDegradableRecallError = (
+  error: unknown,
+  recallMode: boolean,
+): error is RagitOperationalError =>
+  recallMode &&
+  isRagitOperationalError(error) &&
+  DEGRADABLE_RECALL_CODES.has(error.code);
+
+const recallDegradationWarning = (error: RagitOperationalError): string =>
+  `[${error.code}] snapshot을 사용할 수 없어 working memory와 artifact-derived content만 사용했습니다: ${error.message}`;
+
 export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrievalRequest): Promise<UnifiedRetrievalResult> => {
   const warnings: string[] = [];
-  const recallCompatibility = request.artifactOptions?.mode === "recall";
+  const recallMode = request.artifactOptions?.mode === "recall";
   let retrievalRoot = cwd;
   let selection: SnapshotSelection | null = null;
   let store: CanonicalStore | null = null;
   let snapshotSha: string | null = null;
   let snapshot = unavailableSnapshotMetadata(request.at);
+  let degradedError: RagitOperationalError | null = null;
 
   if (request.includeSnapshot !== false) {
     try {
       selection = await selectSnapshot(cwd, request.at);
       retrievalRoot = selection.context.gitRoot;
-      snapshotSha = selection.snapshotSha;
       snapshot = selection.snapshot;
       warnings.push(...selection.warnings);
     } catch (error) {
-      const recoverableForRecall =
-        recallCompatibility &&
-        (!isRagitOperationalError(error) || error.code === "SNAPSHOT_NOT_INDEXED");
-      if (!recoverableForRecall) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      warnings.push(`검색 snapshot이 없어 artifact source만 사용했습니다: ${message}`);
-      try {
-        const context = await resolveRepositoryContext(cwd);
-        retrievalRoot = context.gitRoot;
-        snapshot = snapshotMetadataForUnavailable(context, request.at);
-      } catch {
-        // The compatibility path also supports memory recall outside a Git repository.
-      }
+      if (!isDegradableRecallError(error, recallMode)) throw error;
+      degradedError = error;
+      const context = await resolveRepositoryContext(cwd);
+      retrievalRoot = context.gitRoot;
+      snapshot = snapshotMetadataForUnavailable(context, request.at);
+      warnings.push(recallDegradationWarning(error));
     }
   }
 
   const config = await loadConfig(retrievalRoot);
-  const embeddingProfile = resolveEmbeddingProfile(config);
-  if (!canUseRemoteEmbedding(config, embeddingProfile, "query")) {
-    throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
+  let embeddingProfile: ReturnType<typeof resolveEmbeddingProfile> | null = null;
+
+  if (degradedError === null) {
+    embeddingProfile = resolveEmbeddingProfile(config);
+    if (!canUseRemoteEmbedding(config, embeddingProfile, "query")) {
+      throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
+    }
   }
 
-  if (selection !== null) {
+  if (selection !== null && embeddingProfile !== null) {
     try {
       store = await openCanonicalStoreWithContract(
         retrievalRoot,
         toEmbeddingContract(embeddingProfile),
         true,
       );
+      snapshotSha = selection.snapshotSha;
     } catch (error) {
       const mapped = snapshotStoreUnavailable(selection, error);
-      if (!recallCompatibility) throw mapped;
-      snapshot = { ...selection.snapshot, status: "store-unavailable" };
-      warnings.push(`검색 snapshot이 없어 artifact source만 사용했습니다: ${mapped.message}`);
+      if (!isDegradableRecallError(mapped, recallMode)) throw mapped;
+      degradedError = mapped;
+      snapshotSha = null;
+      snapshot = { ...selection.snapshot, status: "unavailable" };
+      warnings.push(recallDegradationWarning(mapped));
     }
   }
 
   try {
     const topK = request.topK ?? config.retrieval.top_k;
     const sanitizedQuery = sanitizeKnowledgeText(request.query, "retrieval.query", "query");
-    const queryEmbedding = await embedText(sanitizedQuery.text, embeddingProfile, { cwd: retrievalRoot });
+    const semanticContext: ArtifactSemanticContext | null = degradedError === null && embeddingProfile !== null
+      ? {
+          queryEmbedding: await embedText(sanitizedQuery.text, embeddingProfile, { cwd: retrievalRoot }),
+          embeddingProfile,
+          config,
+        }
+      : null;
     const hits: RetrievalHit[] = [];
 
-    if (selection !== null && store !== null) {
+    if (selection !== null && store !== null && semanticContext !== null) {
       hits.push(
         ...(await buildSnapshotHits(
           retrievalRoot,
           store,
           selection.manifest,
           sanitizedQuery.text,
-          queryEmbedding,
+          semanticContext.queryEmbedding,
           config.retrieval.alpha,
           topK,
           request.scope ?? "durable",
@@ -546,23 +579,23 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
               retrievalRoot,
               request.artifactOptions.scope ?? "all",
             );
-      const allowsArtifactEmbedding = canUseRemoteEmbedding(
-        config,
-        embeddingProfile,
-        request.artifactOptions.scope === "evidence" ? "evidence" : "artifact",
-      );
-      if (!allowsArtifactEmbedding && candidates.length > 0) {
+      const allowsArtifactEmbedding =
+        semanticContext !== null &&
+        canUseRemoteEmbedding(
+          config,
+          semanticContext.embeddingProfile,
+          request.artifactOptions.scope === "evidence" ? "evidence" : "artifact",
+        );
+      if (semanticContext !== null && !allowsArtifactEmbedding && candidates.length > 0) {
         warnings.push("security policy 때문에 artifact/evidence semantic embedding을 건너뛰고 keyword fallback으로 검색했습니다.");
       }
       hits.push(
         ...(await buildArtifactHits(
           retrievalRoot,
-          config,
           sanitizedQuery.text,
-          queryEmbedding,
           config.retrieval.alpha,
-          embeddingProfile,
           candidates,
+          semanticContext,
         )),
       );
     }
