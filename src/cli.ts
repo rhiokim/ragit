@@ -14,11 +14,22 @@ import { runNarrativeCommand } from "./commands/narrative.js";
 import { runSessionMaterializeCommand } from "./commands/session.js";
 import { runSecurityAuditCommand, runSecurityPurgeCommand } from "./commands/security.js";
 import { runTimelineCommand } from "./commands/timeline.js";
-import { buildCliEnvelope, CliFormat, CliView, emitCliOutput, normalizeCliFormat, normalizeCliView } from "./core/cliContract.js";
+import {
+  buildCliEnvelope,
+  buildCliFailureEnvelope,
+  CliFormat,
+  CliView,
+  emitCliFailure,
+  emitCliOutput,
+  normalizeCliFormat,
+  normalizeCliView,
+  resolveCliFailureContext,
+} from "./core/cliContract.js";
 import { assertSafeGlobText, readJsonInput } from "./core/cliInput.js";
 import { normalizeContextPackCommandInput, normalizeIngestCommandInput, normalizeQueryCommandInput } from "./core/commandInputs.js";
 import { describeCommandPath, listDescribableCommands } from "./core/commandRegistry.js";
 import { formatContextPackText, packContext, projectContextPack } from "./core/context.js";
+import { isRagitOperationalError } from "./core/errors.js";
 import { runIngest } from "./core/ingest.js";
 import { formatRagitLogText, projectRagitLogResult, runRagitLog } from "./core/log.js";
 import { formatQueryResultText, projectRetrievalHits } from "./core/output.js";
@@ -933,8 +944,17 @@ program
     }
   });
 
-program.parseAsync(process.argv).catch((error: unknown) => {
+program.parseAsync(process.argv).catch(async (error: unknown) => {
+  if (isRagitOperationalError(error)) {
+    const context = await resolveCliFailureContext(process.argv.slice(2));
+    emitCliFailure({
+      envelope: buildCliFailureEnvelope(context.command, context.cwd, error),
+      format: context.format,
+    });
+    process.exitCode = error.exitCode;
+    return;
+  }
   const message = error instanceof Error ? error.message : String(error);
   console.error(`[ragit] 오류: ${message}`);
-  process.exit(1);
+  process.exitCode = 1;
 });

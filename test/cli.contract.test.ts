@@ -106,6 +106,20 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeOutput.ok).toBe(true);
       expect(describeOutput.data.spec.path).toBe("query");
       expect(describeOutput.data.spec.supportsRawJsonInput).toBe(true);
+      expect(describeOutput.data.spec.outputSchemaSummary).toContain("snapshot");
+
+      const describeIngestOutput = JSON.parse(runCli(["describe", "ingest", "--format", "json"]));
+      expect(describeIngestOutput.data.spec.outputSchemaSummary).toContain("dirtyCandidates");
+      expect(describeIngestOutput.data.spec.outputSchemaSummary).toContain("wouldFail");
+
+      const describeContextOutput = JSON.parse(runCli(["describe", "context", "pack", "--format", "json"]));
+      expect(describeContextOutput.data.spec.outputSchemaSummary).toContain("snapshot");
+
+      const describeRecallOutput = JSON.parse(runCli(["describe", "memory", "recall", "--format", "json"]));
+      expect(describeRecallOutput.data.spec.outputSchemaSummary).toContain("snapshot");
+
+      const describeStatusOutput = JSON.parse(runCli(["describe", "status", "--format", "json"]));
+      expect(describeStatusOutput.data.spec.outputSchemaSummary).toContain("snapshot");
 
       const describeLogOutput = JSON.parse(runCli(["describe", "log", "--format", "json"]));
       expect(describeLogOutput.command).toBe("describe");
