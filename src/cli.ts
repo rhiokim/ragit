@@ -104,6 +104,8 @@ const formatIngestText = (summary: Awaited<ReturnType<typeof runIngest>>): strin
     `- bound_artifacts: ${summary.boundArtifactIds.length}`,
     `- planned_files: ${summary.plannedFiles.length}`,
     `- deleted_document_ids: ${summary.deletedDocumentIds.length}`,
+    `- dirty_candidates: ${summary.dirtyCandidates.length > 0 ? summary.dirtyCandidates.join(", ") : "none"}`,
+    `- would_fail: ${summary.wouldFail}`,
     `- docs_validated: ${summary.docAuthority.validated}`,
     `- doc_contract_violations: ${summary.docAuthority.violations}`,
     `- doc_contract_skipped: ${summary.docAuthority.skipped}`,

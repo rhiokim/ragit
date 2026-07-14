@@ -9,7 +9,6 @@ import { loadConfig } from "./config.js";
 import { createDoc, reconcileDocs } from "./doc-authority.js";
 import { appendLedgerEvent } from "./event-ledger.js";
 import { toRepoPath } from "./identity.js";
-import { runIngest } from "./ingest.js";
 import {
   MemoryDecision,
   MemoryOpenLoop,
@@ -905,17 +904,11 @@ export const promoteMemory = async (cwd: string, input: PromotionBatchInput, dry
   if (plannedFiles.length === 0) {
     warnings.push("promotionCandidates가 비어 있어 생성된 문서가 없습니다.");
   }
-  let ingested = false;
-  if (!dryRun && createdFiles.length > 0 && config.memory.auto_ingest_promotions) {
-    if (currentHeadSha) {
-      await runIngest(cwd, { paths: createdFiles, scope: "durable" });
-      ingested = true;
-    } else {
-      warnings.push("HEAD commit이 없어 promotion 문서 인덱싱을 건너뛰었습니다.");
-    }
-  }
-  if (dryRun && plannedFiles.length > 0 && config.memory.auto_ingest_promotions && !currentHeadSha) {
-    warnings.push("HEAD commit이 없어 dry-run 이후 실제 promote 시 인덱싱이 건너뛰어집니다.");
+  const ingested = false;
+  if (!dryRun && createdFiles.length > 0) {
+    warnings.push(
+      "생성된 promotion 문서를 commit한 뒤 첫 snapshot은 ragit ingest --all, 이후에는 지원되는 증분 ingest 명령을 실행하세요.",
+    );
   }
 
   if (!dryRun) {

@@ -113,7 +113,13 @@ describe("harness integration", () => {
 
       expect(promoted.createdFiles.some((file) => file.startsWith("docs/harness/specs/"))).toBe(true);
       expect(promoted.createdFiles.some((file) => file.startsWith("docs/harness/plans/"))).toBe(true);
-      expect(promoted.ingested).toBe(true);
+      expect(promoted.ingested).toBe(false);
+      expect(promoted.warnings).toContainEqual(expect.stringContaining("commit"));
+
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "commit promoted harness docs"]);
+      const indexed = await runIngest(temp, { all: true });
+      expect(indexed.searchReady).toBe(true);
 
       const targeted = await runIngest(temp, {
         paths: [promoted.createdFiles[0]],

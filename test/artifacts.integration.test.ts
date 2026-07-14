@@ -31,6 +31,8 @@ describe("artifacts integration", () => {
       git(temp, ["commit", "-m", "init"]);
 
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "initialize ragit"]);
       await runIngest(temp, { all: true });
 
       const input = {

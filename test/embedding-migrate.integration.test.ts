@@ -14,7 +14,7 @@ import { bootstrapCanonicalStore, closeCanonicalStore, readCanonicalStoreMeta } 
 
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
-const createSeededRepo = async (prefix: string): Promise<{ temp: string; sha: string }> => {
+const createSeededRepo = async (prefix: string): Promise<{ temp: string }> => {
   const temp = await mkdtemp(path.join(os.tmpdir(), prefix));
   git(temp, ["init"]);
   git(temp, ["config", "user.email", "ragit@example.com"]);
@@ -33,18 +33,18 @@ Token refresh must stay outside snapshot mutation.
   );
   git(temp, ["add", "."]);
   git(temp, ["commit", "-m", "seed docs"]);
-  return {
-    temp,
-    sha: git(temp, ["rev-parse", "HEAD"]),
-  };
+  return { temp };
 };
 
 describe("embedding migration", () => {
   it(
     "separates configured/store contracts and rebuilds the store without changing manifests",
     async () => {
-      const { temp, sha } = await createSeededRepo("ragit-embeddings-");
+      const { temp } = await createSeededRepo("ragit-embeddings-");
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "initialize ragit"]);
+      const sha = git(temp, ["rev-parse", "HEAD"]);
       await runIngest(temp, { all: true });
 
       const manifestPath = path.join(temp, ".ragit", "manifest", `${sha}.json`);
@@ -93,8 +93,11 @@ describe("embedding migration", () => {
   it(
     "fails fast when a manifest-referenced chunk is missing from the source store",
     async () => {
-      const { temp, sha } = await createSeededRepo("ragit-embeddings-missing-");
+      const { temp } = await createSeededRepo("ragit-embeddings-missing-");
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "initialize ragit"]);
+      const sha = git(temp, ["rev-parse", "HEAD"]);
       await runIngest(temp, { all: true });
 
       const manifest = await loadSnapshotManifest(temp, sha);

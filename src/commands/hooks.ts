@@ -18,14 +18,21 @@ export interface HooksMutationResult {
 }
 
 const hookTemplate = (hookName: "post-commit" | "post-merge"): string => {
-  const sinceExpr = hookName === "post-commit" ? "HEAD~1" : "${ORIG_HEAD:-HEAD~1}";
+  const baseRef = hookName === "post-commit" ? "HEAD^" : "ORIG_HEAD";
   return `#!/bin/sh
 ${header}
+base_ref='${baseRef}'
+base_sha="$(git rev-parse --verify "\${base_ref}^{commit}" 2>/dev/null)" || exit 0
 if command -v ragit >/dev/null 2>&1; then
-  ragit ingest --since ${sinceExpr} >/dev/null 2>&1 || true
+  if ! ragit ingest --since "$base_sha" >/dev/null 2>&1; then
+    echo "[ragit] incremental ingest failed; run 'ragit ingest --all' to recover." >&2
+  fi
 elif [ -f "./dist/cli.js" ]; then
-  node ./dist/cli.js ingest --since ${sinceExpr} >/dev/null 2>&1 || true
+  if ! node ./dist/cli.js ingest --since "$base_sha" >/dev/null 2>&1; then
+    echo "[ragit] incremental ingest failed; run 'ragit ingest --all' to recover." >&2
+  fi
 fi
+exit 0
 `;
 };
 
@@ -109,4 +116,3 @@ export const runHooksStatus = async (cwd: string): Promise<HooksMutationResult> 
   }
   return { dryRun: false, root, hooks };
 };
-

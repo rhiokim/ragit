@@ -48,6 +48,8 @@ process.exit(0);
       git(temp, ["commit", "-m", "init"]);
 
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "initialize ragit"]);
       const initialIngest = await runIngest(temp, { all: true });
 
       const materialized = await sessionMaterialize(temp, {
@@ -199,6 +201,8 @@ process.exit(0);
     git(temp, ["commit", "-m", "init"]);
 
     await runInit(temp, { nonInteractive: true });
+    git(temp, ["add", "-A"]);
+    git(temp, ["commit", "-m", "initialize ragit"]);
     await runIngest(temp, { all: true, dryRun: true });
     await sessionMaterialize(
       temp,

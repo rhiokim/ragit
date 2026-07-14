@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runInit } from "../src/commands/init.js";
+import { runIngest } from "../src/core/ingest.js";
 import { promoteMemory, recallMemory, runMemoryWrap } from "../src/core/memory.js";
 import { searchKnowledge } from "../src/core/retrieval.js";
 
@@ -49,7 +50,7 @@ describe("memory integration", () => {
   });
 
   it(
-    "promotes candidates into searchable memory docs and ingests them immediately",
+    "promotes candidates and requires commit before indexing the generated docs",
     async () => {
       const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-memory-promote-"));
       git(temp, ["init"]);
@@ -86,8 +87,14 @@ describe("memory integration", () => {
       });
 
       expect(result.createdFiles).toHaveLength(3);
-      expect(result.ingested).toBe(true);
+      expect(result.ingested).toBe(false);
+      expect(result.warnings).toContainEqual(expect.stringContaining("commit"));
       expect(result.createdFiles.some((entry) => entry.startsWith("docs/adr/"))).toBe(true);
+
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "commit promoted docs"]);
+      const indexed = await runIngest(temp, { all: true });
+      expect(indexed.searchReady).toBe(true);
 
       const query = await searchKnowledge(temp, "restore active work instead of replaying raw logs", { topK: 3 });
       expect(query.hits[0]?.path.startsWith("docs/adr/")).toBe(true);
@@ -95,7 +102,7 @@ describe("memory integration", () => {
     15_000,
   );
 
-  it("skips ingest with a warning when HEAD commit is missing", async () => {
+  it("requires commit-first indexing even when HEAD is missing", async () => {
     const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-memory-nohead-"));
     git(temp, ["init"]);
     await runInit(temp, { nonInteractive: true });
@@ -113,7 +120,8 @@ describe("memory integration", () => {
 
     expect(result.createdFiles[0]).toMatch(/^docs\/adr\//);
     expect(result.ingested).toBe(false);
-    expect(result.warnings[0]).toContain("HEAD commit");
+    expect(result.warnings).toContainEqual(expect.stringContaining("commit"));
+    expect(result.warnings).toContainEqual(expect.stringContaining("ragit ingest --all"));
   });
 
   it(

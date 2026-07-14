@@ -42,12 +42,14 @@ Keep refresh mutation outside snapshot writes.
       git(temp, ["commit", "-m", "seed auth adr"]);
 
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "--amend", "--no-edit"]);
+      const indexedSha = git(temp, ["rev-parse", "HEAD"]);
       await runIngest(temp, { all: true });
 
       await writeFile(path.join(temp, "notes.txt"), "missing snapshot commit\n", "utf8");
       git(temp, ["add", "notes.txt"]);
       git(temp, ["commit", "-m", "notes only"]);
-      const missingSha = git(temp, ["rev-parse", "HEAD"]);
 
       await writeFile(
         path.join(temp, "docs", "arch", "runtime-boundary.adr.md"),
@@ -73,7 +75,7 @@ Ship the recovery changes in two deliberate phases.
       git(temp, ["add", "."]);
       git(temp, ["commit", "-m", "replace adr and add plan"]);
 
-      await runIngest(temp, { since: missingSha });
+      await runIngest(temp, { since: indexedSha });
 
       const materialized = await sessionMaterialize(temp, {
         goal: "resume auth recovery work",
