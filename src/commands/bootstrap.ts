@@ -11,7 +11,7 @@ import {
   resolveEmbeddingProfile,
 } from "../core/embedding.js";
 import { readEventLedgerStats } from "../core/event-ledger.js";
-import { ensureGitRepository, currentBranch, getHeadSha } from "../core/git.js";
+import { ensureGitRepository, currentBranch, getHeadSha, tryGetGitRoot } from "../core/git.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
 import {
@@ -524,4 +524,7 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
   return { checks, hasFailure };
 };
 
-export const resolveCwd = (input?: string): string => (input ? path.resolve(input) : process.cwd());
+export const resolveCwd = async (input?: string): Promise<string> => {
+  const requested = input ? path.resolve(input) : process.cwd();
+  return (await tryGetGitRoot(requested)) ?? requested;
+};

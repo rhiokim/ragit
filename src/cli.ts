@@ -179,7 +179,7 @@ program
   .option("--output <format>", "text|json|both", "text")
   .option("--git-init", "비대화형 모드에서 git 저장소 자동 초기화")
   .action(async (options) => {
-    const cwd = await resolveInitRoot(resolveCwd(options.cwd));
+    const cwd = await resolveInitRoot(await resolveCwd(options.cwd));
     const format = normalizeCliFormat(options.output, "text");
     const summary = await runInit(cwd, {
       nonInteractive: Boolean(options.yes || options.nonInteractive),
@@ -210,7 +210,7 @@ program
   .option("--format <format>", "text|json|both", "text")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (revRange, options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const docType = options.type ? normalizeKnownDocType(String(options.type)) : null;
     if (options.type && !docType) {
       throw new Error(`지원하지 않는 doc type입니다: ${options.type}`);
@@ -244,7 +244,7 @@ program
   .option("--format <format>", "text|json|both", "text")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const kind = options.kind ? String(options.kind).trim().toLowerCase() : undefined;
     if (kind && !["session", "artifact", "memory", "harness", "ingest", "security"].includes(kind)) {
       throw new Error(`지원하지 않는 timeline kind입니다: ${options.kind}`);
@@ -278,7 +278,7 @@ program
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (revRange, options) => {
     await runNarrativeCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       {
         revRange: revRange ? String(revRange) : undefined,
         maxCommits: parseOptionalPositiveNumber(options.maxCommits as string | undefined, "narrative.maxCommits"),
@@ -303,7 +303,7 @@ program
   .option("--format <format>", "text|json|both", "text")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const scope = String(options.scope ?? "all").trim().toLowerCase();
     if (!["durable", "memory", "harness", "all"].includes(scope)) {
       throw new Error(`지원하지 않는 drift scope입니다: ${options.scope}`);
@@ -336,7 +336,7 @@ program
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const scope = String(options.scope ?? "all").trim().toLowerCase();
     if (!["durable", "memory", "harness", "all"].includes(scope)) {
       throw new Error(`지원하지 않는 repair scope입니다: ${options.scope}`);
@@ -373,7 +373,7 @@ security
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runSecurityAuditCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       normalizeCliFormat(options.format, "json"),
     );
   });
@@ -391,7 +391,7 @@ security
       throw new Error(`지원하지 않는 security purge target입니다: ${options.target}`);
     }
     await runSecurityPurgeCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       target as "control-plane" | "store" | "cache" | "quarantine" | "all",
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
@@ -429,7 +429,7 @@ doc
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     await runDocCreateCommand(
       cwd,
       {
@@ -451,7 +451,7 @@ doc
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     await runDocRefreshCommand(
       cwd,
       {
@@ -471,7 +471,7 @@ doc
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     await runDocValidateCommand(
       cwd,
       {
@@ -489,7 +489,7 @@ doc
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     await runDocReconcileCommand(cwd, normalizeCliFormat(options.format, "json"), Boolean(options.dryRun));
   });
 
@@ -502,7 +502,7 @@ program
   .argument("<value>")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (key, value, options) => {
-    await runConfigSet(resolveCwd(options.cwd), key, value);
+    await runConfigSet(await resolveCwd(options.cwd), key, value);
   });
 
 const hooks = program.command("hooks").description("git hook 관리");
@@ -513,7 +513,7 @@ hooks
   .option("--dry-run", "미리보기 모드")
   .option("--format <format>", "text|json|both", "text")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const result = await runHooksInstall(cwd, Boolean(options.dryRun));
     const envelope = buildCliEnvelope("hooks install", cwd, result);
     emitCliOutput({
@@ -529,7 +529,7 @@ hooks
   .option("--dry-run", "미리보기 모드")
   .option("--format <format>", "text|json|both", "text")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const result = await runHooksUninstall(cwd, Boolean(options.dryRun));
     const envelope = buildCliEnvelope("hooks uninstall", cwd, result);
     emitCliOutput({
@@ -544,7 +544,7 @@ hooks
   .option("--cwd <path>", "대상 저장소 경로")
   .option("--format <format>", "text|json|both", "json")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const result = await runHooksStatus(cwd);
     const envelope = buildCliEnvelope("hooks status", cwd, result);
     emitCliOutput({
@@ -567,7 +567,7 @@ program
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     ensureNoMixedInput(
       options.input,
       [options.all, options.since, options.files, ...(options.path as string[]), options.scope === "durable" ? undefined : options.scope],
@@ -610,7 +610,7 @@ program
   .option("--at <sha>", "특정 커밋 시점 조회")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (question, options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     ensureNoMixedInput(
       options.input,
       [question, options.topK, options.at, options.scope === "durable" ? undefined : options.scope],
@@ -663,7 +663,7 @@ program
   .option("--at <sha>", "특정 커밋 시점 조회")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (goal, options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     ensureNoMixedInput(
       options.input,
       [goal, options.budget, options.at, options.scope === "durable" ? undefined : options.scope],
@@ -710,7 +710,7 @@ memory
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runMemoryWrapCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       options.input,
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
@@ -726,7 +726,7 @@ memory
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (goal, options) => {
     await runMemoryRecallCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       goal,
       normalizeCliFormat(options.format, "both"),
       normalizeCliView(options.view, "default"),
@@ -742,7 +742,7 @@ memory
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runMemoryPromoteCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       options.input,
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
@@ -759,7 +759,7 @@ program
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runSessionMaterializeCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       options.input,
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
@@ -775,7 +775,7 @@ artifact
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runArtifactReviewCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       options.input,
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
@@ -791,7 +791,7 @@ harness
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runHarnessCaptureCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       options.input,
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
@@ -806,7 +806,7 @@ harness
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runHarnessPromoteCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       options.input,
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
@@ -819,7 +819,7 @@ harness
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (suiteRef, options) => {
-    await runHarnessPackCommand(resolveCwd(options.cwd), String(suiteRef), normalizeCliFormat(options.format, "json"));
+    await runHarnessPackCommand(await resolveCwd(options.cwd), String(suiteRef), normalizeCliFormat(options.format, "json"));
   });
 
 harness
@@ -828,7 +828,7 @@ harness
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    await runHarnessVerifyCommand(resolveCwd(options.cwd), String(options.suite), normalizeCliFormat(options.format, "json"));
+    await runHarnessVerifyCommand(await resolveCwd(options.cwd), String(options.suite), normalizeCliFormat(options.format, "json"));
   });
 
 harness
@@ -839,7 +839,7 @@ harness
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     await runHarnessRunCommand(
-      resolveCwd(options.cwd),
+      await resolveCwd(options.cwd),
       options.input,
       normalizeCliFormat(options.format, "json"),
       Boolean(options.dryRun),
@@ -855,7 +855,7 @@ migrate
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     const { migrateEmbeddings } = await import("./core/migrate.js");
-    const result = await migrateEmbeddings(resolveCwd(options.cwd), Boolean(options.dryRun));
+    const result = await migrateEmbeddings(await resolveCwd(options.cwd), Boolean(options.dryRun));
     console.log(JSON.stringify(result, null, 2));
   });
 
@@ -866,7 +866,7 @@ migrate
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     const { migrateFromJsonStore } = await import("./core/migrate.js");
-    const result = await migrateFromJsonStore(resolveCwd(options.cwd), Boolean(options.dryRun));
+    const result = await migrateFromJsonStore(await resolveCwd(options.cwd), Boolean(options.dryRun));
     console.log(JSON.stringify(result, null, 2));
   });
 
@@ -877,7 +877,7 @@ migrate
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     const { migrateFromSqliteVss } = await import("./core/migrate.js");
-    const result = await migrateFromSqliteVss(resolveCwd(options.cwd), Boolean(options.dryRun));
+    const result = await migrateFromSqliteVss(await resolveCwd(options.cwd), Boolean(options.dryRun));
     console.log(JSON.stringify(result, null, 2));
   });
 
@@ -887,7 +887,7 @@ program
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const status = await runStatus(cwd);
     const envelope = buildCliEnvelope("status", cwd, status);
     emitCliOutput({
@@ -903,7 +903,7 @@ program
   .option("--format <format>", "text|json|both", "text")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
-    const cwd = resolveCwd(options.cwd);
+    const cwd = await resolveCwd(options.cwd);
     const result = await runDoctor(cwd);
     const envelope = buildCliEnvelope("doctor", cwd, result, [], !result.hasFailure);
     emitCliOutput({
