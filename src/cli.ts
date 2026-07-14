@@ -41,8 +41,14 @@ const formatHooksText = (title: string, hooks: HookActionResult[], dryRun: boole
 const formatStatusText = (status: Awaited<ReturnType<typeof runStatus>>): string =>
   [
     "# ragit status",
-    `- branch: ${status.branch}`,
-    `- head: ${status.head}`,
+    `- branch: ${status.branch ?? "none"}`,
+    `- head: ${status.head ?? "none"}`,
+    `- snapshot_requested_ref: ${status.snapshot.requestedRef}`,
+    `- snapshot_resolved_sha: ${status.snapshot.resolvedSha ?? "none"}`,
+    `- snapshot_selection: ${status.snapshot.selection}`,
+    `- snapshot_status: ${status.snapshot.status}`,
+    `- snapshot_detached: ${status.snapshot.detached}`,
+    `- snapshot_worktree_dirty: ${status.snapshot.worktreeDirty}`,
     `- backend: ${status.backend}`,
     `- manifests: ${status.manifests}`,
     `- zvec: ${status.zvec.status}`,

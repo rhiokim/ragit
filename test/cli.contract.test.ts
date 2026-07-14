@@ -342,12 +342,45 @@ Recall packets should restore active work instead of replaying raw logs.`,
       const statusOutput = JSON.parse(runCli(["status", "--cwd", temp, "--format", "json"]));
       expect(statusOutput.command).toBe("status");
       expect(statusOutput.ok).toBe(true);
+      expect(statusOutput.data.snapshot).toMatchObject({
+        requestedRef: "HEAD",
+        resolvedSha: headSha,
+        selection: "head-exact",
+        status: "indexed",
+        detached: false,
+        worktreeDirty: true,
+      });
       expect(statusOutput.data.zvec.searchReady).toBe(true);
       expect(statusOutput.data.events.eventCount).toBeGreaterThan(0);
       expect(statusOutput.data.embedding.cache).toBeTruthy();
       expect(typeof statusOutput.data.embedding.cache.entryCount).toBe("number");
       expect(statusOutput.data.security).toBeTruthy();
+
+      const statusTextOutput = runCli(["status", "--cwd", temp, "--format", "text"]);
+      expect(statusTextOutput).toContain(`- head: ${headSha}`);
+      expect(statusTextOutput).toContain("- snapshot_requested_ref: HEAD");
+      expect(statusTextOutput).toContain(`- snapshot_resolved_sha: ${headSha}`);
+      expect(statusTextOutput).toContain("- snapshot_selection: head-exact");
+      expect(statusTextOutput).toContain("- snapshot_status: indexed");
+      expect(statusTextOutput).toContain("- snapshot_detached: false");
+      expect(statusTextOutput).toContain("- snapshot_worktree_dirty: true");
+
+      git(temp, ["checkout", "--detach", headSha]);
+      const detachedStatusTextOutput = runCli(["status", "--cwd", temp, "--format", "text"]);
+      expect(detachedStatusTextOutput).toContain("- branch: none");
+      expect(detachedStatusTextOutput).toContain(`- head: ${headSha}`);
     },
     90_000,
   );
+
+  it("renders an unborn status HEAD as none in text output", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-cli-status-unborn-"));
+    git(temp, ["init", "-b", "main"]);
+
+    const statusTextOutput = runCli(["status", "--cwd", temp, "--format", "text"]);
+
+    expect(statusTextOutput).toContain("- head: none");
+    expect(statusTextOutput).toContain("- snapshot_resolved_sha: none");
+    expect(statusTextOutput).toContain("- snapshot_status: missing");
+  });
 });
