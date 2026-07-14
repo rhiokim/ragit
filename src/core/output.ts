@@ -83,15 +83,26 @@ export const renderRetrievalHitLines = (hits: RetrievalHit[], view: CliView): st
   });
 };
 
-export const formatQueryResultText = (query: string, result: QueryResult, view: CliView): string =>
-  [
+export const formatQueryResultText = (query: string, result: QueryResult, view: CliView): string => {
+  const warningLines = result.warnings.map((warning) => `- warning: ${warning}`);
+  return [
     "# ragit query",
     `- question: ${query}`,
     `- snapshot: ${result.snapshotSha}`,
+    `- requested_ref: ${result.snapshot.requestedRef}`,
+    `- resolved_sha: ${result.snapshot.resolvedSha ?? "null"}`,
+    `- selection: ${result.snapshot.selection}`,
+    `- status: ${result.snapshot.status}`,
+    `- branch: ${result.snapshot.branch ?? "null"}`,
+    `- detached: ${result.snapshot.detached}`,
+    `- worktree_dirty: ${result.snapshot.worktreeDirty}`,
     `- hits: ${result.hits.length}`,
+    `- warnings: ${result.warnings.length}`,
     `- view: ${view}`,
     `- redaction_applied: ${result.redactionSummary.applied}`,
     `- masked_count: ${result.redactionSummary.maskedCount}`,
+    ...warningLines,
     "",
     ...renderRetrievalHitLines(result.hits, view),
   ].join("\n");
+};

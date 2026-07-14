@@ -38,9 +38,11 @@ Binding maps keep unchanged documents visible across snapshots.`,
     );
     git(temp, ["add", "."]);
     git(temp, ["commit", "-m", "seed docs"]);
-    const oldSha = git(temp, ["rev-parse", "HEAD"]);
 
     await runInit(temp, { nonInteractive: true });
+    git(temp, ["add", "-A"]);
+    git(temp, ["commit", "-m", "initialize ragit"]);
+    const oldSha = git(temp, ["rev-parse", "HEAD"]);
     await runIngest(temp, { all: true });
 
     await writeFile(

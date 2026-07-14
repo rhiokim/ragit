@@ -627,21 +627,28 @@ program
     if (!input.question) {
       throw new Error("query 질문이 필요합니다.");
     }
-    const sanitizedQuestion = sanitizeKnowledgeText(input.question, "query.output", "query");
     const view = normalizeCliView(options.view, "default");
-    const result = await searchKnowledge(cwd, sanitizedQuestion.text, {
+    const result = await searchKnowledge(cwd, input.question, {
       topK: input.topK,
       at: input.at,
       scope: input.scope,
     });
+    const sanitizedQuestion = sanitizeKnowledgeText(input.question, "query.output", "query");
     const redactionSummary = mergeRedactionSummaries(sanitizedQuestion.summary, result.redactionSummary);
-    const envelope = buildCliEnvelope("query", cwd, {
-      query: sanitizedQuestion.text,
-      snapshotSha: result.snapshotSha,
-      scope: input.scope ?? "durable",
-      hits: projectRetrievalHits(result.hits, view),
-      redactionSummary,
-    });
+    const envelope = buildCliEnvelope(
+      "query",
+      cwd,
+      {
+        query: sanitizedQuestion.text,
+        snapshotSha: result.snapshotSha,
+        snapshot: result.snapshot,
+        scope: input.scope ?? "durable",
+        hits: projectRetrievalHits(result.hits, view),
+        warnings: result.warnings,
+        redactionSummary,
+      },
+      result.warnings,
+    );
     emitCliOutput({
       envelope,
       format: normalizeCliFormat(options.format, "both"),
@@ -680,22 +687,24 @@ program
     if (!input.goal) {
       throw new Error("context pack goal이 필요합니다.");
     }
-    const sanitizedGoal = sanitizeKnowledgeText(input.goal, "context.pack", "goal");
     const view = normalizeCliView(options.view, "default");
-    const packed = await packContext(cwd, sanitizedGoal.text, {
+    const packed = await packContext(cwd, input.goal, {
       budget: input.budget,
       at: input.at,
       scope: input.scope,
     });
-    const redactionSummary = mergeRedactionSummaries(sanitizedGoal.summary, packed.redactionSummary);
-    const envelope = buildCliEnvelope("context pack", cwd, {
-      ...projectContextPack(packed, view),
-      redactionSummary,
-    });
+    const envelope = buildCliEnvelope(
+      "context pack",
+      cwd,
+      {
+        ...projectContextPack(packed, view),
+      },
+      packed.warnings,
+    );
     emitCliOutput({
       envelope,
       format: normalizeCliFormat(options.format, "both"),
-      text: formatContextPackText({ ...packed, redactionSummary }, view),
+      text: formatContextPackText(packed, view),
     });
   });
 
