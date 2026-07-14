@@ -263,6 +263,33 @@ export const listDirtyPathsAgainstHead = async (cwd: string, headSha: string | n
   return [...paths].map(([dirtyPath, state]) => ({ path: dirtyPath, state }));
 };
 
+export interface GitTrackedPath {
+  path: string;
+  worktreeChangesHidden: boolean;
+}
+
+export const listTrackedPaths = async (cwd: string): Promise<GitTrackedPath[]> =>
+  splitNullDelimited(await execGitRaw(cwd, ["ls-files", "-v", "-z"])).map((entry) => {
+    const tag = entry[0];
+    if (tag === undefined || entry[1] !== " " || entry.length < 3) {
+      throw new Error("git ls-files -v 출력 형식이 올바르지 않습니다.");
+    }
+    return {
+      path: entry.slice(2),
+      worktreeChangesHidden: tag === "S" || /^[a-z]$/.test(tag),
+    };
+  });
+
+export const workingTreePathMatchesHead = async (cwd: string, repoPath: string): Promise<boolean> => {
+  const treeEntries = splitNullDelimited(await execGitRaw(cwd, ["ls-tree", "--full-tree", "-z", "HEAD", "--", repoPath]));
+  if (treeEntries.length !== 1) return false;
+  const [metadata] = treeEntries[0]!.split("\t", 1);
+  const [, objectType, headObjectId] = metadata!.split(" ");
+  if (objectType !== "blob" || !headObjectId) return false;
+  const workingObjectId = await execGit(cwd, ["hash-object", `--path=${repoPath}`, "--", repoPath]);
+  return workingObjectId === headObjectId;
+};
+
 export interface GitCommitInfo {
   sha: string;
   subject: string;

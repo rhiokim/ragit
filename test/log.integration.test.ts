@@ -43,9 +43,11 @@ Initial auth API contract.
       await writeFile(path.join(temp, "notes.txt"), "seed\n", "utf8");
       git(temp, ["add", "."]);
       git(temp, ["commit", "-m", "seed docs"]);
-      const seedSha = git(temp, ["rev-parse", "HEAD"]);
 
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "--amend", "--no-edit"]);
+      const seedSha = git(temp, ["rev-parse", "HEAD"]);
       await runIngest(temp, { all: true });
 
       await writeFile(path.join(temp, "notes.txt"), "missing snapshot\n", "utf8");
@@ -77,7 +79,7 @@ Ship recall-friendly auth changes in two phases.
       git(temp, ["commit", "-m", "update spec and add plan"]);
       const updateSha = git(temp, ["rev-parse", "HEAD"]);
 
-      await runIngest(temp, { since: missingSha });
+      await runIngest(temp, { since: seedSha });
 
       await rm(path.join(temp, "docs", "auth-boundary.adr.md"));
       git(temp, ["add", "-A"]);
@@ -148,9 +150,11 @@ Keep auth recovery small and structured.
       );
       git(temp, ["add", "."]);
       git(temp, ["commit", "-m", "seed semantic log repo"]);
-      const seedSha = git(temp, ["rev-parse", "HEAD"]);
 
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "initialize ragit"]);
+      const seedSha = git(temp, ["rev-parse", "HEAD"]);
       const materialized = await sessionMaterialize(temp, {
         goal: "resume auth migration",
         episode: { id: "ep-auth-refresh", title: "Auth refresh stabilization" },

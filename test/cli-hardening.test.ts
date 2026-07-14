@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runInit } from "../src/commands/init.js";
+import { runHooksInstall } from "../src/commands/hooks.js";
 import { resolveSnapshotRef, writeSnapshotManifest } from "../src/core/manifest.js";
 import { buildSnapshotManifest } from "../src/core/manifest.js";
 
@@ -50,6 +51,8 @@ Dry-run should not mutate tracked state.`,
       git(temp, ["add", "."]);
       git(temp, ["commit", "-m", "init"]);
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "initialize ragit"]);
 
       await writeFile(
         path.join(temp, "wrap.json"),
@@ -99,6 +102,18 @@ Dry-run should not mutate tracked state.`,
       const ingestOutput = JSON.parse(runCli(["ingest", "--input", "ingest.json", "--dry-run", "--format", "json", "--cwd", temp]));
       expect(ingestOutput.data.mode).toBe("dry-run");
       expect(ingestOutput.data.plannedFiles).toContain("docs/memory.plan.md");
+      expect(ingestOutput.data.wouldFail).toBe(false);
+      expect(ingestOutput.data.dirtyCandidates).toEqual([]);
+
+      const cleanIngestText = runCli(["ingest", "--input", "ingest.json", "--dry-run", "--format", "text", "--cwd", temp]);
+      expect(cleanIngestText).toContain("- dirty_candidates: none");
+      expect(cleanIngestText).toContain("- would_fail: false");
+
+      await writeFile(path.join(temp, "docs", "memory.plan.md"), "# Dirty memory\n", "utf8");
+      await writeFile(path.join(temp, "docs", "another.spec.md"), "# Another dirty doc\n", "utf8");
+      const dirtyIngestText = runCli(["ingest", "--input", "ingest.json", "--dry-run", "--format", "text", "--cwd", temp]);
+      expect(dirtyIngestText).toContain("- dirty_candidates: docs/another.spec.md, docs/memory.plan.md");
+      expect(dirtyIngestText).toContain("- would_fail: true");
 
       const hooksOutput = JSON.parse(runCli(["hooks", "install", "--dry-run", "--format", "json", "--cwd", temp]));
       expect(hooksOutput.data.dryRun).toBe(true);
@@ -109,7 +124,7 @@ Dry-run should not mutate tracked state.`,
       const hooksStatus = JSON.parse(runCli(["hooks", "status", "--cwd", temp, "--format", "json"]));
       expect(hooksStatus.ok).toBe(true);
     },
-    20_000,
+    25_000,
   );
 
   it(
@@ -180,5 +195,29 @@ Dry-run should not mutate tracked state.`,
     await writeSnapshotManifest(temp, { ...manifest, commitSha: "abc222" });
 
     await expect(resolveSnapshotRef(temp, "abc")).rejects.toThrow("모호");
+  });
+
+  it("installs non-blocking hooks that resolve and pass full base SHAs", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-hook-sha-"));
+    git(temp, ["init", "-b", "main"]);
+    git(temp, ["config", "user.email", "ragit@example.com"]);
+    git(temp, ["config", "user.name", "ragit-test"]);
+    await writeFile(path.join(temp, "README.md"), "# hooks\n", "utf8");
+    git(temp, ["add", "--", "README.md"]);
+    git(temp, ["commit", "-m", "init"]);
+
+    await runHooksInstall(temp);
+    const postCommit = await readFile(path.join(temp, ".git", "hooks", "post-commit"), "utf8");
+    const postMerge = await readFile(path.join(temp, ".git", "hooks", "post-merge"), "utf8");
+
+    expect(postCommit).toContain("base_ref='HEAD^'");
+    expect(postMerge).toContain("base_ref='ORIG_HEAD'");
+    for (const hook of [postCommit, postMerge]) {
+      expect(hook).toContain("base_sha=");
+      expect(hook).toContain('--since "$base_sha"');
+      expect(hook).toContain("ragit ingest --all");
+      expect(hook).not.toContain("HEAD~1");
+      expect(hook).not.toContain("|| true");
+    }
   });
 });

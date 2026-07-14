@@ -1,17 +1,24 @@
-import { access } from "node:fs/promises";
+import { access, lstat, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { buildArtifactIndexData, bindPendingArtifacts } from "./artifacts.js";
 import { chunkSections, parseSections } from "./chunk.js";
-import { loadConfig } from "./config.js";
+import { CONFIG_PATH, defaultConfig, loadConfig } from "./config.js";
 import { validateKnownDoc } from "./doc-authority.js";
 import { detectDocType } from "./docType.js";
+import { RagitOperationalError } from "./errors.js";
 import { appendLedgerEvent } from "./event-ledger.js";
 import { hashFileContent, listAllDocumentFiles, listDocumentFilesByGlob } from "./files.js";
-import { getHeadSha, getParentSha, listChangedFilesSince } from "./git.js";
+import {
+  getParentShaForCommit,
+  listChangedFilesBetween,
+  listDirtyPathsAgainstHead,
+  listTrackedPaths,
+  workingTreePathMatchesHead,
+} from "./git.js";
 import { chunkVersionId, documentIdFromPath, documentVersionId, toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
-import { buildSnapshotManifest, latestSnapshotSha, loadSnapshotManifestIfExists, writeSnapshotManifest } from "./manifest.js";
+import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
 import { ensureRagitStructure } from "./project.js";
 import {
@@ -25,6 +32,7 @@ import {
   sanitizeKnowledgeText,
 } from "./security.js";
 import { bootstrapCanonicalStore, closeCanonicalStore, writeChunksToCanonicalStore, writeDocumentsToCanonicalStore } from "./store.js";
+import { resolveRepositoryContext, selectIngestBase } from "./snapshot.js";
 import { AdmissionSummary, ChunkRecord, DocType, DocumentRecord, isKnownDocType } from "./types.js";
 import { RAGIT_VERSION } from "./version.js";
 
@@ -53,9 +61,20 @@ const fileExists = async (target: string): Promise<boolean> => {
   }
 };
 
+const pathEntryExists = async (target: string): Promise<boolean> => {
+  try {
+    await lstat(target);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const INTERNAL_REPO_PATH_SEGMENTS = new Set([".git", ".ragit", "node_modules", "dist"]);
+
 const isDocumentLikePath = (target: string): boolean => {
   const normalized = target.replaceAll(path.sep, "/");
-  if (normalized.includes("/.git/") || normalized.includes("/.ragit/") || normalized.includes("/node_modules/") || normalized.includes("/dist/")) {
+  if (normalized.split("/").some((segment) => INTERNAL_REPO_PATH_SEGMENTS.has(segment))) {
     return false;
   }
   const extension = path.extname(normalized).toLowerCase();
@@ -64,6 +83,20 @@ const isDocumentLikePath = (target: string): boolean => {
 
 const matchesAnyGlob = (target: string, patterns: string[]): boolean =>
   patterns.some((pattern) => path.matchesGlob(target, pattern));
+
+const parseIngestFilePatterns = (globText: string): string[] =>
+  globText
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const matchesIngestFilePatterns = (target: string, patterns: string[]): boolean => {
+  const positivePatterns = patterns.filter((pattern) => !pattern.startsWith("!"));
+  const negativePatterns = patterns
+    .filter((pattern) => pattern.startsWith("!") && pattern.length > 1)
+    .map((pattern) => pattern.slice(1));
+  return matchesAnyGlob(target, positivePatterns) && !matchesAnyGlob(target, negativePatterns);
+};
 
 const isImplicitIngestPath = (repoPath: string, config: Awaited<ReturnType<typeof loadConfig>>): boolean => {
   const normalized = repoPath.replaceAll(path.sep, "/");
@@ -90,6 +123,8 @@ const resolveCandidates = async (
   cwd: string,
   config: Awaited<ReturnType<typeof loadConfig>>,
   options: IngestOptions,
+  headSha: string,
+  normalizedBaseSha: string | null,
 ): Promise<ResolvedIngestTargets> => {
   if (options.paths && options.paths.length > 0) {
     const files = options.paths.map((entry) => path.resolve(cwd, normalizeExplicitRepoPath(cwd, entry)));
@@ -101,7 +136,8 @@ const resolveCandidates = async (
     };
   }
   if (options.files) {
-    const files = await listDocumentFilesByGlob(cwd, options.files);
+    const patterns = parseIngestFilePatterns(options.files);
+    const files = await listDocumentFilesByGlob(cwd, patterns.join(","));
     return {
       files: files.filter((file) => {
         const repoPath = toRepoPath(cwd, file);
@@ -113,7 +149,10 @@ const resolveCandidates = async (
     };
   }
   if (options.since) {
-    const changed = await listChangedFilesSince(cwd, options.since);
+    if (normalizedBaseSha === null) {
+      throw new Error("normalized --since base SHA가 없습니다.");
+    }
+    const changed = await listChangedFilesBetween(cwd, normalizedBaseSha, headSha);
     const files: string[] = [];
     const deletedDocumentIds: string[] = [];
     const seenFiles = new Set<string>();
@@ -153,6 +192,99 @@ const resolveCandidates = async (
 const isSupported = (docType: DocType, supported: DocType[]): boolean =>
   docType !== "unknown" && supported.includes(docType);
 
+const isFullSnapshotRequest = (options: IngestOptions): boolean =>
+  !(options.paths && options.paths.length > 0) && !options.files && !options.since;
+
+const loadIngestConfig = async (cwd: string): Promise<Awaited<ReturnType<typeof loadConfig>>> =>
+  (await fileExists(path.join(cwd, CONFIG_PATH))) ? loadConfig(cwd) : defaultConfig();
+
+const resolveDirtyCandidates = async (
+  cwd: string,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+  options: IngestOptions,
+  headSha: string,
+  normalizedBaseSha: string | null,
+  candidateFiles: string[],
+): Promise<string[]> => {
+  const filePatterns = options.files ? parseIngestFilePatterns(options.files) : [];
+  let relevantPaths: Set<string> | null = null;
+
+  if (options.paths && options.paths.length > 0) {
+    relevantPaths = new Set(options.paths.map((entry) => normalizeExplicitRepoPath(cwd, entry)));
+  } else if (!options.files && options.since) {
+    if (normalizedBaseSha === null) {
+      throw new Error("normalized --since base SHA가 없습니다.");
+    }
+    relevantPaths = new Set(
+      (await listChangedFilesBetween(cwd, normalizedBaseSha, headSha))
+        .map((entry) => entry.replaceAll(path.sep, "/"))
+        .filter((entry) => isImplicitIngestPath(entry, config)),
+    );
+  }
+
+  const isRelevantPath = (entry: string): boolean => {
+    if (relevantPaths !== null) return relevantPaths.has(entry);
+    if (options.files) {
+      return isDocumentLikePath(entry) && matchesIngestFilePatterns(entry, filePatterns);
+    }
+    return isImplicitIngestPath(entry, config);
+  };
+
+  const [visibleDirtyPaths, trackedPathEntries] = await Promise.all([
+    listDirtyPathsAgainstHead(cwd, headSha),
+    listTrackedPaths(cwd),
+  ]);
+  const dirtyPaths = new Set(visibleDirtyPaths.map((entry) => entry.path.replaceAll(path.sep, "/")));
+  const trackedPaths = new Map(
+    trackedPathEntries.map((entry) => [entry.path.replaceAll(path.sep, "/"), entry]),
+  );
+  for (const trackedPath of trackedPathEntries) {
+    const repoPath = trackedPath.path.replaceAll(path.sep, "/");
+    if (!trackedPath.worktreeChangesHidden || !isRelevantPath(repoPath)) continue;
+    if (!(await pathEntryExists(path.resolve(cwd, repoPath)))) {
+      dirtyPaths.add(repoPath);
+    }
+  }
+  for (const candidateFile of candidateFiles) {
+    const repoPath = toRepoPath(cwd, candidateFile);
+    const trackedPath = trackedPaths.get(repoPath);
+    if (trackedPath === undefined && await pathEntryExists(candidateFile)) {
+      dirtyPaths.add(repoPath);
+      continue;
+    }
+    if (trackedPath?.worktreeChangesHidden && await pathEntryExists(candidateFile)) {
+      const stats = await lstat(candidateFile);
+      if (!stats.isFile() || !(await workingTreePathMatchesHead(cwd, repoPath))) {
+        dirtyPaths.add(repoPath);
+      }
+    }
+  }
+
+  return [...dirtyPaths]
+    .filter(isRelevantPath)
+    .sort((left, right) => left.localeCompare(right));
+};
+
+const missingHeadForIngest = (): RagitOperationalError =>
+  new RagitOperationalError(
+    "SNAPSHOT_NOT_INDEXED",
+    "현재 HEAD가 없어 ingest할 commit을 결정할 수 없습니다.",
+    {
+      details: { headSha: null },
+      recovery: { command: "git status" },
+    },
+  );
+
+const isRegularRepoFile = async (
+  absolutePath: string,
+  repoPath: string,
+  realGitRoot: string,
+): Promise<boolean> => {
+  const [stats, resolvedPath] = await Promise.all([lstat(absolutePath), realpath(absolutePath)]);
+  const expectedPath = path.resolve(realGitRoot, repoPath);
+  return stats.isFile() && resolvedPath === expectedPath;
+};
+
 export interface IngestSummary {
   mode: "apply" | "dry-run";
   processed: number;
@@ -163,6 +295,8 @@ export interface IngestSummary {
   searchReady: boolean;
   plannedFiles: string[];
   deletedDocumentIds: string[];
+  dirtyCandidates: string[];
+  wouldFail: boolean;
   fullSnapshot: boolean;
   scope: "durable" | "all";
   boundArtifactIds: string[];
@@ -226,17 +360,62 @@ const appendIngestAdmissionEvent = async (
 };
 
 export const runIngest = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
-  await ensureRagitStructure(cwd);
-  const config = await loadConfig(cwd);
+  const context = await resolveRepositoryContext(cwd);
+  if (context.headSha === null) throw missingHeadForIngest();
+  cwd = context.gitRoot;
+  const headSha = context.headSha;
+  const fullSnapshot = isFullSnapshotRequest(options);
+  const baseSelection = await selectIngestBase(
+    cwd,
+    { fullSnapshot, since: options.since },
+    context,
+  );
+  const config = await loadIngestConfig(cwd);
+  const candidates = await resolveCandidates(cwd, config, options, headSha, baseSelection.baseSha);
+  const dirtyCandidates = await resolveDirtyCandidates(
+    cwd,
+    config,
+    options,
+    headSha,
+    baseSelection.baseSha,
+    candidates.files,
+  );
+  if (!options.dryRun && dirtyCandidates.length > 0) {
+    throw new RagitOperationalError(
+      "INGEST_CANDIDATES_DIRTY",
+      "ingest 대상에 커밋되지 않은 변경이 있습니다.",
+      {
+        details: { dirtyCandidates },
+        recovery: { command: "git status --short" },
+      },
+    );
+  }
+  const dirtyCandidateSet = new Set(dirtyCandidates);
+  const processableFiles: string[] = [];
+  const realGitRoot = await realpath(cwd);
+  for (const absolutePath of candidates.files) {
+    const repoPath = toRepoPath(cwd, absolutePath);
+    if (options.dryRun && dirtyCandidateSet.has(repoPath) && !(await fileExists(absolutePath))) {
+      continue;
+    }
+    if (!(await isRegularRepoFile(absolutePath, repoPath, realGitRoot))) {
+      if (options.dryRun && dirtyCandidateSet.has(repoPath)) {
+        continue;
+      }
+      throw new Error(`ingest 대상은 symlink가 아닌 regular file이어야 합니다: ${repoPath}`);
+    }
+    processableFiles.push(absolutePath);
+  }
+  if (!options.dryRun) {
+    await ensureRagitStructure(cwd, config);
+  }
   assertKnowledgeWriteSecurity(config, "ingest", Boolean(options.dryRun));
   const embeddingProfile = resolveEmbeddingProfile(config);
   if (!canUseRemoteEmbedding(config, embeddingProfile, "durable-doc")) {
     throw new Error("현재 embedding provider는 remote egress가 필요하지만 security.remote_embedding_policy=local-only 입니다.");
   }
   const cacheMode = options.dryRun ? "readonly" : "readwrite";
-  const candidates = await resolveCandidates(cwd, config, options);
   const scope = options.scope ?? "durable";
-  const headSha = await getHeadSha(cwd);
   let processed = 0;
   let skipped = 0;
   let masked = 0;
@@ -249,7 +428,7 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
   let contractViolations = 0;
   let contractSkipped = 0;
 
-  for (const absolutePath of candidates.files) {
+  for (const absolutePath of processableFiles) {
     const { content, hash } = await hashFileContent(absolutePath);
     const repoPath = toRepoPath(cwd, absolutePath);
     const admissionDecision = evaluateRepoDocCandidate(repoPath, candidates.selectorMode, content);
@@ -349,6 +528,10 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       searchReady: false,
       plannedFiles,
       deletedDocumentIds: candidates.deletedDocumentIds,
+      dirtyCandidates,
+      wouldFail:
+        dirtyCandidates.length > 0 ||
+        (blockedExplicitDocs.length > 0 && config.security.admission_mode === "enforce"),
       fullSnapshot: candidates.fullSnapshot,
       scope,
       boundArtifactIds: [],
@@ -371,17 +554,12 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
     throw new Error(`admission control이 explicit ingest 문서를 차단했습니다: ${blockedExplicitDocs.join(", ")}`);
   }
 
-  const parentSha = await getParentSha(cwd);
+  const parentSha = await getParentShaForCommit(cwd, headSha);
   const boundArtifactIds = await bindPendingArtifacts(cwd, headSha);
   const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), false);
 
   try {
-
-    const baseSnapshot =
-      candidates.fullSnapshot
-        ? null
-        : (await loadSnapshotManifestIfExists(cwd, parentSha)) ??
-          (await loadSnapshotManifestIfExists(cwd, await latestSnapshotSha(cwd)));
+    const baseSnapshot = baseSelection.manifest;
 
     const documentMap = new Map<string, DocumentRecord>();
     const chunkEntries = new Map<string, Pick<ChunkRecord, "id" | "documentId" | "documentVersionId">>();
@@ -488,6 +666,8 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
       searchReady: true,
       plannedFiles,
       deletedDocumentIds: candidates.deletedDocumentIds,
+      dirtyCandidates,
+      wouldFail: false,
       fullSnapshot: candidates.fullSnapshot,
       scope,
       boundArtifactIds,

@@ -42,6 +42,8 @@ Keep report synthesis separate from viewer rendering.
       git(temp, ["commit", "-m", "seed narrative boundary"]);
 
       await runInit(temp, { nonInteractive: true });
+      git(temp, ["add", "-A"]);
+      git(temp, ["commit", "-m", "initialize ragit"]);
       await runIngest(temp, { all: true });
 
       const materialized = await sessionMaterialize(temp, {

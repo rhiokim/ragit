@@ -25,7 +25,6 @@ import { getHeadSha } from "./git.js";
 import { loadArtifactRecord, persistArtifactRecord } from "./artifacts.js";
 import { RAGIT_VERSION } from "./version.js";
 import { createDoc, reconcileDocs } from "./doc-authority.js";
-import { runIngest } from "./ingest.js";
 import { loadConfig } from "./config.js";
 import { toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
@@ -1147,15 +1146,11 @@ export const promoteHarness = async (cwd: string, input: HarnessPromoteInput, dr
   if (!dryRun && createdFiles.length > 0) {
     await reconcileDocs(cwd, { dryRun: false, ensureStructure: false });
   }
-  let ingested = false;
+  const ingested = false;
   if (!dryRun && createdFiles.length > 0) {
-    const headSha = await safeHeadSha(cwd);
-    if (headSha) {
-      await runIngest(cwd, { paths: createdFiles, scope: "durable" });
-      ingested = true;
-    } else {
-      warnings.push("HEAD commit이 없어 harness promotion 문서 인덱싱을 건너뛰었습니다.");
-    }
+    warnings.push(
+      "생성된 harness promotion 문서를 commit한 뒤 첫 snapshot은 ragit ingest --all, 이후에는 지원되는 증분 ingest 명령을 실행하세요.",
+    );
   }
   if (!dryRun && createdFiles.length > 0) {
     await appendLedgerEvent(cwd, {
