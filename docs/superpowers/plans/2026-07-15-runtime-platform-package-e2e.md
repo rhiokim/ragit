@@ -81,6 +81,7 @@ Files:
 Verify:
 
 - Documentation and code name the same Node floor and three targets.
+- Linux guidance and CI declare and install the zvec `libaio` prerequisite.
 - Windows is explicitly unsupported for zvec 0.2.1.
 - All docs checks and the static docs build pass.
 

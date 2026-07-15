@@ -14,6 +14,7 @@ RAGit 저장소 자체를 개발하고 있다면 이 문서보다 <a href="/ko/d
 - Git 저장소
 - Node.js 22.14+
 - pnpm 10+
+- Linux: `libaio` (Debian/Ubuntu에서는 `sudo apt-get install libaio-dev`)
 - 로컬 초기화를 위한 zvec bootstrap 지원 플랫폼: `darwin/arm64`, `linux/arm64`, `linux/x64`
 
 Node 24는 호환성 lane에서 검증합니다. 고정된 zvec 0.2.1 런타임은 Windows x64를 지원하지 않으며, 미지원 대상에서는 native binding을 로드하기 전에 지원 매트릭스와 함께 실패합니다.

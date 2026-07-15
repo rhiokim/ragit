@@ -1,6 +1,7 @@
 import { access, lstat, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
+import micromatch from "micromatch";
 import { buildArtifactIndexData, planPendingArtifactBindings } from "./artifacts.js";
 import { chunkSections, parseSections } from "./chunk.js";
 import { CONFIG_PATH, defaultConfig, loadConfig } from "./config.js";
@@ -120,7 +121,7 @@ const isDocumentLikePath = (target: string): boolean => {
 };
 
 const matchesAnyGlob = (target: string, patterns: string[]): boolean =>
-  patterns.some((pattern) => path.matchesGlob(target, pattern));
+  patterns.some((pattern) => micromatch.isMatch(target, pattern));
 
 const parseIngestFilePatterns = (globText: string): string[] =>
   globText
@@ -141,7 +142,7 @@ const isImplicitIngestPath = (repoPath: string, config: Awaited<ReturnType<typeo
   if (!isDocumentLikePath(normalized)) return false;
   if (!matchesAnyGlob(normalized, config.ingest.doc_globs)) return false;
   if (!matchesAnyGlob(normalized, config.ingest.include)) return false;
-  if (config.ingest.exclude.some((pattern) => path.matchesGlob(normalized, pattern))) return false;
+  if (matchesAnyGlob(normalized, config.ingest.exclude)) return false;
   return true;
 };
 

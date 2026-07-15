@@ -57,8 +57,17 @@ jobs:
           EXPECTED_TARGET: ${{ matrix.target }}
         run: node --eval 'const actual = `${process.platform}/${process.arch}`; if (actual !== process.env.EXPECTED_TARGET) { throw new Error(`expected ${process.env.EXPECTED_TARGET}, received ${actual}`); }'
 
+      - name: Install Linux runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libaio-dev
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Verify zvec binding
+        run: node --input-type=module --eval 'await import("@zvec/zvec")'
 
       - name: Run tests
         run: pnpm test

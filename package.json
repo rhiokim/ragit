@@ -71,12 +71,14 @@
   },
   "dependencies": {
     "commander": "^14.0.1",
-    "fast-glob": "^3.3.3"
+    "fast-glob": "^3.3.3",
+    "micromatch": "^4.0.8"
   },
   "optionalDependencies": {
     "@zvec/zvec": "0.2.1"
   },
   "devDependencies": {
+    "@types/micromatch": "^4.0.10",
     "@types/node": "^24.10.1",
     "tsdown": "^0.21.0",
     "tsx": "^4.20.6",
