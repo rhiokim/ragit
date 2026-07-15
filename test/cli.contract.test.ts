@@ -117,6 +117,11 @@ Recall packets should restore active work instead of replaying raw logs.`,
 
       const describeContextOutput = JSON.parse(runCli(["describe", "context", "pack", "--format", "json"]));
       expect(describeContextOutput.data.spec.outputSchemaSummary).toContain("snapshot");
+      expect(describeContextOutput.data.spec.outputSchemaSummary).toContain("selection.strategy");
+      expect(describeContextOutput.data.spec.outputSchemaSummary).toContain("selection.uniqueCitations");
+      const contextBudgetOption = describeContextOutput.data.spec.options.find((option: { name: string }) => option.name === "--budget");
+      expect(contextBudgetOption.description).toContain("양의 안전한 정수");
+      expect(contextBudgetOption.description).toContain("공백 구분 콘텐츠 단위");
 
       const describeRecallOutput = JSON.parse(runCli(["describe", "memory", "recall", "--format", "json"]));
       expect(describeRecallOutput.data.spec.outputSchemaSummary).toContain("snapshot");
@@ -260,7 +265,24 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(contextOutput.data.snapshotSha).toBe(headSha);
       expect(contextOutput.data.snapshot.resolvedSha).toBe(headSha);
       expect(contextOutput.data.selectedHits).toBeGreaterThan(0);
+      expect(contextOutput.data.selection.strategy).toBe("citation-diverse-v2");
+      expect(contextOutput.data.selection.candidateHits).toBe(
+        contextOutput.data.selection.uniqueCitations + contextOutput.data.selection.duplicateCitationsSkipped,
+      );
+      expect(contextOutput.data.selection.uniqueCitations).toBe(
+        contextOutput.data.selectedHits + contextOutput.data.selection.budgetRejectedHits,
+      );
+      expect(contextOutput.data.hits[0].citation.id).toMatch(/^cite-[a-f0-9]{24}$/);
+      expect(contextOutput.data.hits[0].scoreBreakdown).toBeUndefined();
       expect(contextOutput.warnings).toEqual(contextOutput.data.warnings);
+      const noFitContextOutput = JSON.parse(
+        runCli(["context", "pack", "resume auth flow", "--budget", "1", "--cwd", temp, "--format", "json"]),
+      );
+      expect(noFitContextOutput.data.hits).toEqual([]);
+      expect(noFitContextOutput.data.usedTokens).toBe(0);
+      expect(noFitContextOutput.data.selectedHits).toBe(0);
+      expect(noFitContextOutput.data.warnings).toContain("context pack budget admitted no complete hit");
+      expect(noFitContextOutput.warnings).toEqual(noFitContextOutput.data.warnings);
       const contextTextOutput = runCli([
         "context",
         "pack",
@@ -272,6 +294,12 @@ Recall packets should restore active work instead of replaying raw logs.`,
       ]);
       expect(contextTextOutput).toContain(`- resolved_sha: ${headSha}`);
       expect(contextTextOutput).toContain("- status: indexed");
+      expect(contextTextOutput).toContain("- selection_strategy: citation-diverse-v2");
+      expect(contextTextOutput).toMatch(/- candidate_hits: \d+/);
+      expect(contextTextOutput).toMatch(/- unique_citations: \d+/);
+      expect(contextTextOutput).toMatch(/- selected_sources: \d+/);
+      expect(contextTextOutput).toMatch(/- duplicate_citations_skipped: \d+/);
+      expect(contextTextOutput).toMatch(/- budget_rejected_hits: \d+/);
 
       const recallOutput = JSON.parse(
         runCli(["memory", "recall", "resume auth flow", "--cwd", temp, "--format", "json", "--view", "minimal"]),

@@ -142,6 +142,7 @@ Dry-run should not mutate tracked state.`,
       const outside = path.join(os.tmpdir(), `ragit-outside-${Date.now()}.json`);
       await writeFile(outside, JSON.stringify({ question: "outside" }, null, 2), "utf8");
       await writeFile(path.join(temp, "bad-query.json"), JSON.stringify({ question: "hello\u0007" }, null, 2), "utf8");
+      await writeFile(path.join(temp, "bad-context.json"), JSON.stringify({ goal: "context", budget: 1.5 }, null, 2), "utf8");
       await writeFile(path.join(temp, "bad-ingest.json"), JSON.stringify({ files: "../**/*.md" }, null, 2), "utf8");
       await writeFile(
         path.join(temp, "bad-harness-run.json"),
@@ -180,6 +181,8 @@ Dry-run should not mutate tracked state.`,
 
       expect(runCliExpectError(["query", "--input", outside, "--cwd", temp, "--format", "json"])).toContain("repo 밖 input 경로");
       expect(runCliExpectError(["query", "--input", "bad-query.json", "--cwd", temp, "--format", "json"])).toContain("control character");
+      expect(runCliExpectError(["context", "pack", "context", "--budget", "1.5", "--cwd", temp, "--format", "json"])).toContain("양의 안전한 정수");
+      expect(runCliExpectError(["context", "pack", "--input", "bad-context.json", "--cwd", temp, "--format", "json"])).toContain("양의 안전한 정수");
       expect(runCliExpectError(["ingest", "--input", "bad-ingest.json", "--cwd", temp, "--format", "json"])).toContain("repo 내부 glob");
       expect(runCliExpectError(["harness", "run", "--input", "bad-harness-run.json", "--cwd", temp, "--format", "json"])).toContain("concurrency=1");
       expect(runCliExpectError(["memory", "wrap", "--input", "bad-wrap.json", "--cwd", temp, "--format", "json"])).toContain("예상하지 못한 필드");

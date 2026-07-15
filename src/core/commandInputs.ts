@@ -46,6 +46,14 @@ const asOptionalNumber = (value: unknown, label: string): number | undefined => 
   return value;
 };
 
+const asOptionalPositiveSafeInteger = (value: unknown, label: string): number | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${label} 값은 양의 안전한 정수여야 합니다.`);
+  }
+  return value;
+};
+
 const asOptionalBoolean = (value: unknown, label: string): boolean | undefined => {
   if (value === undefined) return undefined;
   if (typeof value !== "boolean") {
@@ -98,7 +106,7 @@ export const normalizeContextPackCommandInput = (value: unknown): ContextPackCom
   assertAllowedKeys(raw, ["goal", "budget", "at", "scope"], "context pack");
   return {
     goal: asTrimmedString(raw.goal, "context.goal"),
-    budget: asOptionalNumber(raw.budget, "context.budget"),
+    budget: asOptionalPositiveSafeInteger(raw.budget, "context.budget"),
     at: raw.at === undefined ? undefined : asTrimmedString(raw.at, "context.at"),
     scope: asOptionalRetrievalScope(raw.scope, "context.scope"),
   };
