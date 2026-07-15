@@ -2,7 +2,38 @@ import { describe, expect, it } from "vitest";
 import {
   buildRetrievalCitation,
   buildRetrievalScoreBreakdown,
+  compareRetrievalHits,
 } from "../src/core/retrieval-explanation.js";
+import type { RetrievalHit } from "../src/core/types.js";
+
+const makeHit = (path: string, sectionTitle: string, scoreFinal = 0.5): RetrievalHit => {
+  const scoreBreakdown = buildRetrievalScoreBreakdown({
+    mode: "keyword",
+    scoreVector: 0,
+    scoreKeyword: 0.5,
+    alpha: 0.7,
+    authority: 0.5,
+    recency: 0.5,
+  });
+  return {
+    chunkId: `chunk:${path}:${sectionTitle}`,
+    path,
+    sectionTitle,
+    scoreVector: 0,
+    scoreKeyword: 0.5,
+    scoreFinal,
+    scoreBreakdown: { ...scoreBreakdown, final: scoreFinal },
+    citation: buildRetrievalCitation({
+      sourceType: "document",
+      sourceId: `chunk:${path}:${sectionTitle}`,
+      sourceVersion: "version-1",
+      sourceSha: "a".repeat(40),
+    }),
+    text: "source text",
+    scope: "durable",
+    originType: "document",
+  };
+};
 
 describe("retrieval explanations", () => {
   it("calculates hybrid contributions with the existing final weights", () => {
@@ -53,5 +84,13 @@ describe("retrieval explanations", () => {
     expect(first.id).toMatch(/^cite-[a-f0-9]{24}$/);
     expect(buildRetrievalCitation({ ...source, sourceVersion: "content-v2" }).id).not.toBe(first.id);
     expect(buildRetrievalCitation({ ...source, sourceId: "artifact-1:evidence-2", sourceType: "evidence" }).id).not.toBe(first.id);
+  });
+
+  it("orders exact ties independently of insertion order", () => {
+    const hits = [makeHit("b.md", "A"), makeHit("a.md", "B"), makeHit("a.md", "A")];
+    const forward = [...hits].sort(compareRetrievalHits).map((hit) => `${hit.path}#${hit.sectionTitle}`);
+    const reverse = [...hits].reverse().sort(compareRetrievalHits).map((hit) => `${hit.path}#${hit.sectionTitle}`);
+    expect(forward).toEqual(["a.md#A", "a.md#B", "b.md#A"]);
+    expect(reverse).toEqual(forward);
   });
 });

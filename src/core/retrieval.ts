@@ -43,7 +43,12 @@ import {
   sanitizeKnowledgeText,
   sanitizeStructuredValue,
 } from "./security.js";
-import { calculateHybridScore } from "./retrieval-explanation.js";
+import {
+  buildRetrievalCitation,
+  buildRetrievalScoreBreakdown,
+  calculateHybridScore,
+  compareRetrievalHits,
+} from "./retrieval-explanation.js";
 
 export { calculateHybridScore };
 
@@ -136,6 +141,7 @@ type ArtifactCandidate = {
   sectionTitle: string;
   path: string;
   scopeValue: "session" | "harness" | "evidence";
+  evidenceId: string | null;
 };
 
 const escapeFilterLiteral = (value: string): string => value.replaceAll("'", "''");
@@ -180,19 +186,37 @@ const buildSnapshotHit = async (
   const chunk = hydrateChunk(raw);
   const scoreVector = zvecCosineDistanceToSimilarity(raw.score);
   const scoreKeyword = keywordScore(query, chunk.text);
-  const semanticHybrid = calculateHybridScore(scoreVector, scoreKeyword, alpha);
   const hitScope = scopeById.get(chunk.id) ?? "durable";
   const artifactEntry = artifactEntryByChunkId.get(chunk.id);
   const artifact = artifactEntry ? await loadArtifactRecord(cwd, artifactEntry.artifactId) : null;
-  const authorityWeight = authorityWeightForScope(hitScope, artifact?.authority);
-  const scoreFinal = 0.8 * semanticHybrid + 0.15 * authorityWeight + 0.05 * recencyWeight(artifact?.updatedAt);
+  const authority = authorityWeightForScope(hitScope, artifact?.authority);
+  const recency = recencyWeight(artifact?.updatedAt);
+  const scoreBreakdown = buildRetrievalScoreBreakdown({
+    mode: "hybrid",
+    scoreVector,
+    scoreKeyword,
+    alpha,
+    authority,
+    recency,
+  });
+  const sourceType = artifactEntry
+    ? hitScope === "evidence" ? "evidence" : "artifact"
+    : "document";
+  const citation = buildRetrievalCitation({
+    sourceType,
+    sourceId: chunk.id,
+    sourceVersion: chunk.documentVersionId,
+    sourceSha: chunk.commitSha,
+  });
   return {
     chunkId: chunk.id,
     path: chunk.path,
     sectionTitle: chunk.sectionTitle,
     scoreVector,
     scoreKeyword,
-    scoreFinal,
+    scoreFinal: scoreBreakdown.final,
+    scoreBreakdown,
+    citation,
     text: chunk.text,
     scope: hitScope,
     originType: artifactEntry ? "artifact" : "document",
@@ -288,6 +312,7 @@ const buildExplicitArtifactCandidates = async (
           sectionTitle: "Evidence",
           path: `${pathForArtifact(cwd, artifact)}#${evidence.evidenceId}`,
           scopeValue: "evidence",
+          evidenceId: evidence.evidenceId,
         });
       }
       continue;
@@ -298,6 +323,7 @@ const buildExplicitArtifactCandidates = async (
       sectionTitle: artifact.title,
       path: pathForArtifact(cwd, artifact),
       scopeValue: artifact.searchPolicy === "evidence" ? "evidence" : artifact.artifactScope,
+      evidenceId: null,
     });
   }
   return candidates;
@@ -311,8 +337,12 @@ const buildRecallArtifactCandidates = async (cwd: string, goal: string): Promise
     sectionTitle: artifact.title,
     path: pathForArtifact(cwd, artifact),
     scopeValue: artifact.searchPolicy === "evidence" ? "evidence" : artifact.artifactScope,
+    evidenceId: null,
   }));
 };
+
+const sourceShaForArtifact = (artifact: ArtifactRecord): string | null =>
+  artifact.boundHeadSha ?? artifact.sourceHeadSha ?? artifact.captureHeadSha;
 
 const buildArtifactHits = async (
   cwd: string,
@@ -338,13 +368,22 @@ const buildArtifactHits = async (
       ? cosineSimilarity(semanticContext.queryEmbedding, candidateEmbeddings[index] ?? [])
       : 0;
     const keyword = keywordScore(query, candidate.text);
-    const retrievalScore = semanticContext === null
-      ? keyword
-      : calculateHybridScore(semantic, keyword, alpha);
-    const scoreFinal =
-      0.8 * retrievalScore +
-      0.15 * authorityWeightForArtifact(candidate.artifact, candidate.scopeValue) +
-      0.05 * recencyWeight(candidate.artifact.updatedAt);
+    const scoreBreakdown = buildRetrievalScoreBreakdown({
+      mode: canEmbedCandidates ? "hybrid" : "keyword",
+      scoreVector: semantic,
+      scoreKeyword: keyword,
+      alpha,
+      authority: authorityWeightForArtifact(candidate.artifact, candidate.scopeValue),
+      recency: recencyWeight(candidate.artifact.updatedAt),
+    });
+    const citation = buildRetrievalCitation({
+      sourceType: candidate.evidenceId ? "evidence" : "artifact",
+      sourceId: candidate.evidenceId
+        ? `${candidate.artifact.artifactId}:${candidate.evidenceId}`
+        : candidate.artifact.artifactId,
+      sourceVersion: candidate.artifact.provenance.contentHash,
+      sourceSha: sourceShaForArtifact(candidate.artifact),
+    });
     return {
       chunkId:
         candidate.scopeValue === "evidence"
@@ -354,7 +393,9 @@ const buildArtifactHits = async (
       sectionTitle: candidate.sectionTitle,
       scoreVector: semantic,
       scoreKeyword: keyword,
-      scoreFinal,
+      scoreFinal: scoreBreakdown.final,
+      scoreBreakdown,
+      citation,
       text: candidate.text,
       scope: candidate.scopeValue,
       originType: "artifact" as const,
@@ -425,12 +466,12 @@ const finalizeHits = (hits: RetrievalHit[], topK: number): RetrievalHit[] => {
   for (const hit of hits) {
     const key = retrievalIdentity(hit);
     const existing = deduped.get(key);
-    if (!existing || existing.scoreFinal < hit.scoreFinal) {
+    if (!existing || compareRetrievalHits(hit, existing) < 0) {
       deduped.set(key, hit);
     }
   }
   return Array.from(deduped.values())
-    .sort((left, right) => right.scoreFinal - left.scoreFinal)
+    .sort(compareRetrievalHits)
     .slice(0, topK);
 };
 

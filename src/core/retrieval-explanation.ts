@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
   RetrievalCitation,
+  RetrievalHit,
   RetrievalScoreBreakdown,
   RetrievalScoreInput,
   RetrievalScoreStage,
@@ -61,4 +62,19 @@ export const buildRetrievalCitation = (
     .digest("hex")
     .slice(0, 24);
   return { id: `cite-${digest}`, ...input };
+};
+
+const compareCodePoints = (left: string, right: string): number =>
+  left === right ? 0 : left < right ? -1 : 1;
+
+export const compareRetrievalHits = (left: RetrievalHit, right: RetrievalHit): number => {
+  const byScore = right.scoreFinal - left.scoreFinal;
+  if (byScore !== 0) return byScore;
+  const byPath = compareCodePoints(left.path, right.path);
+  if (byPath !== 0) return byPath;
+  const bySection = compareCodePoints(left.sectionTitle, right.sectionTitle);
+  if (bySection !== 0) return bySection;
+  const byCitation = compareCodePoints(left.citation.id, right.citation.id);
+  if (byCitation !== 0) return byCitation;
+  return compareCodePoints(left.chunkId, right.chunkId);
 };

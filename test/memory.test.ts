@@ -143,6 +143,11 @@ recall_top_k = 12
       scoreVector: 0,
     });
     expect(artifactHit?.scoreKeyword).toBeGreaterThan(0);
+    expect(artifactHit?.citation.id).toMatch(/^cite-[a-f0-9]{24}$/);
+    expect(artifactHit?.citation.sourceType).toBe("artifact");
+    expect(artifactHit?.scoreBreakdown.mode).toBe("keyword");
+    expect(artifactHit?.scoreBreakdown.retrieval.inputs.keyword.weight).toBe(1);
+    expect(artifactHit?.scoreFinal).toBeCloseTo(artifactHit!.scoreBreakdown.final, 12);
     expect(result.packet.snapshotSha).toBeNull();
     expect(result.packet.snapshot).toEqual({
       requestedRef: "HEAD",

@@ -660,6 +660,8 @@ export interface RetrievalHit {
   scoreVector: number;
   scoreKeyword: number;
   scoreFinal: number;
+  scoreBreakdown: RetrievalScoreBreakdown;
+  citation: RetrievalCitation;
   text: string;
   scope?: RetrievalScope;
   originType?: "document" | "artifact";

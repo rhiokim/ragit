@@ -136,7 +136,13 @@ Keep refresh token mutation outside snapshot writes.
 
       const artifactSearchBefore = calls;
       const artifactSearch = await searchArtifacts(temp, "keep the output concise", "session", 3);
-      expect(artifactSearch.hits[0]?.artifactId).toBeTruthy();
+      const artifactHit = artifactSearch.hits[0];
+      expect(artifactHit?.artifactId).toBeTruthy();
+      expect(artifactHit?.citation.sourceType).toBe("artifact");
+      expect(artifactHit?.scoreBreakdown.mode).toBe("keyword");
+      expect(artifactHit?.scoreBreakdown.retrieval.inputs.vector.weight).toBe(0);
+      expect(artifactHit?.scoreBreakdown.retrieval.inputs.keyword.weight).toBe(1);
+      expect(artifactHit?.scoreBreakdown.retrieval.score).toBe(artifactHit?.scoreKeyword);
       expect(calls).toBe(artifactSearchBefore + 1);
 
       await searchArtifacts(temp, "keep the output concise", "session", 3);

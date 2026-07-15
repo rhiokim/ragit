@@ -44,6 +44,11 @@ import {
   SessionArtifactKind,
 } from "./types.js";
 import { RAGIT_VERSION } from "./version.js";
+import {
+  buildRetrievalCitation,
+  buildRetrievalScoreBreakdown,
+  compareRetrievalHits,
+} from "./retrieval-explanation.js";
 
 export interface SessionTurn {
   turnId: string;
@@ -1141,6 +1146,7 @@ export const searchArtifacts = async (
     sectionTitle: string;
     path: string;
     scopeValue: "session" | "harness" | "evidence";
+    evidenceId: string | null;
   }> = [];
   for (const artifact of artifacts) {
     if (!scopeMatches(artifact, scope)) continue;
@@ -1152,12 +1158,14 @@ export const searchArtifacts = async (
             sectionTitle: "Evidence",
             path: `${pathForArtifact(cwd, artifact)}#${item.evidenceId}`,
             scopeValue: "evidence" as const,
+            evidenceId: item.evidenceId,
           }))
         : [{
             text: artifact.text,
             sectionTitle: artifact.title,
             path: pathForArtifact(cwd, artifact),
             scopeValue: (scope === "all" ? (artifact.searchPolicy === "evidence" ? "evidence" : artifact.artifactScope) : scope) as "session" | "harness" | "evidence",
+            evidenceId: null,
           }];
     for (const candidate of baseTexts) {
       candidatesToEmbed.push({
@@ -1166,6 +1174,7 @@ export const searchArtifacts = async (
         sectionTitle: candidate.sectionTitle,
         path: candidate.path,
         scopeValue: candidate.scopeValue,
+        evidenceId: candidate.evidenceId,
       });
     }
   }
@@ -1182,15 +1191,34 @@ export const searchArtifacts = async (
   for (const [index, candidate] of candidatesToEmbed.entries()) {
     const semantic = canEmbedCandidates ? cosineSimilarity(queryEmbedding, candidateEmbeddings[index] ?? []) : 0;
     const keyword = candidate.text.toLowerCase().includes(String((sanitizedQuery.value as { query: string }).query).toLowerCase()) ? 1 : 0;
-    const semanticHybrid = config.retrieval.alpha * semantic + (1 - config.retrieval.alpha) * keyword;
-    const scoreFinal = 0.8 * semanticHybrid + 0.15 * authorityWeight(candidate.artifact) + 0.05 * recencyWeight(candidate.artifact.updatedAt);
+    const scoreBreakdown = buildRetrievalScoreBreakdown({
+      mode: canEmbedCandidates ? "hybrid" : "keyword",
+      scoreVector: semantic,
+      scoreKeyword: keyword,
+      alpha: config.retrieval.alpha,
+      authority: authorityWeight(candidate.artifact),
+      recency: recencyWeight(candidate.artifact.updatedAt),
+    });
+    const citation = buildRetrievalCitation({
+      sourceType: candidate.evidenceId ? "evidence" : "artifact",
+      sourceId: candidate.evidenceId
+        ? `${candidate.artifact.artifactId}:${candidate.evidenceId}`
+        : candidate.artifact.artifactId,
+      sourceVersion: candidate.artifact.provenance.contentHash,
+      sourceSha:
+        candidate.artifact.boundHeadSha ??
+        candidate.artifact.sourceHeadSha ??
+        candidate.artifact.captureHeadSha,
+    });
     candidates.push({
       chunkId: `${candidate.artifact.artifactId}:${sha1(candidate.path).slice(0, 8)}`,
       path: toRepoPath(cwd, candidate.path.replace(/#.*$/, "")),
       sectionTitle: candidate.sectionTitle,
       scoreVector: semantic,
       scoreKeyword: keyword,
-      scoreFinal,
+      scoreFinal: scoreBreakdown.final,
+      scoreBreakdown,
+      citation,
       text: candidate.text,
       scope: candidate.scopeValue,
       originType: "artifact",
@@ -1200,7 +1228,7 @@ export const searchArtifacts = async (
       confidence: candidate.artifact.confidence,
     });
   }
-  const hits = candidates.sort((left, right) => right.scoreFinal - left.scoreFinal).slice(0, topK);
+  const hits = candidates.sort(compareRetrievalHits).slice(0, topK);
   const sanitizedHits = sanitizeStructuredValue(hits, "retrieval.hit", "hits");
   return {
     hits: sanitizedHits.value,
