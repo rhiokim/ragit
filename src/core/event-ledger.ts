@@ -283,9 +283,16 @@ export const appendLedgerEvent = async (
 };
 
 export const readLedgerEvents = async (cwd: string): Promise<RagitEventRecord[]> => {
-  await ensureRagitStructure(cwd);
   const paths = resolveRagitPaths(cwd);
-  const files = (await readdir(paths.eventDir)).filter((name) => name.endsWith(".jsonl")).sort();
+  let files: string[];
+  try {
+    files = (await readdir(paths.eventDir)).filter((name) => name.endsWith(".jsonl")).sort();
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
   const events: RagitEventRecord[] = [];
   for (const file of files) {
     const content = await readFile(path.join(paths.eventDir, file), "utf8");

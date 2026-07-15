@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveRagitPaths } from "./project.js";
 
@@ -198,8 +198,15 @@ export const parseIngestTransactionJournal = (value: unknown): IngestTransaction
   };
 };
 
-const transactionPath = (cwd: string, transactionId: string): string =>
-  path.join(resolveRagitPaths(cwd).runtimeTransactionsDir, `${transactionId}.json`);
+export const isSafeIngestTransactionId = (transactionId: string): boolean =>
+  /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(transactionId);
+
+const transactionPath = (cwd: string, transactionId: string): string => {
+  if (!isSafeIngestTransactionId(transactionId)) {
+    throw new Error("unsafe ingest transaction id");
+  }
+  return path.join(resolveRagitPaths(cwd).runtimeTransactionsDir, `${transactionId}.json`);
+};
 
 const serialized = (journal: IngestTransactionJournal): string => `${JSON.stringify(journal, null, 2)}\n`;
 
@@ -248,15 +255,23 @@ export const readIngestTransaction = async (
   cwd: string,
   transactionId: string,
 ): Promise<IngestTransactionJournal | null> => {
+  const target = transactionPath(cwd, transactionId);
   let content: string;
   try {
-    content = await readFile(transactionPath(cwd, transactionId), "utf8");
+    const metadata = await lstat(target);
+    if (!metadata.isFile() || metadata.isSymbolicLink()) {
+      throw new Error("ingest transaction journal must be a regular file");
+    }
+    content = await readFile(target, "utf8");
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return null;
     throw error;
   }
   const parsed = parseIngestTransactionJournal(JSON.parse(content));
   if (parsed === null) throw new Error(`ingest transaction journal is invalid: ${transactionId}`);
+  if (parsed.transactionId !== transactionId) {
+    throw new Error(`ingest transaction journal id does not match requested id: ${transactionId}`);
+  }
   return parsed;
 };
 

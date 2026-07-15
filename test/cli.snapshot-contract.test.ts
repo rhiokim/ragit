@@ -63,6 +63,39 @@ afterEach(async () => {
 });
 
 describe("CLI snapshot failure contract", () => {
+  it("keeps status recovery fields additive in JSON and text output", async () => {
+    const { cwd, headSha } = await createRepository("ragit-cli-status-recovery-");
+
+    const json = runCli(["status", "--cwd", cwd, "--format", "json"]);
+    expect(json.status).toBe(0);
+    expect(parseEnvelope(json).data).toMatchObject({
+      storeWriter: { state: expect.any(String), owner: null },
+      ingestRecovery: {
+        summary: { finalizationPending: 0 },
+        pending: [],
+        lastCompleted: null,
+      },
+    });
+
+    const lock = await acquireStoreWriteLock(cwd, { command: "ingest", headSha });
+    try {
+      const text = runCli(["status", "--cwd", cwd, "--format", "text"]);
+      expect(text.status).toBe(0);
+      expect(text.stdout).toContain("store_writer_lock: active");
+      expect(text.stdout).toContain(`pid=${lock.owner.pid}`);
+      expect(text.stdout).toContain(`command=${lock.owner.command}`);
+      expect(text.stdout).toContain(`head_sha=${headSha}`);
+      expect(text.stdout).not.toContain(lock.owner.token);
+      expect(text.stdout).toContain("ingest_recovery_pending:");
+    } finally {
+      await lock.release();
+    }
+
+    const repairHelp = runCli(["repair", "--help"]);
+    expect(repairHelp.status).toBe(0);
+    expect(repairHelp.stdout).toContain("ingest-recover");
+  }, 20_000);
+
   it("emits invalid snapshot refs with exit 2 in JSON and text modes", async () => {
     const { cwd } = await createRepository("ragit-cli-invalid-ref-");
 

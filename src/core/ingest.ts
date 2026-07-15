@@ -27,6 +27,7 @@ import {
   updateIngestTransaction,
 } from "./ingest-transaction.js";
 import { finalizeIngestTransaction, type IngestFinalizationTestBoundary } from "./ingest-finalization.js";
+import { scanIngestTransactions } from "./ingest-recovery.js";
 import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
@@ -871,6 +872,31 @@ export const runIngest = async (
   return withStoreWriteLock(
     context.gitRoot,
     { command: "ingest", headSha: context.headSha },
-    () => runIngestUnlocked(context.gitRoot, options, dependencies),
+    async () => {
+      const diagnostics = await scanIngestTransactions(context.gitRoot);
+      const blocking = diagnostics.transactions.filter(
+        (transaction) => transaction.classification === "inconsistent" || transaction.classification === "invalid",
+      );
+      if (blocking.length > 0) {
+        throw new RagitOperationalError(
+          "INGEST_RECOVERY_REQUIRED",
+          "ingest 복구 상태를 확인할 수 없어 새 store 변경을 시작하지 않습니다.",
+          {
+            details: {
+              blockingTransactions: blocking.map((transaction) => ({
+                transactionId: transaction.transactionId,
+                classification: transaction.classification,
+                detail: transaction.detail ?? null,
+              })),
+            },
+            recovery: { command: "ragit repair --apply --action ingest-recover" },
+          },
+        );
+      }
+      for (const transaction of diagnostics.pending) {
+        await finalizeIngestTransaction(context.gitRoot, transaction.transactionId);
+      }
+      return runIngestUnlocked(context.gitRoot, options, dependencies);
+    },
   );
 };

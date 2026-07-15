@@ -1,7 +1,10 @@
 import { CliView } from "./cliContract.js";
 import { runDrift, DriftQueryOptions } from "./drift.js";
 import { runIngest } from "./ingest.js";
+import { finalizeIngestTransaction } from "./ingest-finalization.js";
+import { scanIngestTransactions } from "./ingest-recovery.js";
 import { verifyHarness } from "./harness.js";
+import { withStoreWriteLock } from "./store-write-lock.js";
 import {
   DriftItem,
   DriftReasonCode,
@@ -16,7 +19,12 @@ export interface RepairOptions extends DriftQueryOptions {
   actions?: RepairActionKind[];
 }
 
+export interface RepairDependencies {
+  beforeIngestRecoveryLock?: () => Promise<void> | void;
+}
+
 const ACTION_PRIORITY: Record<RepairActionKind, number> = {
+  "ingest-recover": -1,
   ingest: 0,
   "harness-verify": 1,
   "doc-refresh": 2,
@@ -46,6 +54,7 @@ export const normalizeRepairActionKind = (value: string | undefined): RepairActi
   const normalized = value.trim().toLowerCase();
   if (
     normalized === "ingest" ||
+    normalized === "ingest-recover" ||
     normalized === "doc-refresh" ||
     normalized === "artifact-review" ||
     normalized === "harness-verify" ||
@@ -222,6 +231,27 @@ export const buildRepairPlan = (
   return withIds(sortActions(Array.from(deduped.values())));
 };
 
+const buildIngestRecoveryPlan = async (
+  cwd: string,
+  actionFilters: RepairActionKind[],
+): Promise<RepairAction[]> => {
+  if (actionFilters.length > 0 && !actionFilters.includes("ingest-recover")) return [];
+  const diagnostics = await scanIngestTransactions(cwd);
+  return diagnostics.pending.map((transaction) => ({
+    actionId: "",
+    action: "ingest-recover",
+    sourceItemId: transaction.transactionId,
+    sourceScope: "durable",
+    reasonCodes: [],
+    status: "planned",
+    safeToApply: true,
+    requiresInput: false,
+    commandPath: "ingest recover",
+    args: ["--transaction", transaction.transactionId],
+    notes: ["finalize a manifest-visible ingest transaction"],
+  }));
+};
+
 const summarizeActions = (actions: RepairAction[]) => ({
   planned: actions.filter((action) => action.status === "planned").length,
   executed: actions.filter((action) => action.status === "executed").length,
@@ -231,6 +261,24 @@ const summarizeActions = (actions: RepairAction[]) => ({
 });
 
 const executeAction = async (cwd: string, action: RepairAction): Promise<RepairAction> => {
+  if (action.action === "ingest-recover") {
+    const args = splitActionArgs(action);
+    const transactionIndex = args.indexOf("--transaction");
+    const transactionId = transactionIndex >= 0 ? args[transactionIndex + 1] : undefined;
+    if (!transactionId) {
+      return {
+        ...action,
+        status: "failed",
+        notes: [...action.notes, "missing ingest transaction reference"],
+      };
+    }
+    await finalizeIngestTransaction(cwd, transactionId);
+    return {
+      ...action,
+      status: "executed",
+    };
+  }
+
   if (action.action === "ingest") {
     const args = splitActionArgs(action);
     const pathValues: string[] = [];
@@ -285,7 +333,11 @@ const executeAction = async (cwd: string, action: RepairAction): Promise<RepairA
   };
 };
 
-export const runRepair = async (cwd: string, options: RepairOptions = {}): Promise<RepairResult> => {
+export const runRepair = async (
+  cwd: string,
+  options: RepairOptions = {},
+  dependencies: RepairDependencies = {},
+): Promise<RepairResult> => {
   const drift = await runDrift(cwd, {
     scope: options.scope,
     path: options.path,
@@ -295,12 +347,56 @@ export const runRepair = async (cwd: string, options: RepairOptions = {}): Promi
   });
 
   const warnings: string[] = [];
-  const plannedActions = buildRepairPlan(drift, options.actions ?? []);
+  const actionFilters = options.actions ?? [];
+  const plannedActions = withIds(sortActions([
+    ...buildRepairPlan(drift, actionFilters).map(({ actionId: _actionId, ...action }) => action),
+    ...await buildIngestRecoveryPlan(cwd, actionFilters),
+  ]));
   const executedActions: RepairAction[] = [];
   const skippedActions: RepairAction[] = [];
 
   if (options.apply) {
+    const recoveryActions = plannedActions.filter(
+      (action) => action.action === "ingest-recover" && action.status === "planned" && action.safeToApply && !action.requiresInput,
+    );
+    if (recoveryActions.length > 0) {
+      await dependencies.beforeIngestRecoveryLock?.();
+      const recovered = await withStoreWriteLock(cwd, { command: "ingest-recover" }, async () => {
+        const results: RepairAction[] = [];
+        for (const action of recoveryActions) {
+          const current = await scanIngestTransactions(cwd);
+          const transaction = current.transactions.find((entry) => entry.transactionId === action.sourceItemId);
+          if (transaction?.classification !== "finalization-pending") {
+            results.push({
+              ...action,
+              status: "skipped",
+              notes: [...action.notes, `transaction is no longer recoverable (${transaction?.classification ?? "missing"})`],
+            });
+            continue;
+          }
+          try {
+            const executed = await executeAction(cwd, action);
+            if (executed.status === "failed") {
+              warnings.push(`${executed.commandPath} 실행이 실패했습니다: ${executed.sourceItemId}`);
+            }
+            results.push(executed);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            warnings.push(`${action.commandPath} 실행이 실패했습니다: ${message}`);
+            results.push({
+              ...action,
+              status: "failed",
+              notes: [...action.notes, message],
+            });
+          }
+        }
+        return results;
+      });
+      executedActions.push(...recovered.filter((action) => action.status !== "skipped"));
+      skippedActions.push(...recovered.filter((action) => action.status === "skipped"));
+    }
     for (const action of plannedActions) {
+      if (action.action === "ingest-recover") continue;
       if (action.status !== "planned" || !action.safeToApply || action.requiresInput) {
         skippedActions.push(action);
         continue;

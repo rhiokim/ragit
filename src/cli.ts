@@ -96,6 +96,10 @@ const formatStatusText = (status: Awaited<ReturnType<typeof runStatus>>): string
     `- security_admission_quarantined_entries: ${status.security.admissionQuarantinedEntries}`,
     `- security_last_audit_at: ${status.security.lastAuditAt ?? "none"}`,
     `- security_legacy_unsafe_state: ${status.security.legacyUnsafeState}`,
+    `- store_writer_lock: ${status.storeWriter.state}`,
+    `- store_writer_owner: ${status.storeWriter.owner ? `pid=${status.storeWriter.owner.pid}, hostname=${status.storeWriter.owner.hostname}, started_at=${status.storeWriter.owner.startedAt}, command=${status.storeWriter.owner.command}, head_sha=${status.storeWriter.owner.headSha ?? "none"}` : "none"}`,
+    `- ingest_recovery_pending: ${status.ingestRecovery.summary.finalizationPending}`,
+    `- ingest_recovery_last_completed: ${status.ingestRecovery.lastCompleted?.transactionId ?? "none"}`,
     `- format: ${status.format}`,
   ].join("\n");
 
@@ -350,7 +354,7 @@ program
   .option("--goal <goalId>", "goalId 필터")
   .option("--session <sessionId>", "sessionId 필터")
   .option("-n, --max-count <n>", "최종 출력 item 개수")
-  .option("--action <kind>", "ingest|doc-refresh|artifact-review|harness-verify|harness-run|memory-promote", collectRepeatedOption, [])
+  .option("--action <kind>", "ingest|ingest-recover|doc-refresh|artifact-review|harness-verify|harness-run|memory-promote", collectRepeatedOption, [])
   .option("--view <view>", "minimal|default|full", "default")
   .option("--format <format>", "text|json|both", "json")
   .option("--cwd <path>", "대상 저장소 경로")

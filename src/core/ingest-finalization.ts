@@ -6,6 +6,7 @@ import {
   readIngestTransaction,
   updateIngestTransaction,
 } from "./ingest-transaction.js";
+import { expectedIngestManifestPath, isFullGitObjectId } from "./ingest-recovery.js";
 import { loadSnapshotManifest } from "./manifest.js";
 import { RAGIT_VERSION } from "./version.js";
 
@@ -20,10 +21,6 @@ export interface FinalizeIngestTransactionResult {
   boundArtifactIds: string[];
 }
 
-const expectedManifestPath = (headSha: string): string => `.ragit/manifest/${headSha}.json`;
-
-const isFullGitObjectId = (value: string): boolean => /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(value);
-
 const finalizationPayload = (journal: IngestTransactionJournal) => {
   if (!journal.finalization) {
     throw new Error("ingest transaction cannot finalize without finalization payload");
@@ -31,7 +28,7 @@ const finalizationPayload = (journal: IngestTransactionJournal) => {
   if (!isFullGitObjectId(journal.targetHeadSha)) {
     throw new Error("ingest transaction cannot finalize with an invalid target HEAD");
   }
-  if (journal.manifestPath !== expectedManifestPath(journal.targetHeadSha)) {
+  if (journal.manifestPath !== expectedIngestManifestPath(journal.targetHeadSha)) {
     throw new Error("ingest transaction cannot finalize with an unexpected manifest path");
   }
   return journal.finalization;
