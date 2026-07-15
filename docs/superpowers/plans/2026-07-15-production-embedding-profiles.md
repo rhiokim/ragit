@@ -160,6 +160,8 @@ pnpm benchmark:retrieval:openai:verify --output /tmp/ragit-retrieval-b4-openai.j
 
 Stop if the credential is unavailable or paid use has not been authorized. Record report SHA-256, aggregate metrics, noise drop, p95 latency, and gate result; never print or persist the key.
 
+**Scope decision (2026-07-15):** paid OpenAI use was not authorized. Keep the recognized profile, mocked contracts, opt-in command, and unchanged precommitted threshold, but do not declare OpenAI evidence-backed or production-supported. This release's production support is limited to the passing loopback Ollama `nomic-embed-text` target.
+
 ## Task 6 — Independent regression and integration
 
 Sol Max runs:
@@ -187,5 +189,5 @@ Audit that retrieval weights, B1 dataset/default thresholds, Context Pack, zvec,
 
 - Push `feat/production-embedding-profiles`.
 - Create a focused ready PR with mocked-contract results, B1 equivalence, live report digests, and provider gate outcomes.
-- Merge only after both initial live targets pass. If OpenAI evidence remains unavailable, leave the PR unmerged or narrow the support claim through an explicit Sol Max decision; do not imply live OpenAI validation.
+- Merge after the Ollama live target passes and the explicit Ollama-only support decision is reflected consistently in the README, evidence guide, bilingual docs, design, and master plan. Do not imply live OpenAI validation.
 - Rebase-merge, verify the merged tree matches the reviewed tree, and delete the feature branch.
