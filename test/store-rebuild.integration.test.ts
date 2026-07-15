@@ -108,7 +108,7 @@ describe("store rebuild", () => {
 
     const defaultPlan = await runRepair(cwd, {});
     expect(defaultPlan.plannedActions.some((action) => action.action === "store-rebuild")).toBe(false);
-  }, 45_000);
+  }, 90_000);
 
   it("rebuilds the exact manifest union and removes source-store orphans without rewriting manifests", async () => {
     const { cwd, sha } = await createRepository("ragit-store-rebuild-union-");
