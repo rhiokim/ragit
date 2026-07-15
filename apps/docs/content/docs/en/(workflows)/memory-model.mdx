@@ -81,16 +81,24 @@ stable knowledge
    |
    +--> memory promote --------------------> decisions/ glossary/ plans
                                               |
-                                              +--> ingest --> searchable snapshot hits
+                                              +--> review + git commit
+                                                       |
+                                                       +--> ingest --> searchable snapshot hits
 ```
 
 ## How Commands Map
 
 - `memory wrap` records the state of the work you want to resume. It writes session history and refreshes the current working state.
 - `memory recall` reconstructs the smallest useful packet for continuing work. It starts from what is active now in working memory and then supplements it with relevant snapshot-scoped retrieval results rather than replaying the full past.
-- `memory promote` turns stable knowledge into searchable documents. It is how an important conclusion stops being a session detail and becomes project memory. In the current MVP, promoted documents are ingested immediately when `HEAD` is available.
+- `memory promote` turns stable knowledge into durable documents. It is how an important conclusion stops being a session detail and becomes project memory. Promotion does not ingest those new worktree files: review them, commit them, and then run `ragit ingest --all` for the first snapshot or a supported incremental ingest after a trusted base exists.
 
 The key idea is that wrap is for continuity, recall is for restoration, and promote is for crystallization.
+
+## When Exact Snapshot Retrieval Is Unavailable
+
+`memory recall` is the only read path that may degrade. If the exact HEAD manifest or canonical store cannot be used, recall returns `snapshotSha: null`, sets `snapshot.status` to `unavailable`, and includes the operational error code in `warnings`.
+
+The degraded packet uses only working memory and reviewed artifact-derived content. Ranking is keyword-, authority-, and recency-based with no embedding or canonical-store call. It must not be interpreted as snapshot-backed durable knowledge. `query` and `context pack` remain strict and fail instead of taking this degraded path.
 
 ## A Simple Example
 
@@ -100,7 +108,7 @@ You use `memory wrap` to save the current goal, the rule that snapshot contracts
 
 The next morning, you do not want to reread every note. You use `memory recall`. RAGit pulls the current working state and combines it with relevant retrieved knowledge, such as earlier decisions about auth boundaries or plans stored in the repository. You get a recall packet that tells you where to restart.
 
-Later, once a rule becomes stable, such as “refresh token handling must remain outside snapshot mutation,” you use `memory promote`. That rule becomes a durable document in `docs/memory/**`, where future sessions can search it like any other project knowledge.
+Later, once a rule becomes stable, such as “refresh token handling must remain outside snapshot mutation,” you use `memory promote`. That rule becomes a durable document in `docs/memory/**`. After review, commit, and ingest, future sessions can search it like any other project knowledge.
 
 ## Common Misunderstandings
 

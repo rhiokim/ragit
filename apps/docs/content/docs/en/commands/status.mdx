@@ -6,7 +6,7 @@ command_path: status
 
 ## What It Does
 
-`status` prints the current repository state that matters to RAGit: branch, HEAD, backend, manifest count, knowledge readiness, event-ledger activity, the split between the configured embedding profile and the persisted store contract, the active embedding-cache namespace summary, and the current security posture summary.
+`status` prints the current repository state that matters to RAGit: branch, HEAD, exact current-HEAD snapshot readiness, backend, historical manifest count, knowledge readiness, event-ledger activity, embedding/store/cache state, and security posture.
 
 ## When To Use / When Not To Use
 
@@ -35,7 +35,9 @@ pnpm ragit status [--format text|json|both] [--cwd <path>]
 ## Input And Output Contract
 
 - There is no positional input and no JSON payload input.
-- JSON output includes `branch`, `head`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `events`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.cache`, `embedding.ready`, `embedding.needsMigration`, `security`, and `format`.
+- JSON output includes `branch`, `head`, `snapshot`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `events`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.cache`, `embedding.ready`, `embedding.needsMigration`, `security`, and `format`.
+- `snapshot.status` is `missing` when HEAD or its exact manifest is absent, `invalid` for malformed/mismatched/future manifests, `store-unavailable` for a valid exact manifest without a usable canonical store, and `indexed` only when both exact manifest and store are usable.
+- `zvec.searchReady` and `knowledge.durableReady` are true only for `snapshot.status: indexed`. The `manifests` count is historical context and an unrelated manifest never makes the current HEAD ready.
 - `embedding.cache` reports `enabled`, `dir`, `namespaceId`, `entryCount`, `batchPolicy`, `retryPolicy`, `writable`, and `namespaceReadable`.
 - `security` reports `maskingConfigured`, `remoteEmbeddingPolicy`, `providerEgressClass`, `outputRemasking`, `quarantineEntries`, `lastAuditAt`, and `legacyUnsafeState`.
 - Agents should usually call `--format json`.
@@ -57,7 +59,9 @@ pnpm ragit status --format json
 ## Failures And Cautions
 
 - `status` is a summary, not a repair command.
-- A loaded store does not guarantee that your latest docs are indexed. Run <a href="/en/docs/commands/ingest">`ingest`</a> after content changes.
+- `status` exits successfully for all four snapshot diagnostic states and does not call an embedding provider to determine readiness.
+- Detached HEAD is reported with `branch: null`; an unborn repository uses `head: null`. Dirty worktree metadata does not invalidate an otherwise usable committed snapshot.
+- A loaded store does not guarantee that your exact current HEAD is indexed. Commit intended document changes, then run <a href="/en/docs/commands/ingest">`ingest`</a>.
 - Event counters reflect append-only operational ledger activity, not snapshot semantic deltas. Use <a href="/en/docs/commands/timeline">`timeline`</a> when you need the detailed time axis.
 - When `embedding.needsMigration=true`, change the store with <a href="/en/docs/commands/migrate/embeddings">`migrate embeddings`</a> before running write paths against the new provider contract.
 - When `embedding.cache.enabled=false` while cache is expected, inspect <a href="/en/docs/commands/doctor">`doctor`</a> for `embedding.cache-dir` and `embedding.cache-namespace`.

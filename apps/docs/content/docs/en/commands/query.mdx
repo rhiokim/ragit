@@ -6,7 +6,7 @@ command_path: query
 
 ## What It Does
 
-`query` searches indexed repository knowledge and returns matching hits for a question. It uses the shared retrieval planner/executor, but stays snapshot-scoped, so the answer is still tied to the chosen commit state.
+`query` searches indexed repository knowledge and returns matching hits for a question. It requires the validated manifest and canonical store for the exact requested commit before embedding the question, so the answer cannot silently come from another snapshot.
 
 ## When To Use / When Not To Use
 
@@ -36,7 +36,7 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
 - `--input <path|->`: Provide a JSON payload with `question`, `topK`, and optional `at`.
 - `--top-k <n>`: Control how many hits to return.
 - `--scope durable|session|harness|evidence|all`: Choose whether to search the durable snapshot only, explicit artifact scopes, or both.
-- `--at <sha>`: Query a specific snapshot SHA or prefix.
+- `--at <sha>`: Query `HEAD`, a full commit SHA, or a unique hexadecimal commit prefix. Branch names, tags, and revision expressions are not accepted.
 - `--view minimal|default|full`: Choose how much hit detail to project.
 - `--format text|json|both`: Choose the output form.
 - `--cwd <path>`: Run against another repository.
@@ -54,8 +54,8 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
 }
 ```
 
-- JSON output returns `query`, `snapshotSha`, and `hits`.
-- JSON output also returns `redactionSummary`.
+- JSON output returns `query`, `snapshotSha`, `snapshot`, `hits`, `warnings`, and `redactionSummary`.
+- `snapshot` reports `requestedRef`, `resolvedSha`, `selection`, `status`, `branch`, `detached`, and `worktreeDirty`. On success, `snapshotSha` always equals `snapshot.resolvedSha`.
 - Each hit can carry artifact-aware metadata such as `scope`, `originType`, `artifactId`, `artifactKind`, `authority`, and `confidence` when the indexed chunk originated from reviewed artifact material inside the snapshot.
 - Output is always re-masked before printing or JSON projection.
 - `--view minimal` returns the smallest useful hit shape.
@@ -80,9 +80,13 @@ pnpm ragit query --input query.json --view minimal --format json
 
 - Do not mix `--input` with positional `question`, `--top-k`, or `--at`.
 - If `question` is empty, the command fails.
+- With no `--at`, `query` loads only the exact current HEAD manifest. Any supplied `--at`, including `--at HEAD`, is reported as an explicit exact selection.
+- A nearest indexed ancestor in error details is a recovery hint only and is never queried automatically.
+- Dirty worktree reads use the committed snapshot, exclude uncommitted changes, and include a warning.
+- Invalid references exit `2`; a missing exact snapshot or unavailable store exits `3`; corrupt or unsupported manifests exit `4`. Typed failures use the stable CLI failure envelope.
 - `query` never reads working memory.
 - With `--scope durable`, it stays snapshot-only.
-- With `--scope session|harness|evidence|all`, it can merge explicit artifact/evidence overlays, but still returns sanitized output.
+- With `--scope session|harness|evidence|all`, it can merge explicit artifact/evidence overlays only after exact snapshot selection succeeds, and still returns sanitized output.
 
 ## Related Commands
 

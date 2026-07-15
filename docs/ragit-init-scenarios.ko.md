@@ -234,15 +234,22 @@
 ## `init`와 `ingest`의 경계
 
 `init`은 저장소 운영 모델을 준비합니다.
-`ingest`는 searchable knowledge를 준비합니다.
+`ingest`는 커밋된 저장소 상태에서 searchable knowledge를 준비합니다. 생성되거나 수정된 기초 문서는 먼저 검토하고 커밋해야 하며, 관련 문서 후보가 dirty 상태이면 apply mode는 실패합니다.
 
 운영 순서:
 
-1. `pnpm ragit init`
-2. `pnpm ragit hooks install`
-3. `pnpm ragit ingest --all`
+```bash
+ragit init
+git add AGENTS.md docs .ragit/config.toml .gitignore
+git commit -m "initialize ragit knowledge"
+ragit ingest --all
+ragit status --format json
+ragit query "project goal" --format json
+```
+
+생성된 초안은 staging 전에 검토하십시오. 선택한 init 정책이 `.ragit/config.toml`을 ignore한다면 해당 정책이 추적 대상으로 유지하는 저장소 파일만 staging하고, ignore된 runtime state를 강제로 추가하지 마십시오. Managed hook은 첫 ingest 성공 이후에 선택적으로 설치합니다.
 
 해석 규칙:
 
 - `init` 이후 상태는 **diagnosed + foundation-ready + zvec-store-ready**
-- `ingest` 이후 상태는 **search-ready**
+- 의도한 문서를 커밋하고 정확한 HEAD ingest가 성공한 뒤에야 저장소는 **해당 커밋에 대해 search-ready** 상태가 됩니다.

@@ -6,7 +6,7 @@ command_path: ingest
 
 ## 무엇을 하는 명령인가
 
-`ingest`는 지원되는 문서를 스캔하고 canonical store에 임베딩과 레코드를 기록한 뒤, 현재 커밋에 결속된 snapshot manifest를 생성합니다.
+`ingest`는 커밋된 저장소 상태에서 지원되는 문서를 스캔하고 canonical store에 임베딩과 레코드를 기록한 뒤, 정확한 현재 커밋에 결속된 snapshot manifest를 생성합니다.
 
 persist 이전에는 admission control이 먼저 실행됩니다. implicit selector(`--all`, `--since`, 관리형 hook 기반 ingest)는 설정된 문서 표면만 따르고, explicit selector(`--files`, `--path`, JSON `paths[]`)는 include 규칙을 우회할 수 있어도 admission 검사는 우회할 수 없습니다.
 
@@ -14,7 +14,7 @@ persist 이전에는 admission control이 먼저 실행됩니다. implicit selec
 
 ### 언제 쓰는가
 
-- 신규 프로젝트 onboarding 중이라면 먼저 <a href="/ko/docs/getting-started">Getting Started</a>를 읽고, `init` 이후에 `ingest`를 실행하십시오.
+- 신규 프로젝트 onboarding 중이라면 먼저 <a href="/ko/docs/getting-started">Getting Started</a>를 읽고, `init`이 만든 문서를 검토하고 커밋한 뒤 `ingest`를 실행하십시오.
 - 프로젝트 문서를 추가하거나 변경해서 검색 결과에 반영하고 싶을 때
 - `docs/memory/**`에 장기기억 문서를 승격한 뒤 검색 가능하게 만들고 싶을 때
 - 실제 변경 전에 어떤 파일이 인덱싱될지 미리 보고 싶을 때
@@ -28,15 +28,18 @@ persist 이전에는 admission control이 먼저 실행됩니다. implicit selec
 
 ```bash
 pnpm ragit ingest \
-  [--all | --since <sha> | --files <glob> | --input <path|->] \
+  [--all | --since <sha> | --files <glob> | --path <repo-path>... | --input <path|->] \
+  [--scope durable|all] \
   [--dry-run] [--format text|json|both]
 ```
 
 ## 인자와 옵션
 
 - `--all`: 전체 지원 문서를 인덱싱합니다.
-- `--since <sha>`: 특정 커밋 이후 변경분만 인덱싱합니다.
+- `--since <sha>`: 정확히 인덱싱된 base 이후의 커밋된 변경분만 인덱싱합니다. Base는 `HEAD`, full SHA, unique hexadecimal prefix 중 하나로 해석되어야 하며 현재 HEAD의 ancestor여야 합니다.
 - `--files <glob>`: 특정 glob만 대상으로 인덱싱합니다.
+- `--path <repo-path>`: 저장소 상대 Markdown 경로를 정확히 지정합니다. 여러 경로에는 옵션을 반복합니다.
+- `--scope durable|all`: durable 문서만 포함하거나 bind 가능한 artifact까지 포함합니다.
 - `--input <path|->`: 플래그 대신 구조화된 JSON payload를 전달합니다.
 - `--dry-run`: store와 manifest를 쓰지 않고 계획만 검증합니다.
 - `--format text|json|both`: 출력 형식을 선택합니다.
@@ -49,14 +52,15 @@ pnpm ragit ingest \
 
 ```json
 {
-  "all": false,
-  "since": "HEAD~1",
-  "files": "docs/**/*.md"
+  "since": "0123456789abcdef0123456789abcdef01234567",
+  "scope": "durable"
 }
 ```
 
-- JSON 출력에는 `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`, `admission`이 포함됩니다.
-- `--dry-run`은 같은 계획면을 반환하되 실제 변경은 하지 않습니다.
+- Selector가 없으면 full `--all` ingest처럼 동작하며 incremental base를 사용하지 않습니다.
+- `--since`는 정확한 base manifest를 요구합니다. Partial `--files` 또는 `--path` ingest는 exact HEAD manifest를 우선 사용하고, 없으면 exact parent manifest를 사용하며, latest 또는 nearest snapshot으로 fallback하지 않습니다.
+- JSON 출력에는 `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`, `dirtyCandidates`, `wouldFail`, `fullSnapshot`, `scope`, `admission`, `docAuthority`, `warnings`가 포함됩니다.
+- `--dry-run`은 exit `0`으로 계획을 반환하고 persistent write를 수행하지 않습니다. 관련 worktree 문서가 dirty 상태이면 모든 차단 경로를 `dirtyCandidates`에 담고 `wouldFail: true`를 설정합니다.
 - `security.admission_mode=enforce`에서는 blocked implicit candidate는 skip되고, blocked explicit candidate는 apply가 실패합니다.
 
 ## 대표 사용 예시
@@ -77,6 +81,8 @@ pnpm ragit ingest --input ingest.json --dry-run --format json
 
 - `--input`과 선택 플래그를 한 호출에 섞으면 안 됩니다.
 - 잘못된 glob나 안전하지 않은 경로 패턴은 인덱싱 전에 거부됩니다.
+- Apply mode는 관련 문서가 modified, deleted, untracked 상태이면 content read, embedding, store write, artifact binding, manifest publication, ledger write 전에 exit `3`의 `INGEST_CANDIDATES_DIRTY`를 반환합니다. 의도한 상태를 커밋하고 다시 실행하십시오.
+- 정확한 base가 없으면 exit `3`의 `INGEST_BASE_NOT_INDEXED`, `--since` base가 ancestor가 아니면 exit `2`의 `INGEST_BASE_NOT_ANCESTOR`를 반환합니다. Base manifest가 corrupt 또는 future schema이면 해당 exit-`4` manifest error를 유지합니다.
 - `.ragit/memory/**` control plane 파일은 searchable corpus가 아니므로 `ingest` 대상이 아닙니다.
 - `--all`과 `--since`는 저장소 전체가 아니라 설정된 implicit doc surface(`doc_globs/include/exclude`)만 후보로 사용합니다.
 

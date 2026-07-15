@@ -6,7 +6,7 @@ command_path: harness promote
 
 ## What It Does
 
-`harness promote` turns reviewed harness artifacts into durable `docs/harness/**` documents and can trigger targeted ingest when `HEAD` is available.
+`harness promote` turns reviewed harness artifacts into durable `docs/harness/**` documents. It reports `ingested: false`; review and commit the generated documents before running ingest.
 
 ## Syntax
 
@@ -19,4 +19,5 @@ pnpm ragit harness promote --input <path|-> \
 
 - Only `reviewed` harness artifacts can be promoted.
 - `promote` writes durable docs. It is not execution.
+- A successful apply warns you to commit the generated docs and run `ragit ingest --all` for the first snapshot or a supported incremental ingest after a trusted base exists.
 - Use <a href="/en/docs/commands/harness/run">`harness run`</a> when you want operational evidence instead of durable docs.

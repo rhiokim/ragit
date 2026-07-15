@@ -6,7 +6,7 @@ command_path: context pack
 
 ## What It Does
 
-`context pack` turns retrieved knowledge into a bounded packet for a specific goal. It uses the same retrieval planner/executor as `query`, then applies budget-based trimming for the next agent prompt.
+`context pack` turns retrieved knowledge into a bounded packet for a specific goal. It uses the same strict exact-snapshot selection and store validation as `query`, then applies budget-based trimming for the next agent prompt.
 
 ## When To Use / When Not To Use
 
@@ -37,7 +37,7 @@ pnpm ragit context pack [goal] [--input <path|->] \
 - `--input <path|->`: Provide a JSON payload with `goal`, optional `budget`, and optional `at`.
 - `--budget <tokens>`: Token budget for the selected packet.
 - `--scope durable|session|harness|evidence|all`: Choose whether the packet is built from durable snapshot knowledge only or from explicit artifact scopes too.
-- `--at <sha>`: Use a specific snapshot instead of the current HEAD state.
+- `--at <sha>`: Use `HEAD`, a full commit SHA, or a unique hexadecimal commit prefix. Branch names, tags, and revision expressions are not accepted.
 - `--view minimal|default|full`: Control how much detail is projected into the packet.
 - `--format text|json|both`: Choose text, JSON, or both.
 - `--cwd <path>`: Run against another repository.
@@ -52,7 +52,8 @@ pnpm ragit context pack [goal] [--input <path|->] \
 }
 ```
 
-- JSON output includes `goal`, `snapshotSha`, `budget`, `usedTokens`, `selectedHits`, `hits`, and `redactionSummary`.
+- JSON output includes `goal`, `snapshotSha`, `snapshot`, `budget`, `usedTokens`, `selectedHits`, `hits`, `warnings`, and `redactionSummary`.
+- `snapshot` reports `requestedRef`, `resolvedSha`, `selection`, `status`, `branch`, `detached`, and `worktreeDirty`. On success, `snapshotSha` always equals `snapshot.resolvedSha`.
 - Hit selection is not a separate search path. It is the same retrieval result, trimmed down to fit the requested budget.
 - Output is re-masked before projection, so packets stay safe for downstream agent prompts.
 - `--view minimal` is the safest default for agent context windows.
@@ -77,9 +78,12 @@ pnpm ragit context pack --input context-pack.json --view minimal --format json
 
 - Do not mix `--input` with positional `goal`, `--budget`, or `--at`.
 - An empty `goal` is rejected.
+- With no `--at`, only the exact current HEAD manifest is valid. A nearest indexed ancestor is recovery guidance and is never packed automatically.
+- Dirty worktree reads use the committed snapshot, exclude uncommitted changes, and include a warning.
+- Invalid references exit `2`; a missing exact snapshot or unavailable store exits `3`; corrupt or unsupported manifests exit `4`. Typed failures use the stable CLI failure envelope.
 - This command never includes working-memory state.
 - `--scope durable` stays snapshot-bound.
-- `--scope session|harness|evidence|all` can merge explicit artifact/evidence overlays, but the resulting packet is still sanitized before output.
+- `--scope session|harness|evidence|all` can merge explicit artifact/evidence overlays only after exact snapshot selection succeeds, and the resulting packet is still sanitized before output.
 
 ## Related Commands
 

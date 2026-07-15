@@ -43,18 +43,25 @@ pnpm ragit --help
 
 1. Install RAGit with the published CLI or your local repository checkout.
 2. Initialize the repository.
-3. Write the minimum document set for your project.
-4. Ingest the repository docs.
-5. Verify the result with `status` and `query`.
+3. Write or review the minimum document set for your project.
+4. Commit the intended repository knowledge state.
+5. Run a full ingest for that exact commit.
+6. Verify the result with `status` and `query`.
 
 ```bash
 ragit init
+git add AGENTS.md docs .ragit/config.toml .gitignore
+git commit -m "initialize ragit knowledge"
 ragit ingest --all
-ragit status
-ragit query "project goal"
+ragit status --format json
+ragit query "project goal" --format json
 ```
 
 If you use the repository-local script while developing RAGit itself, replace `ragit` with `pnpm ragit`.
+
+Review generated drafts before staging them. If the selected init policy ignores `.ragit/config.toml`, stage only the repository files that policy keeps trackable; do not force-add ignored runtime state.
+
+RAGit binds searchable knowledge to commits. Apply-mode ingest rejects relevant modified, deleted, or untracked document candidates, and read commands continue to use the committed snapshot while warning that worktree changes are excluded.
 
 ## Minimum Document Set
 
@@ -77,12 +84,15 @@ ragit hooks install
 You are ready when:
 
 - `status` shows the repository is initialized and indexed
-- `query` returns relevant chunks from the documents you just added
+- `status.data.snapshot.status` is `indexed` for the exact current HEAD
+- `query` returns relevant chunks and reports the same SHA in `snapshotSha` and `snapshot.resolvedSha`
 - your team can continue from the written docs without rereading the bootstrap steps
 
 Once the first verification passes, choose retrieval by intent: use `query` for raw indexed hits, `context pack` for a bounded packet for the next agent step, and `memory recall` when you need to resume active work with working state.
 
 If verification fails, use <a href="/en/docs/doctor">doctor</a> before changing the workflow.
+
+This workflow establishes commit-bound snapshot integrity, not complete production readiness. Exclusive ingest locking, crash recovery, retrieval evaluation, and distribution-matrix validation remain separate work.
 
 ## Next Documents
 
