@@ -22,6 +22,10 @@ if (!cliContent.startsWith("#!/usr/bin/env node")) {
   throw new Error("dist/cli.js must preserve the node shebang.");
 }
 
+if (cliContent.includes("Prebuilt binary not found") || cliContent.includes("@zvec/zvec")) {
+  throw new Error("dist/cli.js must validate the runtime before loading zvec.");
+}
+
 await access(cliPath, constants.X_OK);
 
 console.log("build contract verified");

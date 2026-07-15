@@ -43,7 +43,7 @@ const createRepository = async (prefix: string): Promise<{ cwd: string; headSha:
 };
 
 const runCli = (args: string[]): CliRunResult => {
-  const result = spawnSync("pnpm", ["exec", "tsx", "src/cli.ts", ...args], {
+  const result = spawnSync("pnpm", ["exec", "tsx", "src/cli-entry.ts", ...args], {
     cwd: REPO_ROOT,
     encoding: "utf8",
   });

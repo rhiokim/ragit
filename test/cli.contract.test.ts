@@ -12,7 +12,7 @@ const REPO_ROOT = process.cwd();
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
 const runCli = (args: string[]): string =>
-  execFileSync("pnpm", ["exec", "tsx", "src/cli.ts", ...args], {
+  execFileSync("pnpm", ["exec", "tsx", "src/cli-entry.ts", ...args], {
     cwd: REPO_ROOT,
     encoding: "utf8",
   }).trim();
@@ -429,6 +429,18 @@ Recall packets should restore active work instead of replaying raw logs.`,
         worktreeDirty: true,
       });
       expect(statusOutput.data.zvec.searchReady).toBe(true);
+      expect(statusOutput.data.runtime).toMatchObject({
+        node: {
+          minimum: "22.14.0",
+          supported: true,
+        },
+        platform: {
+          current: `${process.platform}/${process.arch}`,
+          supported: true,
+          supportedTargets: ["darwin/arm64", "linux/arm64", "linux/x64"],
+        },
+        supported: true,
+      });
       expect(statusOutput.data.events.eventCount).toBeGreaterThan(0);
       expect(statusOutput.data.embedding.cache).toBeTruthy();
       expect(typeof statusOutput.data.embedding.cache.entryCount).toBe("number");
