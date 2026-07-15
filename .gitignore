@@ -18,4 +18,5 @@ tests/
 
 AGENTS.md
 .ragit/store/
+.ragit/runtime/
 .ragit/cache/

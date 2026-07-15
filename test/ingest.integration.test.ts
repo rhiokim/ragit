@@ -5,8 +5,10 @@ import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig, writeConfig } from "../src/core/config.js";
 import { runIngest } from "../src/core/ingest.js";
-import { loadSnapshotManifest } from "../src/core/manifest.js";
+import { readIngestTransaction } from "../src/core/ingest-transaction.js";
+import { loadSnapshotManifest, snapshotManifestExists } from "../src/core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../src/core/project.js";
+import { searchKnowledge } from "../src/core/retrieval.js";
 import { acquireStoreWriteLock } from "../src/core/store-write-lock.js";
 
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -63,6 +65,15 @@ const snapshotTree = async (cwd: string, relative = ""): Promise<Array<{ path: s
   return snapshot;
 };
 
+const loadOnlyIngestTransaction = async (cwd: string) => {
+  const entries = (await readdir(resolveRagitPaths(cwd).runtimeTransactionsDir))
+    .filter((entry) => entry.endsWith(".json"));
+  if (entries.length !== 1) throw new Error(`expected one ingest transaction, found ${entries.length}`);
+  const journal = await readIngestTransaction(cwd, entries[0]!.replace(/\.json$/, ""));
+  if (journal === null) throw new Error("ingest transaction disappeared");
+  return journal;
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
   globalThis.fetch = ORIGINAL_FETCH;
@@ -77,6 +88,7 @@ describe("ingest integration", () => {
 
     await runIngest(temp, { all: true, dryRun: true });
     await expect(readFile(paths.storeWriteLockPath, "utf8")).rejects.toThrow();
+    await expect(readdir(paths.runtimeTransactionsDir)).rejects.toThrow();
 
     const lock = await acquireStoreWriteLock(temp, { command: "migrate-embeddings" });
     try {
@@ -91,6 +103,145 @@ describe("ingest integration", () => {
       await lock.release();
     }
   });
+
+  it("keeps a failed precommit journal when store writing fails", async () => {
+    const temp = await createRepository("ragit-ingest-transaction-store-write-");
+    await configureOpenAi(temp);
+    const headSha = git(temp, ["rev-parse", "HEAD"]);
+
+    await expect(
+      runIngest(temp, { all: true }, {
+        testHook: async (boundary) => {
+          if (boundary === "store-written") throw new Error("injected store-written failure");
+        },
+      }),
+    ).rejects.toThrow("injected store-written failure");
+
+    await expect(snapshotManifestExists(temp, headSha)).resolves.toBe(false);
+    await expect(loadSnapshotManifest(temp, headSha)).rejects.toMatchObject({ code: "SNAPSHOT_NOT_INDEXED" });
+    await expect(loadOnlyIngestTransaction(temp)).resolves.toMatchObject({
+      status: "failed-precommit",
+      phase: "store-written",
+      lastError: { message: "injected store-written failure" },
+    });
+  }, 20_000);
+
+  it("detects missing records after closing and reopening the store before publishing", async () => {
+    const temp = await createRepository("ragit-ingest-transaction-verify-");
+    await configureOpenAi(temp);
+    const headSha = git(temp, ["rev-parse", "HEAD"]);
+
+    await expect(
+      runIngest(temp, { all: true }, {
+        testHook: async (boundary, context) => {
+          if (boundary === "store-written") {
+            context.store!.documents.deleteSync(context.documentVersionIds[0]!);
+          }
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "INGEST_STORE_WRITE_UNVERIFIED",
+      details: { missingDocumentVersionIds: [expect.any(String)] },
+    });
+
+    await expect(snapshotManifestExists(temp, headSha)).resolves.toBe(false);
+    await expect(loadOnlyIngestTransaction(temp)).resolves.toMatchObject({
+      status: "failed-precommit",
+      phase: "store-written",
+    });
+  }, 20_000);
+
+  it("rejects a HEAD movement after store verification without publishing", async () => {
+    const temp = await createRepository("ragit-ingest-transaction-head-");
+    await configureOpenAi(temp);
+    const selectedHeadSha = git(temp, ["rev-parse", "HEAD"]);
+
+    await expect(
+      runIngest(temp, { all: true }, {
+        testHook: async (boundary) => {
+          if (boundary !== "store-verified") return;
+          await writeFile(path.join(temp, "notes.txt"), "move HEAD\n", "utf8");
+          git(temp, ["add", "--", "notes.txt"]);
+          git(temp, ["commit", "-m", "move HEAD during ingest"]);
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "REPOSITORY_STATE_CHANGED",
+      details: {
+        selectedHeadSha,
+        finalHeadSha: expect.any(String),
+      },
+    });
+
+    await expect(snapshotManifestExists(temp, selectedHeadSha)).resolves.toBe(false);
+    await expect(loadOnlyIngestTransaction(temp)).resolves.toMatchObject({
+      status: "failed-precommit",
+      phase: "store-verified",
+    });
+  }, 20_000);
+
+  it("rejects a candidate that becomes dirty after store verification", async () => {
+    const temp = await createRepository("ragit-ingest-transaction-dirty-");
+    await configureOpenAi(temp);
+    const headSha = git(temp, ["rev-parse", "HEAD"]);
+
+    await expect(
+      runIngest(temp, { all: true }, {
+        testHook: async (boundary) => {
+          if (boundary === "store-verified") {
+            await writeDoc(temp, "docs/base.spec.md", "Changed after verification", "Dirty before manifest.");
+          }
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "INGEST_CANDIDATES_DIRTY",
+      details: { dirtyCandidates: ["docs/base.spec.md"] },
+    });
+
+    await expect(snapshotManifestExists(temp, headSha)).resolves.toBe(false);
+    await expect(loadOnlyIngestTransaction(temp)).resolves.toMatchObject({
+      status: "failed-precommit",
+      phase: "store-verified",
+    });
+  }, 20_000);
+
+  it("retains a committed journal and searchable manifest after postcommit failure", async () => {
+    const temp = await createRepository("ragit-ingest-transaction-postcommit-");
+    await configureOpenAi(temp);
+    const headSha = git(temp, ["rev-parse", "HEAD"]);
+
+    await expect(
+      runIngest(temp, { all: true }, {
+        testHook: async (boundary) => {
+          if (boundary === "after-manifest") throw new Error("injected postcommit failure");
+        },
+      }),
+    ).rejects.toThrow("injected postcommit failure");
+
+    await expect(loadSnapshotManifest(temp, headSha)).resolves.toMatchObject({ commitSha: headSha });
+    await expect(searchKnowledge(temp, "Committed knowledge", { at: headSha, topK: 1 })).resolves.toMatchObject({
+      hits: [expect.objectContaining({ path: "docs/base.spec.md" })],
+    });
+    await expect(loadOnlyIngestTransaction(temp)).resolves.toMatchObject({
+      status: "failed-postcommit",
+      phase: "manifest-committed",
+      lastError: { message: "injected postcommit failure" },
+    });
+  }, 20_000);
+
+  it("completes the journal and releases the writer lock after a successful ingest", async () => {
+    const temp = await createRepository("ragit-ingest-transaction-complete-");
+    await configureOpenAi(temp);
+    const paths = resolveRagitPaths(temp);
+
+    await runIngest(temp, { all: true });
+
+    await expect(loadOnlyIngestTransaction(temp)).resolves.toMatchObject({
+      status: "completed",
+      phase: "completed",
+    });
+    await expect(readFile(paths.storeWriteLockPath, "utf8")).rejects.toThrow();
+  }, 20_000);
 
   it("uses a full base, exact indexed --since base, and the actual current parent", async () => {
     const temp = await createRepository("ragit-ingest-exact-since-");
