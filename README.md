@@ -532,7 +532,15 @@ Review the generated foundational drafts before committing them. If the selected
 - Dirty worktree reads stay pinned to the committed snapshot, exclude uncommitted content, and return a warning.
 - 1st pass: zvec vector search scoped to the snapshot manifest
 - 2nd pass: keyword score
-- Final score: `alpha * vector + (1-alpha) * keyword` (default `alpha=0.7`)
+- Retrieval subtotal in hybrid mode: `alpha * vector + (1-alpha) * keyword` (default `alpha=0.7`)
+- Artifact/evidence fallback without candidate embeddings: `1.0 * keyword`
+- Final score: `0.80 * retrieval + 0.15 * authority + 0.05 * recency`
+- Exact score ties: deterministic repository path, section, citation, then chunk ordering
+- Every hit includes a version-aware citation; `query --explain` adds the score breakdown without changing ranking
+
+```bash
+pnpm ragit query "restore auth context" --explain --view minimal --format json
+```
 
 These integrity guarantees do not by themselves establish practical production readiness. Exclusive ingest locking, crash recovery, retrieval evaluation, and the full distribution matrix remain separate workstreams.
 
