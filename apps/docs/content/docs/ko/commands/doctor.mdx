@@ -37,6 +37,7 @@ pnpm ragit doctor [--format text|json|both] [--cwd <path>]
 - positional 입력도 JSON payload 입력도 없습니다.
 - JSON 출력에는 `checks`와 `hasFailure`가 포함됩니다.
 - 하나라도 실패한 check가 있으면 결과 출력 후 non-zero code로 종료합니다.
+- 런타임 check 이름은 `node.runtime`, `zvec.platform`입니다. Node 22.14 최소 버전과 정확한 native target 매트릭스를 보고합니다.
 - embedding 관련 주요 check 이름은 `embedding.credentials`, `embedding.deprecated-fields`, `embedding.contract`, `embedding.migration-needed`, `embedding.cache-dir`, `embedding.cache-namespace`입니다.
 - 보안 관련 주요 check 이름은 `security.masking-config`, `security.output-remasking`, `security.remote-egress`, `security.quarantine-dir`, `security.legacy-control-plane`, `security.legacy-store`입니다.
 

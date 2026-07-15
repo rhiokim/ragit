@@ -105,6 +105,33 @@ try {
     "packed query snapshot.resolvedSha",
   );
 
+  const contextPack = parseJson(
+    runInstalled(["context", "pack", "packed snapshot contract", "--format", "json"]),
+    "context pack",
+  );
+  assertEqual(contextPack.ok, true, "packed context pack envelope");
+  assertEqual(contextPack.data?.snapshotSha, mainHead, "packed context pack snapshotSha");
+  assertEqual(
+    contextPack.data?.snapshot?.resolvedSha,
+    mainHead,
+    "packed context pack snapshot.resolvedSha",
+  );
+  if (!(contextPack.data?.selectedHits > 0)) {
+    throw new Error(`packed context pack selectedHits must be positive: ${contextPack.data?.selectedHits}`);
+  }
+
+  const status = parseJson(runInstalled(["status", "--format", "json"]), "status");
+  assertEqual(status.ok, true, "packed status envelope");
+  assertEqual(status.data?.snapshot?.resolvedSha, mainHead, "packed status snapshot.resolvedSha");
+  assertEqual(status.data?.snapshot?.status, "indexed", "packed status snapshot.status");
+  assertEqual(status.data?.zvec?.searchReady, true, "packed status zvec.searchReady");
+  assertEqual(status.data?.runtime?.supported, true, "packed status runtime.supported");
+  assertEqual(
+    status.data?.runtime?.platform?.current,
+    `${process.platform}/${process.arch}`,
+    "packed status runtime.platform.current",
+  );
+
   git(["switch", "-c", "divergent"]);
   await writeFile(
     smokeDocument,

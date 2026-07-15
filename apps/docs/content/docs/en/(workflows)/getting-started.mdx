@@ -12,9 +12,11 @@ If you are developing RAGit itself inside this repository, start with <a href="/
 ## Requirements
 
 - Git repository
-- Node.js 20+
+- Node.js 22.14+
 - pnpm 10+
 - A supported zvec bootstrap platform for local initialization: `darwin/arm64`, `linux/arm64`, or `linux/x64`
+
+Node 24 is covered by the compatibility lane. Windows x64 is not supported by the pinned zvec 0.2.1 runtime; unsupported targets fail before the native binding loads and report the supported matrix.
 
 ## Choose Your Install Path
 

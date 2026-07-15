@@ -4,14 +4,17 @@ export {
   canonicalStoreSummary,
   closeCanonicalStore,
   ensureZvecRuntime,
-  formatZvecPlatformSupport,
-  getZvecPlatformSupport,
   hasLegacyJsonStore,
-  isZvecPlatformSupported,
   openCanonicalStoreWithContract,
   readCanonicalStoreMeta,
   writeChunksToCanonicalStore,
   writeDocumentsToCanonicalStore,
-  zvecPlatformUnsupportedMessage,
 } from "./zvec.js";
-export type { CanonicalStore, CanonicalStoreBootstrapSummary, CanonicalStoreMeta, EmbeddingContract, ZvecPlatformSupport } from "./zvec.js";
+export type { CanonicalStore, CanonicalStoreBootstrapSummary, CanonicalStoreMeta, EmbeddingContract } from "./zvec.js";
+export {
+  formatZvecPlatformSupport,
+  getZvecPlatformSupport,
+  isZvecPlatformSupported,
+  zvecPlatformUnsupportedMessage,
+} from "./runtime.js";
+export type { ZvecPlatformSupport } from "./runtime.js";

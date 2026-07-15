@@ -27,11 +27,10 @@ import {
 import {
   bootstrapCanonicalStore,
   closeCanonicalStore,
-  formatZvecPlatformSupport,
-  getZvecPlatformSupport,
   hasLegacyJsonStore,
   readCanonicalStoreMeta,
 } from "../core/store.js";
+import { formatZvecPlatformSupport, getRagitRuntimeSupport } from "../core/runtime.js";
 import { inspectStoreWriteLock } from "../core/store-write-lock.js";
 import { resolveRepositoryContext, type SnapshotMetadata } from "../core/snapshot.js";
 
@@ -94,6 +93,7 @@ export interface StatusResult {
   branch: string | null;
   head: string | null;
   snapshot: SnapshotMetadata;
+  runtime: ReturnType<typeof getRagitRuntimeSupport>;
   backend: string;
   zvec: {
     status: "missing" | "loaded";
@@ -272,6 +272,7 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
     branch: context.branch,
     head: context.headSha,
     snapshot,
+    runtime: getRagitRuntimeSupport(),
     backend: config.storage.backend,
     zvec: {
       status: zvecStatus,
@@ -481,10 +482,15 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
     }
   })();
   try {
-    const support = getZvecPlatformSupport();
+    const support = getRagitRuntimeSupport();
+    checks.push({
+      name: "node.runtime",
+      ok: support.node.supported,
+      detail: `${support.node.current} (minimum: >=${support.node.minimum})`,
+    });
     checks.push({
       name: "zvec.platform",
-      ok: support.supported,
+      ok: support.platform.supported,
       detail: formatZvecPlatformSupport(),
     });
   } catch (error) {

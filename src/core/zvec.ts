@@ -5,7 +5,16 @@ import * as zvecBinding from "@zvec/zvec";
 import type { ZVecCollection, ZVecFieldSchema, ZVecVectorSchema } from "@zvec/zvec";
 import { zeroVector } from "./embedding.js";
 import { resolveRagitPaths } from "./project.js";
+import { isZvecPlatformSupported, zvecPlatformUnsupportedMessage } from "./runtime.js";
 import { ChunkRecord, DocumentRecord, RagitConfig } from "./types.js";
+
+export {
+  formatZvecPlatformSupport,
+  getZvecPlatformSupport,
+  isZvecPlatformSupported,
+  zvecPlatformUnsupportedMessage,
+} from "./runtime.js";
+export type { ZvecPlatformSupport } from "./runtime.js";
 
 const runtimeBinding = ((zvecBinding as typeof zvecBinding & { default?: typeof zvecBinding }).default ??
   zvecBinding) as typeof zvecBinding;
@@ -25,7 +34,6 @@ type ZVecCollectionSchemaInstance = InstanceType<typeof zvecBinding.ZVecCollecti
 
 const STORE_LAYOUT_VERSION = 1;
 const STORE_SCHEMA_VERSION = 2;
-const SUPPORTED_ZVEC_TARGETS = ["darwin/arm64", "linux/arm64", "linux/x64"] as const;
 
 export interface EmbeddingContract {
   provider: RagitConfig["embedding"]["provider"];
@@ -69,12 +77,6 @@ interface CanonicalStorePaths {
 
 let runtimeInitialized = false;
 
-export interface ZvecPlatformSupport {
-  current: string;
-  supported: boolean;
-  supportedTargets: readonly string[];
-}
-
 const fileExists = async (target: string): Promise<boolean> => {
   try {
     await access(target, constants.F_OK);
@@ -102,27 +104,6 @@ const resolveCanonicalStorePaths = (cwd: string, customStoreDir?: string): Canon
     chunksCollectionDir: path.join(storeDir, "chunks"),
   };
 };
-
-export const getZvecPlatformSupport = (platform = process.platform, arch = process.arch): ZvecPlatformSupport => {
-  const current = `${platform}/${arch}`;
-  return {
-    current,
-    supported: SUPPORTED_ZVEC_TARGETS.includes(current as (typeof SUPPORTED_ZVEC_TARGETS)[number]),
-    supportedTargets: SUPPORTED_ZVEC_TARGETS,
-  };
-};
-
-export const formatZvecPlatformSupport = (platform = process.platform, arch = process.arch): string => {
-  const support = getZvecPlatformSupport(platform, arch);
-  if (support.supported) return support.current;
-  return `${support.current} unsupported (supported: ${support.supportedTargets.join(", ")})`;
-};
-
-export const zvecPlatformUnsupportedMessage = (platform = process.platform, arch = process.arch): string =>
-  `현재 플랫폼에서는 zvec를 지원하지 않습니다: ${formatZvecPlatformSupport(platform, arch)}`;
-
-export const isZvecPlatformSupported = (platform = process.platform, arch = process.arch): boolean =>
-  getZvecPlatformSupport(platform, arch).supported;
 
 export const ensureZvecRuntime = (): void => {
   if (!isZvecPlatformSupported()) {

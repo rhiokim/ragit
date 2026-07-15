@@ -13,7 +13,7 @@ const REPO_ROOT = process.cwd();
 const git = (cwd: string, args: string[]): string => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
 const runCli = (args: string[]): string =>
-  execFileSync("pnpm", ["exec", "tsx", "src/cli.ts", ...args], {
+  execFileSync("pnpm", ["exec", "tsx", "src/cli-entry.ts", ...args], {
     cwd: REPO_ROOT,
     encoding: "utf8",
   }).trim();

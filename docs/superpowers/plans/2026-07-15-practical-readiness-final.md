@@ -40,7 +40,7 @@ Terra must not tune retrieval weights, revise thresholds, widen provider or MCP 
 | B2 | Complete | Citations and score explanations | PR #23 merged; citations stable; explanations opt-in; B1 rankings unchanged |
 | B3 | Complete | Context Pack v2 | PR #24 merged; strict budget, deterministic citation dedupe, source diversity, additive selection telemetry |
 | B4 | Complete | Production embedding evidence | Ollama `nomic-embed-text` passed live gates; OpenAI remains recognized but explicitly outside production support |
-| C | Pending | Distribution matrix | Packed CLI installs and completes E2E on every declared Node/OS/architecture target |
+| C | In progress | Distribution matrix | Packed CLI installs and completes E2E on every declared Node/OS/architecture target |
 | D | Pending | Read-only MCP projection | Query, context pack, and status are reachable over stdio with no write-capable path |
 | E | Pending | Release and registry verification | Release PR, trusted publish, clean registry install, provenance and smoke verification |
 
@@ -100,18 +100,18 @@ The provider facade, batching, retry schedule, timeout, cache namespace, and mig
 
 ### Current gap
 
-The package pins `@zvec/zvec@0.2.1` and RAGit's runtime allow-list currently names macOS ARM64 plus Linux ARM64/x64. Current upstream zvec documentation also lists Windows x64. The supported matrix must be proved from the packed tarball rather than inferred from a dependency README.
+The package pins `@zvec/zvec@0.2.1`, whose optional native packages cover macOS ARM64 plus Linux ARM64/x64. Node 20 is end-of-life, and the static zvec import can currently fail before RAGit reports its own runtime policy. The supported matrix must be proved from the packed tarball rather than inferred from a dependency README.
 
 ### Scope
 
 1. Add a PR CI workflow with:
-   - Node 20.19 minimum, Node 22 LTS, and Node 24;
-   - Linux x64, Linux ARM64, macOS ARM64, and Windows x64 candidates;
+   - Node `22.14.0` minimum and Node 24 compatibility;
+   - Linux x64, Linux ARM64, and macOS ARM64;
    - frozen install, unit/contract tests, build verification, pack verification, and installed-CLI E2E.
 2. Run the tarball smoke through `init → commit → ingest → query → context pack → status`.
 3. Test upgrade from the currently published package and reopen existing stores.
-4. Declare only targets that pass. Unsupported targets must fail early with an accurate diagnostic.
-5. If the pinned zvec version blocks a desired target, evaluate a zvec upgrade as an explicit compatibility change with store-schema, query, migration, and benchmark gates. Do not upgrade opportunistically.
+4. Declare only targets that pass. Windows x64 and every other unsupported target must fail before zvec binding import with an accurate diagnostic.
+5. Keep zvec 0.2.1 in C. Evaluate zvec 0.5 and Windows support only in a separate compatibility change with store-schema, query, migration, and benchmark gates.
 
 ### Exit
 
