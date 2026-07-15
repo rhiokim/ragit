@@ -51,11 +51,45 @@ Agent-oriented flow:
 pnpm ragit config set ingest.supported_types '["adr","spec"]'
 ```
 
+## Embedding Provider Setup
+
+RAGit recognizes exactly these provider/model profiles:
+
+| Provider | Model | Dimensions |
+| --- | --- | --- |
+| `openai` | `text-embedding-3-small` | 1536 |
+| `openai` | `text-embedding-3-large` | 3072 |
+| `ollama` | `nomic-embed-text` | 768 |
+| `ollama` | `mxbai-embed-large` | 1024 |
+
+Recognition does not make a profile evidence-backed or production-supported. The deterministic `local-placeholder/placeholder-v1` profile has 64 dimensions and is for offline development/regression only; its benchmark reports are `developmentOnly: true`, not production-quality evidence.
+
+For OpenAI, make `OPENAI_API_KEY` available in the command environment before ingest or migration. It is environment-only: RAGit has no API-key config key or CLI argument, and credentials must not be committed or persisted. Configure the initial OpenAI target as follows:
+
+```bash
+pnpm ragit config set embedding.provider openai
+pnpm ragit config set embedding.model text-embedding-3-small
+```
+
+The credential-free default OpenAI provider root is `https://api.openai.com`; RAGit appends `/v1/embeddings`. A compatible custom gateway can set `embedding.base_url`, but this value is a provider root, not the final embeddings endpoint. It must be an absolute `http` or `https` URL with no username, password, query, or fragment; trailing slashes are normalized away. Never put a credential in `embedding.base_url`.
+
+For loopback Ollama, first make the exact model available locally:
+
+```bash
+ollama pull nomic-embed-text
+pnpm ragit config set embedding.provider ollama
+pnpm ragit config set embedding.model nomic-embed-text
+pnpm ragit config set embedding.base_url http://127.0.0.1:11434
+```
+
+RAGit appends `/api/embed` for Ollama. Only `localhost`, `127.0.0.1`, and `::1` roots are reported as `ollama-local`; any non-loopback root is reported as `custom`.
+
 ## Failures And Cautions
 
 - Invalid keys or invalid values fail before the config file is written.
 - For real providers, use `embedding.provider`, `embedding.model`, `embedding.base_url`, `embedding.timeout_ms`, `embedding.cache_enabled`, and `embedding.cache_dir` as the supported knobs. `embedding.dimensions` and `embedding.version` are legacy-only and only remain meaningful for `local-placeholder`.
 - Changing the target embedding provider does not rewrite the persisted store contract by itself. Follow up with <a href="/en/docs/commands/migrate/embeddings">`migrate embeddings`</a> when `status` reports `embedding.needsMigration=true`.
+- A requested production provider never silently falls back to `local-placeholder`. Inspect `status`, then follow the migration preview/apply flow after changing provider or model.
 - `embedding.cache_dir` must stay inside the repository root. If it points outside the repo, cache writes are disabled and <a href="/en/docs/commands/doctor">`doctor`</a> reports the config as invalid.
 - Because output is text-only, agents should validate follow-up state with <a href="/en/docs/commands/status">`status`</a>.
 
