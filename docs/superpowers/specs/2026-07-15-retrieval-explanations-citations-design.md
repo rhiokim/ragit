@@ -140,8 +140,9 @@ The query, rank, score, wall-clock time, and output view are never inputs. Sourc
 | Hit source | `sourceType` | `sourceId` | `sourceVersion` | `sourceSha` |
 | --- | --- | --- | --- | --- |
 | Snapshot document chunk | `document` | chunk ID | document version ID | chunk commit SHA |
-| Artifact body | `artifact` | artifact ID | provenance content hash | bound, source, or capture SHA |
-| Artifact evidence | `evidence` | `<artifactId>:<evidenceId>` | provenance content hash | bound, source, or capture SHA |
+| Snapshot artifact/evidence chunk | `artifact` or `evidence` from its indexed scope | chunk ID | document version ID | chunk commit SHA |
+| Explicit artifact body | `artifact` | artifact ID | provenance content hash | bound, source, or capture SHA |
+| Explicit artifact evidence | `evidence` | `<artifactId>:<evidenceId>` | provenance content hash | bound, source, or capture SHA |
 
 `sourceSha` may be `null` for an unbound working-memory artifact; the citation is still stable because artifact identity and provenance version are present. Citation IDs do not hash raw query text, source text, path text, or section titles.
 
