@@ -86,7 +86,7 @@ Cover:
 - Context Pack result includes `selection.strategy === "citation-diverse-v2"`;
 - summary counters satisfy the design equations;
 - citations remain present and score breakdowns remain absent;
-- text output includes strategy, candidate, source, duplicate, and budget-rejected counts;
+- text output includes strategy, candidate, unique-citation, selected-source, duplicate, and budget-rejected counts;
 - raw JSON and positional fractional budgets are rejected;
 - no-fit budget returns an empty packet plus the approved warning;
 - existing snapshot metadata and warning projection remain unchanged.
