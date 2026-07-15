@@ -3,13 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildRagitGitIgnorePlan } from "../src/core/gitignore-policy.js";
-import { ensureGitIgnoreEntries } from "../src/core/project.js";
+import { ensureGitIgnoreEntries, resolveRagitPaths } from "../src/core/project.js";
 
 describe("project helpers", () => {
   const safeEntries = [
     ".ragit/store/",
     ".ragit/store.next/",
     ".ragit/store.prev/",
+    ".ragit/runtime/",
     ".ragit/cache/",
     ".ragit/log/",
     ".ragit/reports/",
@@ -71,5 +72,14 @@ describe("project helpers", () => {
     expect(content).not.toContain(".ragit/artifacts/harness/");
     expect(content).toContain(".ragit/store/");
     expect(content).toContain(".ragit/artifacts/session/");
+  });
+
+  it("resolves local runtime paths without eagerly creating them", async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), "ragit-project-runtime-"));
+    const paths = resolveRagitPaths(temp);
+
+    expect(paths.runtimeDir).toBe(path.join(temp, ".ragit", "runtime"));
+    expect(paths.storeWriteLockPath).toBe(path.join(temp, ".ragit", "runtime", "store-write.lock"));
+    await expect(stat(paths.runtimeDir)).rejects.toThrow();
   });
 });

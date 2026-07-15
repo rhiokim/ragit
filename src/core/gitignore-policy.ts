@@ -14,6 +14,7 @@ const LOCAL_RUNTIME_ENTRIES = [
   ".ragit/store/",
   ".ragit/store.next/",
   ".ragit/store.prev/",
+  ".ragit/runtime/",
   ".ragit/cache/",
   ".ragit/log/",
   ".ragit/reports/",

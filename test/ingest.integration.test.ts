@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig, writeConfig } from "../src/core/config.js";
 import { runIngest } from "../src/core/ingest.js";
 import { loadSnapshotManifest } from "../src/core/manifest.js";
-import { ensureRagitStructure } from "../src/core/project.js";
+import { ensureRagitStructure, resolveRagitPaths } from "../src/core/project.js";
+import { acquireStoreWriteLock } from "../src/core/store-write-lock.js";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 const ORIGINAL_OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -70,6 +71,27 @@ afterEach(() => {
 });
 
 describe("ingest integration", () => {
+  it("rejects contention without acquiring a lock for dry-run", async () => {
+    const temp = await createRepository("ragit-ingest-lock-");
+    const paths = resolveRagitPaths(temp);
+
+    await runIngest(temp, { all: true, dryRun: true });
+    await expect(readFile(paths.storeWriteLockPath, "utf8")).rejects.toThrow();
+
+    const lock = await acquireStoreWriteLock(temp, { command: "migrate-embeddings" });
+    try {
+      await expect(runIngest(temp, { all: true })).rejects.toMatchObject({
+        code: "STORE_WRITE_BUSY",
+        exitCode: 3,
+        retryable: true,
+        details: { lockState: "active", owner: { token: lock.owner.token } },
+      });
+      await expect(readFile(paths.storeWriteLockPath, "utf8")).resolves.toContain(lock.owner.token);
+    } finally {
+      await lock.release();
+    }
+  });
+
   it("uses a full base, exact indexed --since base, and the actual current parent", async () => {
     const temp = await createRepository("ragit-ingest-exact-since-");
     const baseSha = git(temp, ["rev-parse", "HEAD"]);
