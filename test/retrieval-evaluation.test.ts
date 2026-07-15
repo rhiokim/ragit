@@ -1,5 +1,10 @@
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  assertRetrievalBenchmarkDatasetPaths,
+  parseRetrievalBenchmarkArgs,
+} from "../scripts/benchmark-retrieval.js";
 import {
   buildRetrievalBenchmarkReport,
   evaluateRetrievalRanking,
@@ -183,6 +188,10 @@ describe("retrieval evaluation reports and thresholds", () => {
       "maximum.relativeNoiseDrop",
       "maximum.p95LatencyMs",
     ]);
+    expect(findRetrievalBenchmarkThresholdViolations(report, { ...thresholds, datasetId: "other", profile: "other" })).toEqual([
+      "datasetId",
+      "profile",
+    ]);
   });
 
   it("rejects duplicate or incomplete observations and invalid threshold bounds", () => {
@@ -203,5 +212,38 @@ describe("retrieval evaluation reports and thresholds", () => {
       minimum: { recallAt5: 1.1, mrrAt10: 0, ndcgAt10: 0 },
       maximum: { relativeNoiseDrop: 0, p95LatencyMs: 0 },
     })).toThrow();
+  });
+});
+
+describe("retrieval benchmark runner arguments", () => {
+  it("parses only supported arguments without importing runner side effects", () => {
+    expect(parseRetrievalBenchmarkArgs([])).toEqual({
+      datasetPath: path.resolve("benchmarks/retrieval/v1/dataset.json"),
+      thresholdsPath: path.resolve("benchmarks/retrieval/v1/thresholds.json"),
+      outputPath: null,
+      verify: false,
+    });
+    expect(parseRetrievalBenchmarkArgs([
+      "--verify",
+      "--dataset", "custom-dataset.json",
+      "--thresholds", "custom-thresholds.json",
+      "--output", "reports/result.json",
+    ])).toEqual({
+      datasetPath: path.resolve("custom-dataset.json"),
+      thresholdsPath: path.resolve("custom-thresholds.json"),
+      outputPath: path.resolve("reports/result.json"),
+      verify: true,
+    });
+  });
+
+  it.each(["--dataset", "--thresholds", "--output", "--unknown"])("rejects invalid argument %s", (argument) => {
+    expect(() => parseRetrievalBenchmarkArgs([argument])).toThrow();
+  });
+
+  it("rejects paths that could escape a materialized fixture repository", () => {
+    const value = validDataset();
+    value.repositories[0]!.documents[0]!.path = "../escape.md";
+    value.repositories[0]!.topics[0]!.judgments[0]!.path = "../escape.md";
+    expect(() => assertRetrievalBenchmarkDatasetPaths(parseRetrievalBenchmarkDataset(value))).toThrow("repository-relative");
   });
 });
