@@ -31,6 +31,8 @@
     "benchmark:snapshot": "tsx scripts/benchmark-snapshot-selection.ts",
     "benchmark:retrieval": "tsx scripts/benchmark-retrieval.ts",
     "benchmark:retrieval:verify": "tsx scripts/benchmark-retrieval.ts --verify",
+    "benchmark:retrieval:openai:verify": "tsx scripts/benchmark-retrieval.ts --verify --embedding-profile openai/text-embedding-3-small --thresholds benchmarks/retrieval/v1/thresholds-openai-text-embedding-3-small.json",
+    "benchmark:retrieval:ollama:verify": "tsx scripts/benchmark-retrieval.ts --verify --embedding-profile ollama/nomic-embed-text --thresholds benchmarks/retrieval/v1/thresholds-ollama-nomic-embed-text.json",
     "release:check": "pnpm test && pnpm build && pnpm build:verify && pnpm pack:verify && pnpm pack:smoke",
     "dev": "tsx src/cli.ts",
     "test": "vitest run --pool=forks --no-isolate --maxWorkers=1 --no-file-parallelism --teardownTimeout=30000",
