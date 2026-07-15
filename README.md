@@ -218,14 +218,24 @@ git push origin --tags
 
 ## Retrieval Evaluation Benchmark
 
-Run the bundled offline benchmark or its regression gate with:
+RAGit recognizes these embedding profiles: `openai/text-embedding-3-small` (1536), `openai/text-embedding-3-large` (3072), `ollama/nomic-embed-text` (768), and `ollama/mxbai-embed-large` (1024). Recognition is not production support. A profile becomes evidence-backed only after its reproducible live report passes that profile's precommitted threshold.
+
+`local-placeholder/placeholder-v1` (64) is deterministic offline development and regression coverage only. Its reports set `developmentOnly: true` and are never production retrieval-quality evidence.
+
+Run the bundled offline regression gate with an explicit untracked output path:
 
 ```bash
-pnpm benchmark:retrieval
-pnpm benchmark:retrieval:verify
+pnpm benchmark:retrieval:verify --output /tmp/ragit-retrieval-local.json
 ```
 
-The committed corpus uses the deterministic local placeholder embedding profile. Its report sets `developmentOnly: true`: these numbers are regression evidence, not a production retrieval-quality claim. Provider-specific Ollama and OpenAI evidence is planned for B4.
+The initial live commands are opt-in. Ollama requires a loopback server with the exact model already available; OpenAI requires a locally supplied `OPENAI_API_KEY` and paid-use authorization, which the command never prints:
+
+```bash
+pnpm benchmark:retrieval:ollama:verify --output /tmp/ragit-retrieval-ollama.json
+pnpm benchmark:retrieval:openai:verify --output /tmp/ragit-retrieval-openai.json
+```
+
+The two initial live evidence targets are still pending in this workstream; neither OpenAI nor Ollama is currently evidence-backed or production-supported. Their opt-in commands, fixed gates, credential-safe report handling, endpoint classes, and evidence-record requirements are in the [retrieval benchmark evidence guide](./benchmarks/retrieval/v1/README.md). Do not commit raw live reports or credentials.
 
 ## Canonical Workflows
 

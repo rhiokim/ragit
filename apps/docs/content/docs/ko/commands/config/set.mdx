@@ -51,11 +51,45 @@ pnpm ragit config set output.format markdown
 pnpm ragit config set ingest.supported_types '["adr","spec"]'
 ```
 
+## Embedding Provider 설정
+
+RAGit은 정확히 다음 provider/model profile을 인식합니다.
+
+| Provider | Model | Dimensions |
+| --- | --- | --- |
+| `openai` | `text-embedding-3-small` | 1536 |
+| `openai` | `text-embedding-3-large` | 3072 |
+| `ollama` | `nomic-embed-text` | 768 |
+| `ollama` | `mxbai-embed-large` | 1024 |
+
+인식된다는 사실만으로 evidence-backed 또는 production-supported가 되지는 않습니다. 결정적인 `local-placeholder/placeholder-v1` profile은 64 dimensions이며 offline development/regression 전용입니다. 이 profile의 benchmark report는 `developmentOnly: true`이므로 production-quality evidence가 아닙니다.
+
+OpenAI를 사용할 때는 ingest 또는 migration 전에 명령 환경에 `OPENAI_API_KEY`가 있어야 합니다. 이 값은 environment-only입니다. RAGit에는 API key config key나 CLI argument가 없으며, 자격증명은 commit하거나 persist하면 안 됩니다. 초기 OpenAI target은 다음과 같이 설정합니다.
+
+```bash
+pnpm ragit config set embedding.provider openai
+pnpm ragit config set embedding.model text-embedding-3-small
+```
+
+자격증명이 없는 기본 OpenAI provider root는 `https://api.openai.com`이며 RAGit이 `/v1/embeddings`를 붙입니다. 호환되는 custom gateway는 `embedding.base_url`로 설정할 수 있지만, 이 값은 최종 embeddings endpoint가 아니라 provider root입니다. username, password, query, fragment가 없는 절대 `http` 또는 `https` URL이어야 하며 trailing slash는 정규화되어 제거됩니다. `embedding.base_url`에 자격증명을 넣지 마십시오.
+
+loopback Ollama를 사용할 때는 먼저 정확한 model을 로컬에서 준비합니다.
+
+```bash
+ollama pull nomic-embed-text
+pnpm ragit config set embedding.provider ollama
+pnpm ragit config set embedding.model nomic-embed-text
+pnpm ragit config set embedding.base_url http://127.0.0.1:11434
+```
+
+Ollama에서는 RAGit이 `/api/embed`를 붙입니다. `localhost`, `127.0.0.1`, `::1` root만 `ollama-local`로 보고되며 loopback이 아닌 root는 모두 `custom`으로 보고됩니다.
+
 ## 실패/주의 사항
 
 - 잘못된 key나 잘못된 value는 config 쓰기 전에 실패합니다.
 - real provider에서는 `embedding.provider`, `embedding.model`, `embedding.base_url`, `embedding.timeout_ms`, `embedding.cache_enabled`, `embedding.cache_dir`를 공식 조절면으로 보십시오. `embedding.dimensions`와 `embedding.version`은 `local-placeholder`에만 의미가 남아 있는 레거시 필드입니다.
 - target embedding provider를 바꿔도 persisted store contract는 자동으로 바뀌지 않습니다. `status`에서 `embedding.needsMigration=true`가 보이면 이어서 <a href="/ko/docs/commands/migrate/embeddings">`migrate embeddings`</a>를 실행하십시오.
+- 요청한 production provider가 `local-placeholder`로 조용히 fallback되지는 않습니다. provider 또는 model을 바꾼 뒤에는 `status`를 확인하고 migration preview/apply 흐름을 따르십시오.
 - `embedding.cache_dir`는 반드시 저장소 루트 내부를 가리켜야 합니다. 저장소 밖을 가리키면 cache 쓰기가 비활성화되고 <a href="/ko/docs/commands/doctor">`doctor`</a>가 invalid config로 보고합니다.
 - 출력이 텍스트뿐이므로, 에이전트는 후속으로 <a href="/ko/docs/commands/status">`status`</a>로 상태를 검증하는 편이 좋습니다.
 

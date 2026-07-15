@@ -40,13 +40,19 @@ pnpm ragit migrate embeddings [--dry-run] [--cwd <path>]
 
 ## Examples
 
-Preview the migration:
+After changing a provider or model, inspect the embedding state first:
+
+```bash
+pnpm ragit status --format json
+```
+
+When `embedding.needsMigration=true`, preview the migration before applying it:
 
 ```bash
 pnpm ragit migrate embeddings --dry-run
 ```
 
-Apply the migration:
+Apply only after reviewing the preview:
 
 ```bash
 pnpm ragit migrate embeddings
@@ -56,7 +62,7 @@ pnpm ragit migrate embeddings
 
 - The source store must still contain every chunk referenced by the manifests. Missing chunks fail fast.
 - The command creates `.ragit/store.next` and `.ragit/store.prev` during the swap.
-- Provider credentials are still env-only. For OpenAI, set `OPENAI_API_KEY` before apply.
+- Provider credentials are still env-only. An OpenAI apply requires `OPENAI_API_KEY` to already be present in the command environment; there is no silent fallback from a requested production provider to `local-placeholder`.
 - If `init` used the safe gitignore policy, manifests may be local-only. Share or track `.ragit/manifest/**` with the `snapshot-history` or `dogfood` policy when other machines must reproduce the same snapshot corpus.
 
 ## Related Commands
