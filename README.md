@@ -216,6 +216,17 @@ git tag "v${VERSION}"
 git push origin --tags
 ```
 
+## Retrieval Evaluation Benchmark
+
+Run the bundled offline benchmark or its regression gate with:
+
+```bash
+pnpm benchmark:retrieval
+pnpm benchmark:retrieval:verify
+```
+
+The committed corpus uses the deterministic local placeholder embedding profile. Its report sets `developmentOnly: true`: these numbers are regression evidence, not a production retrieval-quality claim. Provider-specific Ollama and OpenAI evidence is planned for B4.
+
 ## Canonical Workflows
 
 The README shows the canonical first-use workflow for RAGit.
