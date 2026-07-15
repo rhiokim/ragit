@@ -44,7 +44,7 @@ const configureOpenAi = async (cwd: string): Promise<ReturnType<typeof vi.fn>> =
   const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body)) as { input: string[] };
     return new Response(
-      JSON.stringify({ data: body.input.map(() => ({ embedding: Array(1536).fill(0.1) })) }),
+      JSON.stringify({ data: body.input.map((_text, index) => ({ index, embedding: Array(1536).fill(0.1) })) }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
   });
