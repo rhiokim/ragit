@@ -235,7 +235,7 @@ pnpm benchmark:retrieval:ollama:verify --output /tmp/ragit-retrieval-ollama.json
 pnpm benchmark:retrieval:openai:verify --output /tmp/ragit-retrieval-openai.json
 ```
 
-The two initial live evidence targets are still pending in this workstream; neither OpenAI nor Ollama is currently evidence-backed or production-supported. Their opt-in commands, fixed gates, credential-safe report handling, endpoint classes, and evidence-record requirements are in the [retrieval benchmark evidence guide](./benchmarks/retrieval/v1/README.md). Do not commit raw live reports or credentials.
+The loopback Ollama `nomic-embed-text` target is evidence-backed by a reproducible live report that passed its precommitted gates. OpenAI `text-embedding-3-small` remains pending and is not yet evidence-backed or production-supported. The opt-in commands, fixed gates, credential-safe report handling, endpoint classes, and evidence record are in the [retrieval benchmark evidence guide](./benchmarks/retrieval/v1/README.md). Do not commit raw live reports or credentials.
 
 ## Canonical Workflows
 
