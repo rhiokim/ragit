@@ -36,6 +36,8 @@ export interface RagitPaths {
   chunksCollectionDir: string;
   cacheDir: string;
   hooksDir: string;
+  runtimeDir: string;
+  storeWriteLockPath: string;
 }
 
 export const resolveRagitPaths = (cwd: string): RagitPaths => ({
@@ -67,6 +69,8 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
   chunksCollectionDir: path.join(cwd, ".ragit", "store", "chunks"),
   cacheDir: path.join(cwd, ".ragit", "cache"),
   hooksDir: path.join(cwd, ".ragit", "hooks"),
+  runtimeDir: path.join(cwd, ".ragit", "runtime"),
+  storeWriteLockPath: path.join(cwd, ".ragit", "runtime", "store-write.lock"),
 });
 
 export const ensureRagitDirectories = async (cwd: string): Promise<RagitPaths> => {

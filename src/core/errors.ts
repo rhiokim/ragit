@@ -14,6 +14,8 @@ export type RagitErrorCode =
   | "INGEST_BASE_NOT_INDEXED"
   | "INGEST_BASE_NOT_ANCESTOR"
   | "INGEST_CANDIDATES_DIRTY"
+  | "STORE_WRITE_BUSY"
+  | "STORE_WRITE_LOCK_STALE"
   | "REPOSITORY_STATE_CHANGED";
 
 export interface RagitRecovery {
@@ -71,6 +73,16 @@ export const RAGIT_ERROR_DEFINITIONS = {
     retryable: false,
   },
   INGEST_CANDIDATES_DIRTY: {
+    category: "not_ready",
+    exitCode: 3,
+    retryable: false,
+  },
+  STORE_WRITE_BUSY: {
+    category: "transient",
+    exitCode: 3,
+    retryable: true,
+  },
+  STORE_WRITE_LOCK_STALE: {
     category: "not_ready",
     exitCode: 3,
     retryable: false,

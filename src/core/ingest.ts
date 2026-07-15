@@ -21,6 +21,7 @@ import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
 import { ensureRagitStructure } from "./project.js";
+import { acquireStoreWriteLock } from "./store-write-lock.js";
 import {
   assertKnowledgeWriteSecurity,
   appendAdmissionRecord,
@@ -359,7 +360,7 @@ const appendIngestAdmissionEvent = async (
   });
 };
 
-export const runIngest = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
+const runIngestUnlocked = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
   const context = await resolveRepositoryContext(cwd);
   if (context.headSha === null) throw missingHeadForIngest();
   cwd = context.gitRoot;
@@ -681,5 +682,22 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
     };
   } finally {
     closeCanonicalStore(store);
+  }
+};
+
+export const runIngest = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
+  if (options.dryRun) return runIngestUnlocked(cwd, options);
+
+  const context = await resolveRepositoryContext(cwd);
+  if (context.headSha === null) return runIngestUnlocked(context.gitRoot, options);
+
+  const lock = await acquireStoreWriteLock(context.gitRoot, {
+    command: "ingest",
+    headSha: context.headSha,
+  });
+  try {
+    return await runIngestUnlocked(context.gitRoot, options);
+  } finally {
+    await lock.release();
   }
 };

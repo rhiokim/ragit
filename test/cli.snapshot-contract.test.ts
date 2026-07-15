@@ -8,6 +8,7 @@ import {
   resolveCliFailureContext,
 } from "../src/core/cliContract.js";
 import { RagitOperationalError } from "../src/core/errors.js";
+import { acquireStoreWriteLock } from "../src/core/store-write-lock.js";
 
 const REPO_ROOT = process.cwd();
 const cleanupPaths: string[] = [];
@@ -190,6 +191,30 @@ describe("CLI snapshot failure contract", () => {
     expect(text.stdout).toBe("");
     expect(text.stderr).toContain("INGEST_CANDIDATES_DIRTY");
     expect(text.stderr).toContain("docs/snapshot.plan.md");
+  }, 20_000);
+
+  it("projects a live store writer lock through ingest's JSON failure contract", async () => {
+    const { cwd } = await createRepository("ragit-cli-store-write-lock-");
+    const lock = await acquireStoreWriteLock(cwd, { command: "migrate-embeddings" });
+    try {
+      const result = runCli(["ingest", "--all", `--cwd=${cwd}`]);
+      expect(result.status).toBe(3);
+      expect(result.stderr).toBe("");
+      expect(parseEnvelope(result)).toMatchObject({
+        command: "ingest",
+        ok: false,
+        cwd,
+        data: null,
+        error: {
+          code: "STORE_WRITE_BUSY",
+          category: "transient",
+          retryable: true,
+          details: { lockState: "active", owner: { token: lock.owner.token } },
+        },
+      });
+    } finally {
+      await lock.release();
+    }
   }, 20_000);
 
   it("resolves command, cwd, and safe format defaults regardless of option position", async () => {
