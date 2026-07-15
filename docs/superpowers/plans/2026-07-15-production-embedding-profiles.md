@@ -15,6 +15,10 @@
 - Modify: `src/core/embedding.ts`
 - Modify: `test/embedding-batch.test.ts`
 - Modify: `test/embedding-cache.test.ts`
+- Modify: `test/embedding-execution.integration.test.ts` (add official response indexes to the existing success fixture only)
+- Modify: `test/status-snapshot.integration.test.ts` (add official response indexes to the existing success fixture only)
+- Modify: `test/memory.test.ts` (add official response indexes to the existing success fixture only)
+- Modify: `test/ingest.integration.test.ts` (add official response indexes to the existing success fixture only)
 
 **Red tests**
 
@@ -36,6 +40,7 @@
 
 ```bash
 pnpm vitest run test/embedding-batch.test.ts test/embedding-cache.test.ts
+pnpm vitest run test/embedding-execution.integration.test.ts test/status-snapshot.integration.test.ts test/memory.test.ts test/ingest.integration.test.ts
 ```
 
 ## Task 2 — Endpoint, timeout, and retry safety
