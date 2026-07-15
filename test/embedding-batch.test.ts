@@ -20,6 +20,12 @@ const createOpenAiProfile = () => {
   return resolveEmbeddingProfile(config);
 };
 
+const createOllamaProfile = () => {
+  const config = defaultConfig();
+  config.embedding.provider = "ollama";
+  return resolveEmbeddingProfile(config);
+};
+
 const parseInputs = (init?: RequestInit): string[] => {
   const body = typeof init?.body === "string" ? init.body : "";
   const parsed = JSON.parse(body) as { input: string[] | string };
@@ -32,7 +38,8 @@ const vectorForText = (text: string, dimensions: number): number[] =>
 const successResponse = (inputs: string[], dimensions: number): Response =>
   new Response(
     JSON.stringify({
-      data: inputs.map((text) => ({
+      data: inputs.map((text, index) => ({
+        index,
         embedding: vectorForText(text, dimensions),
       })),
     }),
@@ -41,6 +48,17 @@ const successResponse = (inputs: string[], dimensions: number): Response =>
       headers: { "content-type": "application/json" },
     },
   );
+
+const providerResponse = (body: unknown): Response =>
+  ({
+    ok: true,
+    json: async () => body,
+  }) as Response;
+
+const providerBody = (provider: "openai" | "ollama", vectors: unknown[]): unknown =>
+  provider === "openai"
+    ? { data: vectors.map((embedding, index) => ({ index, embedding })) }
+    : { embeddings: vectors };
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -120,6 +138,124 @@ describe("embedding batching and retry", () => {
       retryable: false,
     });
     expect(calls).toBe(1);
+  });
+
+  it("restores OpenAI input order from response indexes", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const profile = createOpenAiProfile();
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      const inputs = parseInputs(init);
+      return providerResponse({
+        data: inputs
+          .map((text, index) => ({ index, embedding: vectorForText(text, profile.dimensions) }))
+          .reverse(),
+      });
+    }) as typeof fetch;
+
+    await expect(embedTexts(["alpha", "beta"], profile)).resolves.toEqual([
+      vectorForText("alpha", profile.dimensions),
+      vectorForText("beta", profile.dimensions),
+    ]);
+  });
+
+  it.each([
+    ["missing", (dimensions: number) => [{ index: 0, embedding: vectorForText("alpha", dimensions) }, { embedding: vectorForText("beta", dimensions) }]],
+    ["duplicate", (dimensions: number) => [{ index: 0, embedding: vectorForText("alpha", dimensions) }, { index: 0, embedding: vectorForText("beta", dimensions) }]],
+    ["fractional", (dimensions: number) => [{ index: 0, embedding: vectorForText("alpha", dimensions) }, { index: 0.5, embedding: vectorForText("beta", dimensions) }]],
+    ["negative", (dimensions: number) => [{ index: 0, embedding: vectorForText("alpha", dimensions) }, { index: -1, embedding: vectorForText("beta", dimensions) }]],
+    ["out-of-range", (dimensions: number) => [{ index: 0, embedding: vectorForText("alpha", dimensions) }, { index: 2, embedding: vectorForText("beta", dimensions) }]],
+  ])("rejects OpenAI %s response indexes", async (_kind, entries) => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const profile = createOpenAiProfile();
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls += 1;
+      return providerResponse({ data: entries(profile.dimensions) });
+    }) as typeof fetch;
+
+    await expect(embedTexts(["alpha", "beta"], profile)).rejects.toMatchObject({
+      code: "RESPONSE_INVALID",
+      retryable: false,
+    });
+    expect(calls).toBe(1);
+  });
+
+  for (const provider of ["openai", "ollama"] as const) {
+    it.each([1, 3])(`rejects ${provider} batches with %i vectors for two inputs`, async (count) => {
+      if (provider === "openai") process.env.OPENAI_API_KEY = "test-key";
+      const profile = provider === "openai" ? createOpenAiProfile() : createOllamaProfile();
+      globalThis.fetch = vi.fn(async () =>
+        providerResponse(
+          providerBody(
+            provider,
+            Array.from({ length: count }, (_, index) => vectorForText(`vector-${index}`, profile.dimensions)),
+          ),
+        )) as typeof fetch;
+
+      await expect(embedTexts(["alpha", "beta"], profile)).rejects.toMatchObject({
+        code: "RESPONSE_INVALID",
+        retryable: false,
+      });
+    });
+
+    it.each(["string", null, true, Number.NaN, Number.POSITIVE_INFINITY])(
+      `rejects ${provider} non-finite or non-number vector values`,
+      async (invalidValue) => {
+        if (provider === "openai") process.env.OPENAI_API_KEY = "test-key";
+        const profile = provider === "openai" ? createOpenAiProfile() : createOllamaProfile();
+        const vector = [invalidValue, ...vectorForText("alpha", profile.dimensions).slice(1)];
+        globalThis.fetch = vi.fn(async () => providerResponse(providerBody(provider, [vector]))) as typeof fetch;
+
+        await expect(embedTexts(["alpha"], profile)).rejects.toMatchObject({
+          code: "RESPONSE_INVALID",
+          retryable: false,
+        });
+      },
+    );
+  }
+
+  it("preserves Ollama response order", async () => {
+    const profile = createOllamaProfile();
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      const inputs = parseInputs(init);
+      return providerResponse({
+        embeddings: inputs.map((text) => vectorForText(text, profile.dimensions)),
+      });
+    }) as typeof fetch;
+
+    await expect(embedTexts(["alpha", "beta"], profile)).resolves.toEqual([
+      vectorForText("alpha", profile.dimensions),
+      vectorForText("beta", profile.dimensions),
+    ]);
+  });
+
+  it("keeps wrong provider vector dimensions as DIMENSION_MISMATCH", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const profile = createOpenAiProfile();
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls += 1;
+      return providerResponse({
+        data: [{ index: 0, embedding: ["not-a-number", ...new Array(profile.dimensions - 2).fill(0)] }],
+      });
+    }) as typeof fetch;
+
+    await expect(embedText("alpha", profile)).rejects.toMatchObject({
+      code: "DIMENSION_MISMATCH",
+      retryable: false,
+    });
+    expect(calls).toBe(1);
+  });
+
+  it("never replaces a missing provider result with a zero vector", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const profile = createOpenAiProfile();
+    globalThis.fetch = vi.fn(async () => providerResponse({ data: [] })) as typeof fetch;
+
+    await expect(embedText("alpha", profile)).rejects.toMatchObject({
+      code: "RESPONSE_INVALID",
+      retryable: false,
+    });
   });
 
   it("deduplicates identical in-flight requests before issuing a provider call", async () => {

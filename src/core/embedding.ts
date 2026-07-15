@@ -119,7 +119,8 @@ export type EmbeddingProviderErrorCode =
   | "PROVIDER_UNSUPPORTED"
   | "PROVIDER_UNREACHABLE"
   | "TIMEOUT"
-  | "DIMENSION_MISMATCH";
+  | "DIMENSION_MISMATCH"
+  | "RESPONSE_INVALID";
 
 export class EmbeddingProviderError extends Error {
   code: EmbeddingProviderErrorCode;
@@ -458,46 +459,36 @@ const withTimeout = async <T>(promise: Promise<T>, profile: EmbeddingProfile): P
   }
 };
 
-const normalizeEmbeddingVectors = (vectors: unknown, profile: EmbeddingProfile): number[][] => {
-  if (!Array.isArray(vectors)) {
-    throw new EmbeddingProviderError({
-      code: "PROVIDER_UNREACHABLE",
-      provider: profile.provider,
-      model: profile.model,
-      message: "embedding 응답 형식이 올바르지 않습니다.",
-      retryable: true,
-    });
+const invalidEmbeddingResponse = (profile: EmbeddingProfile, message: string): EmbeddingProviderError =>
+  new EmbeddingProviderError({
+    code: "RESPONSE_INVALID",
+    provider: profile.provider,
+    model: profile.model,
+    message,
+    retryable: false,
+  });
+
+const normalizeEmbeddingVectors = (vectors: unknown, profile: EmbeddingProfile, expectedCount: number): number[][] => {
+  if (!Array.isArray(vectors) || vectors.length !== expectedCount) {
+    throw invalidEmbeddingResponse(profile, "embedding 응답 벡터 수가 요청 수와 일치하지 않습니다.");
   }
   return vectors.map((vector) => {
     if (!Array.isArray(vector)) {
-      throw new EmbeddingProviderError({
-        code: "PROVIDER_UNREACHABLE",
-        provider: profile.provider,
-        model: profile.model,
-        message: "embedding 응답 벡터 형식이 올바르지 않습니다.",
-        retryable: true,
-      });
+      throw invalidEmbeddingResponse(profile, "embedding 응답 벡터 형식이 올바르지 않습니다.");
     }
-    const normalized = vector.map((value) => Number(value));
-    if (normalized.some((value) => Number.isNaN(value))) {
-      throw new EmbeddingProviderError({
-        code: "PROVIDER_UNREACHABLE",
-        provider: profile.provider,
-        model: profile.model,
-        message: "embedding 응답에 숫자가 아닌 값이 포함되어 있습니다.",
-        retryable: true,
-      });
-    }
-    if (normalized.length !== profile.dimensions) {
+    if (vector.length !== profile.dimensions) {
       throw new EmbeddingProviderError({
         code: "DIMENSION_MISMATCH",
         provider: profile.provider,
         model: profile.model,
-        message: `embedding 차원이 기대값과 다릅니다: expected=${profile.dimensions}, actual=${normalized.length}`,
+        message: `embedding 차원이 기대값과 다릅니다: expected=${profile.dimensions}, actual=${vector.length}`,
         retryable: false,
       });
     }
-    return normalized;
+    if (vector.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
+      throw invalidEmbeddingResponse(profile, "embedding 응답에 유효하지 않은 숫자 값이 포함되어 있습니다.");
+    }
+    return vector;
   });
 };
 
@@ -545,8 +536,27 @@ const embedWithOpenAi = async (texts: string[], profile: EmbeddingProfile): Prom
     },
     profile,
   );
-  const data = (body as { data?: Array<{ embedding?: unknown }> }).data;
-  return normalizeEmbeddingVectors(data?.map((entry) => entry.embedding) ?? [], profile);
+  const data = typeof body === "object" && body !== null ? (body as { data?: unknown }).data : undefined;
+  if (!Array.isArray(data) || data.length !== texts.length) {
+    throw invalidEmbeddingResponse(profile, "OpenAI embedding 응답 항목 수가 요청 수와 일치하지 않습니다.");
+  }
+  const vectors = new Array<unknown>(texts.length);
+  const indexes = new Set<number>();
+  for (const entry of data) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw invalidEmbeddingResponse(profile, "OpenAI embedding 응답 항목 형식이 올바르지 않습니다.");
+    }
+    const { index, embedding } = entry as { index?: unknown; embedding?: unknown };
+    if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= texts.length || indexes.has(index)) {
+      throw invalidEmbeddingResponse(profile, "OpenAI embedding 응답 index가 올바르지 않습니다.");
+    }
+    indexes.add(index);
+    vectors[index] = embedding;
+  }
+  if (indexes.size !== texts.length || vectors.some((vector) => vector === undefined)) {
+    throw invalidEmbeddingResponse(profile, "OpenAI embedding 응답 index가 요청을 모두 포함하지 않습니다.");
+  }
+  return normalizeEmbeddingVectors(vectors, profile, texts.length);
 };
 
 const embedWithOllama = async (texts: string[], profile: EmbeddingProfile): Promise<number[][]> => {
@@ -564,7 +574,8 @@ const embedWithOllama = async (texts: string[], profile: EmbeddingProfile): Prom
     },
     profile,
   );
-  return normalizeEmbeddingVectors((body as { embeddings?: unknown }).embeddings, profile);
+  const embeddings = typeof body === "object" && body !== null ? (body as { embeddings?: unknown }).embeddings : undefined;
+  return normalizeEmbeddingVectors(embeddings, profile, texts.length);
 };
 
 const executeProviderBatch = async (texts: string[], profile: EmbeddingProfile): Promise<number[][]> => {
@@ -714,7 +725,8 @@ const loadCacheEntry = async (context: EmbeddingCacheContext, normalizedText: st
       parsed.baseUrl !== context.profile.baseUrl ||
       parsed.textHash !== hash ||
       !Array.isArray(parsed.embedding) ||
-      parsed.embedding.length !== context.profile.dimensions
+      parsed.embedding.length !== context.profile.dimensions ||
+      parsed.embedding.some((value) => typeof value !== "number" || !Number.isFinite(value))
     ) {
       return null;
     }
@@ -909,6 +921,7 @@ export const embedTexts = async (
     }
 
     const deferred = createDeferred<number[]>();
+    void deferred.promise.catch(() => undefined);
     inflightEmbeddings.set(key, deferred.promise);
     waiters.set(key, deferred.promise);
     pendingRequests.push({
@@ -936,8 +949,14 @@ export const embedTexts = async (
           profile,
           policy.retry,
         );
+        if (vectors.length !== batchRequests.length) {
+          throw invalidEmbeddingResponse(profile, "embedding 내부 결과 수가 요청 수와 일치하지 않습니다.");
+        }
         for (const [index, request] of batchRequests.entries()) {
-          const vector = vectors[index] ?? zeroVector(profile.dimensions);
+          const vector = vectors[index];
+          if (vector === undefined) {
+            throw invalidEmbeddingResponse(profile, "embedding 내부 결과가 누락되었습니다.");
+          }
           request.deferred.resolve(vector);
           if (context) {
             await writeCacheEntry(context, request.normalizedText, vector);
@@ -967,7 +986,13 @@ export const embedTexts = async (
       results[index] = vector;
     }
   }
-  return results.map((vector) => vector ?? zeroVector(profile.dimensions));
+  return Array.from({ length: results.length }, (_, index) => {
+    const vector = results[index];
+    if (vector === undefined) {
+      throw invalidEmbeddingResponse(profile, "embedding 내부 결과가 누락되었습니다.");
+    }
+    return vector;
+  });
 };
 
 export const embedText = async (
@@ -976,5 +1001,8 @@ export const embedText = async (
   options: EmbeddingExecutionOptions = {},
 ): Promise<number[]> => {
   const [vector] = await embedTexts([text], profile, options);
-  return vector ?? zeroVector(profile.dimensions);
+  if (vector === undefined) {
+    throw invalidEmbeddingResponse(profile, "embedding 내부 결과가 누락되었습니다.");
+  }
+  return vector;
 };

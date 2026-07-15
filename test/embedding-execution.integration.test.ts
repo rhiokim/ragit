@@ -36,7 +36,8 @@ const vectorForText = (text: string, dimensions: number): number[] =>
 const openAiEmbeddingResponse = (inputs: string[]): Response =>
   new Response(
     JSON.stringify({
-      data: inputs.map((text) => ({
+      data: inputs.map((text, index) => ({
+        index,
         embedding: vectorForText(text, 1536),
       })),
     }),

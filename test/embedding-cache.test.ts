@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -86,5 +86,20 @@ describe("embedding cache contract", () => {
     expect(manifest.entryCount).toBe(2);
     expect(entries).toHaveLength(2);
     expect(entries.every((name) => name.endsWith(".json"))).toBe(true);
+  });
+
+  it("treats cache vectors with non-numeric values as misses", async () => {
+    const temp = await makeTempDir("ragit-embedding-cache-invalid-");
+    const profile = resolveEmbeddingProfile(defaultConfig());
+    const [initial] = await embedTexts(["cached value"], profile, { cwd: temp });
+    const namespaceId = resolveEmbeddingCacheNamespaceId(profile);
+    const entriesDir = path.join(temp, ".ragit", "cache", "embeddings", "v1", namespaceId, "entries");
+    const [entryName] = await readdir(entriesDir);
+    const entryPath = path.join(entriesDir, entryName!);
+    const entry = JSON.parse(await readFile(entryPath, "utf8")) as { embedding: unknown[] };
+    entry.embedding = ["not-a-number", ...initial!.slice(1)];
+    await writeFile(entryPath, `${JSON.stringify(entry)}\n`, "utf8");
+
+    await expect(embedTexts(["cached value"], profile, { cwd: temp, cacheMode: "readonly" })).resolves.toEqual([initial]);
   });
 });
