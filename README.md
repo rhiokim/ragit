@@ -220,6 +220,8 @@ git push origin --tags
 
 RAGit recognizes these embedding profiles: `openai/text-embedding-3-small` (1536), `openai/text-embedding-3-large` (3072), `ollama/nomic-embed-text` (768), and `ollama/mxbai-embed-large` (1024). Recognition is not production support. A profile becomes evidence-backed only after its reproducible live report passes that profile's precommitted threshold.
 
+For this release, production support is intentionally limited to loopback Ollama `nomic-embed-text`. The OpenAI profiles remain recognized, fail-closed, mock-contract-tested, and opt-in, but are not production-supported because no authorized live evidence was collected.
+
 `local-placeholder/placeholder-v1` (64) is deterministic offline development and regression coverage only. Its reports set `developmentOnly: true` and are never production retrieval-quality evidence.
 
 Run the bundled offline regression gate with an explicit untracked output path:
@@ -235,7 +237,7 @@ pnpm benchmark:retrieval:ollama:verify --output /tmp/ragit-retrieval-ollama.json
 pnpm benchmark:retrieval:openai:verify --output /tmp/ragit-retrieval-openai.json
 ```
 
-The loopback Ollama `nomic-embed-text` target is evidence-backed by a reproducible live report that passed its precommitted gates. OpenAI `text-embedding-3-small` remains pending and is not yet evidence-backed or production-supported. The opt-in commands, fixed gates, credential-safe report handling, endpoint classes, and evidence record are in the [retrieval benchmark evidence guide](./benchmarks/retrieval/v1/README.md). Do not commit raw live reports or credentials.
+The loopback Ollama `nomic-embed-text` target is evidence-backed by a reproducible live report that passed its precommitted gates. OpenAI `text-embedding-3-small` is deferred from this release's production-support scope and remains available only as a recognized integration target until a future authorized live gate passes. The opt-in commands, fixed gates, credential-safe report handling, endpoint classes, and evidence record are in the [retrieval benchmark evidence guide](./benchmarks/retrieval/v1/README.md). Do not commit raw live reports or credentials.
 
 ## Canonical Workflows
 

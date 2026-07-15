@@ -17,9 +17,11 @@ The deterministic offline profile is `local-placeholder/placeholder-v1` (64 dime
 
 An evidence-backed profile is a recognized profile with a reproducible live report that passes its precommitted profile threshold. Ollama `nomic-embed-text` is evidence-backed by the reproducible loopback run recorded below. OpenAI `text-embedding-3-small` remains recognized but is not evidence-backed or production-supported until its live gate passes.
 
+The production-supported scope for this release is therefore limited to loopback Ollama `nomic-embed-text`. OpenAI remains a recognized, mock-contract-tested, opt-in integration target; its precommitted threshold is retained for a future authorized live run, not as a support claim.
+
 | Initial target | Evidence status | Threshold file |
 | --- | --- | --- |
-| `openai/text-embedding-3-small` | Pending live evidence | `thresholds-openai-text-embedding-3-small.json` |
+| `openai/text-embedding-3-small` | Deferred; recognized only (no live evidence) | `thresholds-openai-text-embedding-3-small.json` |
 | `ollama/nomic-embed-text` | Evidence-backed (passed 2026-07-15) | `thresholds-ollama-nomic-embed-text.json` |
 
 ## Run The Benchmarks
@@ -48,7 +50,7 @@ The default OpenAI provider root is `https://api.openai.com`; a configured custo
 
 ## Fixed Gates
 
-Both initial targets use these precommitted quality gates:
+Both candidate threshold files use these precommitted quality gates:
 
 | Metric | Required value |
 | --- | --- |

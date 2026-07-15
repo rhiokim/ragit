@@ -64,6 +64,8 @@ RAGit recognizes exactly these provider/model profiles:
 
 Recognition does not make a profile evidence-backed or production-supported. The deterministic `local-placeholder/placeholder-v1` profile has 64 dimensions and is for offline development/regression only; its benchmark reports are `developmentOnly: true`, not production-quality evidence.
 
+For this release, only loopback Ollama `nomic-embed-text` is production-supported. The OpenAI profiles are recognized and mock-contract-tested, but remain opt-in integration targets without authorized live evidence and are not production-supported by this release.
+
 For OpenAI, make `OPENAI_API_KEY` available in the command environment before ingest or migration. It is environment-only: RAGit has no API-key config key or CLI argument, and credentials must not be committed or persisted. Configure the initial OpenAI target as follows:
 
 ```bash
@@ -89,7 +91,7 @@ RAGit appends `/api/embed` for Ollama. Only `localhost`, `127.0.0.1`, and `::1` 
 - Invalid keys or invalid values fail before the config file is written.
 - For real providers, use `embedding.provider`, `embedding.model`, `embedding.base_url`, `embedding.timeout_ms`, `embedding.cache_enabled`, and `embedding.cache_dir` as the supported knobs. `embedding.dimensions` and `embedding.version` are legacy-only and only remain meaningful for `local-placeholder`.
 - Changing the target embedding provider does not rewrite the persisted store contract by itself. Follow up with <a href="/en/docs/commands/migrate/embeddings">`migrate embeddings`</a> when `status` reports `embedding.needsMigration=true`.
-- A requested production provider never silently falls back to `local-placeholder`. Inspect `status`, then follow the migration preview/apply flow after changing provider or model.
+- A requested provider never silently falls back to `local-placeholder`. Inspect `status`, then follow the migration preview/apply flow after changing provider or model.
 - `embedding.cache_dir` must stay inside the repository root. If it points outside the repo, cache writes are disabled and <a href="/en/docs/commands/doctor">`doctor`</a> reports the config as invalid.
 - Because output is text-only, agents should validate follow-up state with <a href="/en/docs/commands/status">`status`</a>.
 

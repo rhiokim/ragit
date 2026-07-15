@@ -62,7 +62,7 @@ pnpm ragit migrate embeddings
 
 - manifest가 참조하는 chunk가 source store에 모두 남아 있어야 합니다. 하나라도 빠지면 즉시 실패합니다.
 - 교체 과정에서 `.ragit/store.next`와 `.ragit/store.prev`를 사용합니다.
-- provider 자격증명은 계속 env-only입니다. OpenAI apply는 명령 환경에 이미 `OPENAI_API_KEY`가 있어야 하며, 요청한 production provider가 `local-placeholder`로 조용히 fallback되지는 않습니다.
+- provider 자격증명은 계속 env-only입니다. OpenAI apply는 명령 환경에 이미 `OPENAI_API_KEY`가 있어야 하며, 요청한 provider가 `local-placeholder`로 조용히 fallback되지는 않습니다. 승인된 live evidence가 없으므로 OpenAI는 이번 릴리스의 production support 대상이 아닙니다.
 - `init`에서 safe gitignore policy를 사용했다면 manifest는 로컬 전용일 수 있습니다. 다른 장비에서 같은 snapshot corpus를 재현해야 한다면 `snapshot-history` 또는 `dogfood` policy로 `.ragit/manifest/**`를 공유하거나 추적하십시오.
 
 ## 관련 명령

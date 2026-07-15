@@ -1,6 +1,6 @@
 # Production Embedding Profiles — Design
 
-**Status:** Approved
+**Status:** Approved — Ollama-only release support
 **Design/review owner:** Sol Max
 **Bounded implementation worker:** Terra
 **Baseline:** `origin/main` at `89e25dd`, package `ragit@1.1.2`
@@ -8,7 +8,7 @@
 
 ## Outcome
 
-Turn the existing OpenAI and Ollama embedding facade into an evidence-backed production boundary. A supported provider response must map every input to exactly one valid vector, fail closed on ambiguous data, preserve cache and migration identity, and produce a provider-labeled retrieval report without changing the deterministic B1 benchmark.
+Turn the existing OpenAI and Ollama embedding facade into a fail-closed provider boundary, and declare production support only for profiles backed by passing live evidence. A provider response must map every input to exactly one valid vector, fail closed on ambiguous data, preserve cache and migration identity, and produce a provider-labeled retrieval report without changing the deterministic B1 benchmark.
 
 ## Assumptions and Decisions
 
@@ -17,7 +17,7 @@ Turn the existing OpenAI and Ollama embedding facade into an evidence-backed pro
   - OpenAI `text-embedding-3-large` at 3072 dimensions;
   - Ollama `nomic-embed-text` at 768 dimensions;
   - Ollama `mxbai-embed-large` at 1024 dimensions.
-- Recognition is not the same as an evidence-backed production declaration. This workstream must collect live evidence for at least one OpenAI profile and one loopback Ollama profile.
+- Recognition is not the same as an evidence-backed production declaration. The initial plan required live evidence for one OpenAI profile and one loopback Ollama profile. On 2026-07-15, paid OpenAI evidence was not authorized and Sol Max explicitly narrowed this release's production support to the evidence-backed loopback Ollama `nomic-embed-text` profile. OpenAI remains recognized, fail-closed, mock-contract-tested, and opt-in, but is not production-supported by this release.
 - `local-placeholder` remains the default for offline deterministic development. It is never described as production-quality evidence.
 - Model aliases, arbitrary dimensions, new providers, retrieval-weight changes, dataset changes, and package-version changes are out of scope.
 - OpenAI credentials remain environment-only. A live run stops when `OPENAI_API_KEY` is unavailable; no secret is accepted through a CLI argument, config value, fixture, report, or committed artifact.
@@ -92,7 +92,7 @@ The runner never accepts an API key argument and never serializes a base URL. It
 
 Provider thresholds are fixed before live runs so evidence cannot be tuned after observing results.
 
-Both production candidates reuse the B1 quality and noise floors:
+Both evidence candidates reuse the B1 quality and noise floors:
 
 - Recall@5 >= `0.654166`;
 - MRR@10 >= `0.515446`;
@@ -104,7 +104,7 @@ Latency ceilings are endpoint-class service gates rather than comparisons with t
 - `openai-public`: p95 <= `2000 ms`;
 - `ollama-local`: p95 <= `1000 ms`.
 
-The initial evidence targets are OpenAI `text-embedding-3-small` and Ollama `nomic-embed-text`. A failed target is not declared production-supported. Switching to another recognized profile requires a new threshold file before its live run. Adding a new model requires a separate design decision.
+The initial evidence candidates are OpenAI `text-embedding-3-small` and Ollama `nomic-embed-text`. A failed or unavailable target is not declared production-supported. For this release, only the Ollama target has live evidence and production support; the OpenAI threshold remains precommitted for a future authorized run. Switching to another recognized profile requires a new threshold file before its live run. Adding a new model requires a separate design decision.
 
 ## Evidence Handling
 
@@ -125,7 +125,7 @@ The initial evidence targets are OpenAI `text-embedding-3-small` and Ollama `nom
 1. Focused tests prove exact response cardinality, OpenAI index reordering, Ollama order, finite numbers, dimension checks, no zero fallback, timeout abort, retry classification, `Retry-After`, credentials, base URL validation, and cache isolation.
 2. The default B1 report retains identical quality groups, per-case metrics, and all 108 ranked-path arrays.
 3. Provider reports identify the exact profile and endpoint class without containing a credential or base URL.
-4. Live Ollama and OpenAI reports pass their pre-committed gates before either is called evidence-backed.
+4. The live Ollama report passes its pre-committed gate. OpenAI remains outside this release's production-support scope unless a future authorized report passes its unchanged pre-committed gate.
 5. Full test, build, pack, bilingual docs, and clean-worktree gates pass.
 
 ## Research Basis
