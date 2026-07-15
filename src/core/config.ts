@@ -213,7 +213,9 @@ const toTomlValue = (value: unknown): string => {
 
 export const stringifyToml = (config: RagitConfig): string => {
   const sections = Object.entries(config).map(([sectionName, sectionValues]) => {
-    const lines = Object.entries(sectionValues).map(([key, value]) => `${key} = ${toTomlValue(value)}`);
+    const lines = Object.entries(sectionValues)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => `${key} = ${toTomlValue(value)}`);
     return [`[${sectionName}]`, ...lines].join("\n");
   });
   return `${sections.join("\n\n")}\n`;
