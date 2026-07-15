@@ -62,6 +62,10 @@ jobs:
       - name: Smoke test packed CLI
         run: pnpm pack:smoke
 
+      - name: Setup npm for trusted publishing
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: npm install --global npm@11.5.1
+
       - name: Publish to npm
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         run: npm publish
