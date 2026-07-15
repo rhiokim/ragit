@@ -1,13 +1,12 @@
 import { createHash } from "node:crypto";
-import { access, readFile, readdir, rename, rm } from "node:fs/promises";
-import { constants } from "node:fs";
+import { readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
 import { loadConfig } from "./config.js";
 import { getHeadSha, getParentSha } from "./git.js";
 import { chunkVersionId, documentIdFromPath, documentVersionId } from "./identity.js";
 import { buildSnapshotManifest, loadSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
-import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
+import { ensureRagitStructure } from "./project.js";
 import { loadLegacyStore, legacyStorePath } from "./legacy-store.js";
 import {
   bootstrapCanonicalStore,
@@ -19,6 +18,7 @@ import {
   writeDocumentsToCanonicalStore,
 } from "./store.js";
 import { withStoreWriteLock } from "./store-write-lock.js";
+import { assertStoreSwapReady, promoteNextStore, removeNextStore, storeSwapPaths } from "./store-swap.js";
 import { ChunkRecord, DocumentRecord, DocType, normalizeKnownDocType } from "./types.js";
 
 interface SqliteVssExport {
@@ -47,15 +47,6 @@ const candidatePaths = [
   ".ragit/sqlite-vss/records.json",
   ".ragit/sqlite_vss/export.json",
 ];
-
-const fileExists = async (target: string): Promise<boolean> => {
-  try {
-    await access(target, constants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 const loadLegacyPayload = async (cwd: string): Promise<SqliteVssExport> => {
   for (const candidate of candidatePaths) {
@@ -163,26 +154,6 @@ const hydrateFetchedChunk = (raw: {
   searchPolicy: optionalString(raw.fields.searchPolicy) as ChunkRecord["searchPolicy"] | null,
 });
 
-const swapStoreDirectories = async (cwd: string): Promise<void> => {
-  const paths = resolveRagitPaths(cwd);
-  const nextStoreDir = path.join(paths.ragitDir, "store.next");
-  const prevStoreDir = path.join(paths.ragitDir, "store.prev");
-  if (await fileExists(prevStoreDir)) {
-    throw new Error("이전 migration backup(.ragit/store.prev)이 남아 있습니다. 수동 정리 후 다시 실행해 주세요.");
-  }
-  if (!(await fileExists(nextStoreDir))) {
-    throw new Error("migration temporary store(.ragit/store.next)를 찾을 수 없습니다.");
-  }
-  await rename(paths.storeDir, prevStoreDir);
-  try {
-    await rename(nextStoreDir, paths.storeDir);
-  } catch (error) {
-    await rename(prevStoreDir, paths.storeDir);
-    throw error;
-  }
-  await rm(prevStoreDir, { recursive: true, force: true });
-};
-
 const migrateEmbeddingsUnlocked = async (cwd: string, dryRun: boolean): Promise<EmbeddingMigrationSummary> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
@@ -218,11 +189,12 @@ const migrateEmbeddingsUnlocked = async (cwd: string, dryRun: boolean): Promise<
   }
 
   const sourceStore = await openCanonicalStoreWithContract(cwd, currentMeta.embeddingContract, true);
-  const nextStoreDir = path.join(resolveRagitPaths(cwd).ragitDir, "store.next");
-  const prevStoreDir = path.join(resolveRagitPaths(cwd).ragitDir, "store.prev");
-  if (await fileExists(nextStoreDir) || await fileExists(prevStoreDir)) {
+  const nextStoreDir = storeSwapPaths(cwd).next;
+  try {
+    await assertStoreSwapReady(cwd);
+  } catch (error) {
     closeCanonicalStore(sourceStore);
-    throw new Error("이전 embedding migration 임시 디렉터리가 남아 있습니다. .ragit/store.next 또는 .ragit/store.prev를 정리해 주세요.");
+    throw error;
   }
 
   try {
@@ -257,9 +229,9 @@ const migrateEmbeddingsUnlocked = async (cwd: string, dryRun: boolean): Promise<
   }
 
   try {
-    await swapStoreDirectories(cwd);
+    await promoteNextStore(cwd);
   } catch (error) {
-    await rm(nextStoreDir, { recursive: true, force: true });
+    await removeNextStore(cwd);
     throw error;
   }
 

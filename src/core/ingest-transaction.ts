@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveRagitPaths } from "./project.js";
 
@@ -273,6 +273,18 @@ export const readIngestTransaction = async (
     throw new Error(`ingest transaction journal id does not match requested id: ${transactionId}`);
   }
   return parsed;
+};
+
+export const deleteIngestTransaction = async (cwd: string, transactionId: string): Promise<boolean> => {
+  const journal = await readIngestTransaction(cwd, transactionId);
+  if (!journal) return false;
+  const target = transactionPath(cwd, transactionId);
+  const metadata = await lstat(target);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new Error("ingest transaction journal must be a regular file");
+  }
+  await unlink(target);
+  return true;
 };
 
 export const updateIngestTransaction = async (

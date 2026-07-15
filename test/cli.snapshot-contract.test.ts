@@ -94,6 +94,7 @@ describe("CLI snapshot failure contract", () => {
     const repairHelp = runCli(["repair", "--help"]);
     expect(repairHelp.status).toBe(0);
     expect(repairHelp.stdout).toContain("ingest-recover");
+    expect(repairHelp.stdout).toContain("store-rebuild");
   }, 20_000);
 
   it("emits invalid snapshot refs with exit 2 in JSON and text modes", async () => {

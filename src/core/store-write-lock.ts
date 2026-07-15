@@ -6,7 +6,7 @@ import { resolveRagitPaths } from "./project.js";
 
 export const STORE_WRITE_LOCK_SCHEMA_VERSION = 1;
 
-export type StoreWriteCommand = "ingest" | "ingest-recover" | "migrate-embeddings" | "migrate-from-sqlite-vss" | "migrate-from-json-store" | "security-purge-store";
+export type StoreWriteCommand = "ingest" | "ingest-recover" | "store-rebuild" | "migrate-embeddings" | "migrate-from-sqlite-vss" | "migrate-from-json-store" | "security-purge-store";
 
 export interface StoreWriteLockOwner {
   schemaVersion: number;
@@ -42,6 +42,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isStoreWriteCommand = (value: unknown): value is StoreWriteCommand =>
   value === "ingest" ||
   value === "ingest-recover" ||
+  value === "store-rebuild" ||
   value === "migrate-embeddings" ||
   value === "migrate-from-sqlite-vss" ||
   value === "migrate-from-json-store" ||

@@ -160,6 +160,22 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeRepairOutput.ok).toBe(true);
       expect(describeRepairOutput.data.spec.path).toBe("repair");
       expect(describeRepairOutput.data.spec.options.some((option: { name: string }) => option.name === "--apply")).toBe(true);
+      const repairAction = describeRepairOutput.data.spec.options.find((option: { name: string }) => option.name === "--action");
+      expect(repairAction.enum).toEqual(expect.arrayContaining(["ingest-recover", "store-rebuild"]));
+      expect(describeRepairOutput.data.spec.relatedCommands).toEqual(expect.arrayContaining(["ingest", "migrate embeddings"]));
+      expect(describeRepairOutput.data.spec.examples).toEqual(expect.arrayContaining([
+        "ragit repair --apply --action ingest-recover --format json",
+        "ragit repair --apply --action store-rebuild --format json",
+      ]));
+      const rebuildRepairOutput = JSON.parse(runCli(["repair", "--action", "store-rebuild", "--cwd", temp, "--format", "json"]));
+      expect(rebuildRepairOutput.command).toBe("repair");
+      expect(rebuildRepairOutput.ok).toBe(true);
+      expect(rebuildRepairOutput.data.mode).toBe("plan");
+      expect(rebuildRepairOutput.data.plannedActions).toEqual([
+        expect.objectContaining({ action: "store-rebuild", status: "planned" }),
+      ]);
+      const rebuildRepairText = runCli(["repair", "--action", "store-rebuild", "--cwd", temp, "--format", "text"]);
+      expect(rebuildRepairText).toContain("store-rebuild");
 
       const describeSecurityAuditOutput = JSON.parse(runCli(["describe", "security", "audit", "--format", "json"]));
       expect(describeSecurityAuditOutput.command).toBe("describe");

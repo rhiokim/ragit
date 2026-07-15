@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRepairPlan } from "../src/core/repair.js";
+import { buildRepairPlan, normalizeRepairActionKind } from "../src/core/repair.js";
 import { DriftItem, DriftResult } from "../src/core/types.js";
 
 const makeItem = (overrides: Partial<DriftItem>): DriftItem => ({
@@ -41,6 +41,12 @@ const makeDrift = (items: DriftItem[]): DriftResult => ({
 });
 
 describe("repair planner", () => {
+  it("recognizes store-rebuild only as an explicit action filter", () => {
+    expect(normalizeRepairActionKind("store-rebuild")).toBe("store-rebuild");
+    expect(buildRepairPlan(makeDrift([]), [])).toEqual([]);
+    expect(buildRepairPlan(makeDrift([]), ["store-rebuild"])).toEqual([]);
+  });
+
   it("prefers a single full ingest over targeted ingest when the baseline is missing", () => {
     const drift = makeDrift([
       makeItem({

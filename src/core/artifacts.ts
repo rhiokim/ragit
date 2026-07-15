@@ -1068,18 +1068,32 @@ export const buildArtifactIndexData = async (
           { cwd, cacheMode },
         );
   for (const [index, plan] of chunkPlans.entries()) {
+    const artifactAnchorSha =
+      plan.artifact.boundHeadSha ??
+      plan.artifact.sourceHeadSha ??
+      plan.artifact.captureHeadSha ??
+      headSha;
     const chunk = artifactChunkRecord(
       plan.artifact,
       plan.pathValue,
       plan.sectionTitle,
       plan.text,
-      headSha,
+      artifactAnchorSha,
       embeddings[index] ?? [],
       plan.suffix,
     );
     chunks.push(chunk);
     plan.chunkIds.push(chunk.id);
     chunkScopes[plan.targetScope].push(chunk.id);
+  }
+  for (const entry of entries) {
+    entry.rebuildPayload = {
+      schemaVersion: 1,
+      chunks: chunks
+        .filter((chunk) => chunk.artifactId === entry.artifactId)
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map(({ embedding: _embedding, ...chunk }) => chunk),
+    };
   }
   return { artifactEntries: entries, chunks, chunkScopes };
 };

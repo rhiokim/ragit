@@ -3,6 +3,7 @@ import { runDrift, DriftQueryOptions } from "./drift.js";
 import { runIngest } from "./ingest.js";
 import { finalizeIngestTransaction } from "./ingest-finalization.js";
 import { scanIngestTransactions } from "./ingest-recovery.js";
+import { inspectStoreRebuild, rebuildStoreFromManifests } from "./store-rebuild.js";
 import { verifyHarness } from "./harness.js";
 import { withStoreWriteLock } from "./store-write-lock.js";
 import {
@@ -24,6 +25,7 @@ export interface RepairDependencies {
 }
 
 const ACTION_PRIORITY: Record<RepairActionKind, number> = {
+  "store-rebuild": -2,
   "ingest-recover": -1,
   ingest: 0,
   "harness-verify": 1,
@@ -55,6 +57,7 @@ export const normalizeRepairActionKind = (value: string | undefined): RepairActi
   if (
     normalized === "ingest" ||
     normalized === "ingest-recover" ||
+    normalized === "store-rebuild" ||
     normalized === "doc-refresh" ||
     normalized === "artifact-review" ||
     normalized === "harness-verify" ||
@@ -252,6 +255,30 @@ const buildIngestRecoveryPlan = async (
   }));
 };
 
+const buildStoreRebuildPlan = async (
+  cwd: string,
+  actionFilters: RepairActionKind[],
+): Promise<RepairAction[]> => {
+  if (!actionFilters.includes("store-rebuild")) return [];
+  const inspection = await inspectStoreRebuild(cwd);
+  return [{
+    actionId: "",
+    action: "store-rebuild",
+    sourceItemId: "manifest-store",
+    sourceScope: "durable",
+    reasonCodes: [],
+    status: "planned",
+    safeToApply: true,
+    requiresInput: false,
+    commandPath: "store rebuild",
+    args: [],
+    notes: [
+      `manifest union: ${inspection.manifests} manifests, ${inspection.documents} documents, ${inspection.chunks} chunks`,
+      `legacy artifact chunks requiring source store: ${inspection.legacyChunks}`,
+    ],
+  }];
+};
+
 const summarizeActions = (actions: RepairAction[]) => ({
   planned: actions.filter((action) => action.status === "planned").length,
   executed: actions.filter((action) => action.status === "executed").length,
@@ -351,11 +378,26 @@ export const runRepair = async (
   const plannedActions = withIds(sortActions([
     ...buildRepairPlan(drift, actionFilters).map(({ actionId: _actionId, ...action }) => action),
     ...await buildIngestRecoveryPlan(cwd, actionFilters),
+    ...await buildStoreRebuildPlan(cwd, actionFilters),
   ]));
   const executedActions: RepairAction[] = [];
   const skippedActions: RepairAction[] = [];
 
   if (options.apply) {
+    const storeRebuildActions = plannedActions.filter(
+      (action) => action.action === "store-rebuild" && action.status === "planned" && action.safeToApply && !action.requiresInput,
+    );
+    if (storeRebuildActions.length > 0) {
+      const rebuilt = await withStoreWriteLock(cwd, { command: "store-rebuild" }, async () => {
+        const results: RepairAction[] = [];
+        for (const action of storeRebuildActions) {
+          await rebuildStoreFromManifests(cwd);
+          results.push({ ...action, status: "executed" });
+        }
+        return results;
+      });
+      executedActions.push(...rebuilt);
+    }
     const recoveryActions = plannedActions.filter(
       (action) => action.action === "ingest-recover" && action.status === "planned" && action.safeToApply && !action.requiresInput,
     );
@@ -396,7 +438,7 @@ export const runRepair = async (
       skippedActions.push(...recovered.filter((action) => action.status === "skipped"));
     }
     for (const action of plannedActions) {
-      if (action.action === "ingest-recover") continue;
+      if (action.action === "ingest-recover" || action.action === "store-rebuild") continue;
       if (action.status !== "planned" || !action.safeToApply || action.requiresInput) {
         skippedActions.push(action);
         continue;
