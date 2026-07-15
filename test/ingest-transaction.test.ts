@@ -51,4 +51,48 @@ describe("ingest transaction journal", () => {
       `${created.transactionId}.json`,
     ]);
   });
+
+  it("continues to parse completed schema 1 journals without finalization payload", () => {
+    const legacyCompleted = {
+      schemaVersion: 1,
+      transactionId: "legacy-completed",
+      kind: "ingest" as const,
+      status: "completed" as const,
+      phase: "completed" as const,
+      targetHeadSha: "abc123",
+      manifestPath: ".ragit/manifest/abc123.json",
+      startedAt: "2026-07-15T10:00:00.000Z",
+      updatedAt: "2026-07-15T10:01:00.000Z",
+      documentVersionIds: ["document-version-1"],
+      chunkIds: ["chunk-1"],
+    };
+
+    expect(parseIngestTransactionJournal(legacyCompleted)).toEqual(legacyCompleted);
+  });
+
+  it("rejects a finalization payload with a non-canonical recordedAt timestamp", () => {
+    expect(
+      parseIngestTransactionJournal({
+        schemaVersion: 1,
+        transactionId: "invalid-recorded-at",
+        kind: "ingest",
+        status: "in-progress",
+        phase: "manifest-committed",
+        targetHeadSha: "abc123",
+        manifestPath: ".ragit/manifest/abc123.json",
+        startedAt: "2026-07-15T10:00:00.000Z",
+        updatedAt: "2026-07-15T10:01:00.000Z",
+        documentVersionIds: [],
+        chunkIds: [],
+        finalization: {
+          recordedAt: "2026-07-15T10:00:00Z",
+          processed: 0,
+          scope: "durable",
+          plannedFiles: [],
+          plannedArtifactIds: [],
+          plannedArtifactBindings: [],
+        },
+      }),
+    ).toBeNull();
+  });
 });

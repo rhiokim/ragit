@@ -9,6 +9,7 @@ import { cosineSimilarity, EmbeddingCacheMode, embedText, embedTexts, resolveEmb
 import { appendLedgerEvent, eventLedgerRepoPath } from "./event-ledger.js";
 import { getHeadSha, tryGetGitRoot } from "./git.js";
 import { chunkVersionId, toRepoPath } from "./identity.js";
+import type { IngestTransactionArtifactBinding } from "./ingest-transaction.js";
 import { maskSecrets } from "./mask.js";
 import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
 import {
@@ -814,40 +815,107 @@ const repoRootMatches = async (cwd: string): Promise<boolean> => {
   }
 };
 
-export const bindPendingArtifacts = async (cwd: string, headSha: string): Promise<string[]> => {
+export interface PendingArtifactBindingPlan {
+  plannedArtifactIds: string[];
+  plannedArtifactBindings: IngestTransactionArtifactBinding[];
+  projectedArtifacts: ArtifactRecord[];
+}
+
+const isPendingArtifactBindingReady = async (cwd: string, artifact: ArtifactRecord): Promise<boolean> => {
+  if (artifact.bindingStatus !== "pending") return false;
+  if (
+    artifact.relatedPaths.some((entry) => {
+      if (entry.startsWith("..") || path.isAbsolute(entry)) return true;
+      return false;
+    })
+  ) {
+    return false;
+  }
+  for (const relatedPath of artifact.relatedPaths) {
+    if (!(await fileExists(path.resolve(cwd, relatedPath)))) return false;
+  }
+  return true;
+};
+
+export const planPendingArtifactBindings = async (
+  cwd: string,
+  headSha: string,
+  recordedAt: string,
+): Promise<PendingArtifactBindingPlan> => {
   await ensureRagitStructure(cwd);
-  const currentRepoRootOk = await repoRootMatches(cwd);
-  if (!currentRepoRootOk) return [];
   const artifacts = await listArtifactRecords(cwd, { statuses: ["captured", "reviewed"] });
-  const boundIds: string[] = [];
+  if (!(await repoRootMatches(cwd))) {
+    return {
+      plannedArtifactIds: [],
+      plannedArtifactBindings: [],
+      projectedArtifacts: artifacts,
+    };
+  }
+  const plannedArtifactIds: string[] = [];
+  const plannedArtifactBindings: IngestTransactionArtifactBinding[] = [];
+  const projectedArtifacts: ArtifactRecord[] = [];
   for (const artifact of artifacts) {
-    if (artifact.bindingStatus !== "pending") continue;
-    if (
-      artifact.relatedPaths.some((entry) => {
-        if (entry.startsWith("..") || path.isAbsolute(entry)) return true;
-        return false;
-      })
-    ) {
+    if (!(await isPendingArtifactBindingReady(cwd, artifact))) {
+      projectedArtifacts.push(artifact);
       continue;
     }
-    let relatedPathsReady = true;
-    for (const relatedPath of artifact.relatedPaths) {
-      if (!(await fileExists(path.resolve(cwd, relatedPath)))) {
-        relatedPathsReady = false;
-        break;
-      }
-    }
-    if (!relatedPathsReady) continue;
-    const next: ArtifactRecord = {
+    plannedArtifactIds.push(artifact.artifactId);
+    plannedArtifactBindings.push({ artifactId: artifact.artifactId, updatedAt: artifact.updatedAt });
+    projectedArtifacts.push({
       ...artifact,
       boundHeadSha: headSha,
       bindingStatus: "bound",
-      updatedAt: new Date().toISOString(),
-    };
-    await persistArtifactRecord(cwd, next, false);
-    boundIds.push(next.artifactId);
+      updatedAt: recordedAt,
+    });
+  }
+  return { plannedArtifactIds, plannedArtifactBindings, projectedArtifacts };
+};
+
+export const bindPlannedArtifacts = async (
+  cwd: string,
+  headSha: string,
+  recordedAt: string,
+  plannedArtifactBindings: IngestTransactionArtifactBinding[],
+): Promise<string[]> => {
+  await ensureRagitStructure(cwd);
+  const artifacts = new Map(
+    (await listArtifactRecords(cwd, { statuses: ["captured", "reviewed"] })).map((artifact) => [artifact.artifactId, artifact]),
+  );
+  const boundIds: string[] = [];
+  for (const planned of plannedArtifactBindings) {
+    const artifact = artifacts.get(planned.artifactId);
+    if (!artifact) {
+      throw new Error(`ingest artifact binding conflict: planned artifact is unavailable: ${planned.artifactId}`);
+    }
+    if (artifact.bindingStatus === "pending") {
+      if (artifact.updatedAt !== planned.updatedAt) {
+        throw new Error(`ingest artifact binding conflict: planned artifact changed: ${planned.artifactId}`);
+      }
+      await persistArtifactRecord(cwd, {
+        ...artifact,
+        boundHeadSha: headSha,
+        bindingStatus: "bound",
+        updatedAt: recordedAt,
+      }, false);
+      boundIds.push(artifact.artifactId);
+      continue;
+    }
+    if (
+      artifact.bindingStatus !== "bound" ||
+      artifact.boundHeadSha !== headSha ||
+      artifact.updatedAt !== recordedAt
+    ) {
+      throw new Error(`ingest artifact binding conflict: planned artifact is already bound: ${planned.artifactId}`);
+    }
+    boundIds.push(artifact.artifactId);
   }
   return boundIds;
+};
+
+export const bindPendingArtifacts = async (cwd: string, headSha: string): Promise<string[]> => {
+  const recordedAt = new Date().toISOString();
+  const plan = await planPendingArtifactBindings(cwd, headSha, recordedAt);
+  return bindPlannedArtifacts(cwd, headSha, recordedAt, plan.plannedArtifactBindings);
 };
 
 const artifactChunkRecord = (
@@ -895,6 +963,7 @@ export const buildArtifactIndexData = async (
   scope: "durable" | "all",
   embeddingProfile: EmbeddingProfile,
   cacheMode: EmbeddingCacheMode = "readwrite",
+  artifactRecords?: ArtifactRecord[],
 ): Promise<{
   artifactEntries: ArtifactManifestEntry[];
   chunks: ChunkRecord[];
@@ -915,7 +984,7 @@ export const buildArtifactIndexData = async (
       },
     };
   }
-  const artifacts = await listArtifactRecords(cwd, { statuses: ["captured", "reviewed"] });
+  const artifacts = artifactRecords ?? await listArtifactRecords(cwd, { statuses: ["captured", "reviewed"] });
   const entries: ArtifactManifestEntry[] = [];
   const chunks: ChunkRecord[] = [];
   const chunkScopes = {
