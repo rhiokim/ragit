@@ -426,7 +426,7 @@ const renderRetrievedHits = (hits: RetrievalHit[], view: CliView): string[] => {
   return [
     "## Retrieved Hits",
     ...projectRetrievalHits(hits, view).flatMap((hit, index) => [
-      `${index + 1}. \`${hit.path}\` · ${hit.sectionTitle} · score=${hit.scoreFinal.toFixed(4)}`,
+      `${index + 1}. [${hit.citation.id}] \`${hit.path}\` · ${hit.sectionTitle} · score=${hit.scoreFinal.toFixed(4)}`,
       `   - ${hit.text ?? hit.excerpt ?? ""}`,
     ]),
     "",

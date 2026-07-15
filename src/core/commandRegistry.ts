@@ -514,7 +514,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     mutating: false,
     supportsDryRun: false,
     supportsRawJsonInput: true,
-    outputSchemaSummary: ["query", "snapshotSha", "snapshot", "hits[]", "redactionSummary"],
+    outputSchemaSummary: ["query", "snapshotSha", "snapshot", "explain", "hits[].citation", "hits[].scoreBreakdown (when explain=true)", "redactionSummary"],
     arguments: [{ name: "question", type: "string", required: false, description: "검색 질문" }],
     options: [
       { name: "--input", type: "path", description: "JSON 입력 파일 경로 또는 -" },
@@ -522,10 +522,12 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
       { name: "--scope", type: "enum", description: "검색 범위", enum: ["durable", "session", "harness", "evidence", "all"], defaultValue: "durable" },
       { name: "--at", type: "string", description: "조회할 snapshot SHA 또는 prefix" },
       { name: "--view", type: "enum", description: "출력 축소 수준", enum: ["minimal", "default", "full"], defaultValue: "default" },
+      { name: "--explain", type: "boolean", description: "점수 구성과 기여도를 출력" },
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "both" },
     ],
     examples: [
       'ragit query "restore auth context" --format json',
+      'ragit query "restore auth context" --explain --format json',
       "ragit query --input query.json --view minimal",
     ],
   },
