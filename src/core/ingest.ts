@@ -21,7 +21,7 @@ import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
 import { ensureRagitStructure } from "./project.js";
-import { acquireStoreWriteLock } from "./store-write-lock.js";
+import { withStoreWriteLock } from "./store-write-lock.js";
 import {
   assertKnowledgeWriteSecurity,
   appendAdmissionRecord,
@@ -691,13 +691,9 @@ export const runIngest = async (cwd: string, options: IngestOptions): Promise<In
   const context = await resolveRepositoryContext(cwd);
   if (context.headSha === null) return runIngestUnlocked(context.gitRoot, options);
 
-  const lock = await acquireStoreWriteLock(context.gitRoot, {
-    command: "ingest",
-    headSha: context.headSha,
-  });
-  try {
-    return await runIngestUnlocked(context.gitRoot, options);
-  } finally {
-    await lock.release();
-  }
+  return withStoreWriteLock(
+    context.gitRoot,
+    { command: "ingest", headSha: context.headSha },
+    () => runIngestUnlocked(context.gitRoot, options),
+  );
 };

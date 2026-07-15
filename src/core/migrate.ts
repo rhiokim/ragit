@@ -18,6 +18,7 @@ import {
   writeChunksToCanonicalStore,
   writeDocumentsToCanonicalStore,
 } from "./store.js";
+import { withStoreWriteLock } from "./store-write-lock.js";
 import { ChunkRecord, DocumentRecord, DocType, normalizeKnownDocType } from "./types.js";
 
 interface SqliteVssExport {
@@ -182,7 +183,7 @@ const swapStoreDirectories = async (cwd: string): Promise<void> => {
   await rm(prevStoreDir, { recursive: true, force: true });
 };
 
-export const migrateEmbeddings = async (cwd: string, dryRun: boolean): Promise<EmbeddingMigrationSummary> => {
+const migrateEmbeddingsUnlocked = async (cwd: string, dryRun: boolean): Promise<EmbeddingMigrationSummary> => {
   await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const targetProfile = resolveEmbeddingProfile(config);
@@ -268,7 +269,7 @@ export const migrateEmbeddings = async (cwd: string, dryRun: boolean): Promise<E
   };
 };
 
-export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> => {
+const migrateFromSqliteVssUnlocked = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> => {
   await ensureRagitStructure(cwd);
   const payload = await loadLegacyPayload(cwd);
   if (dryRun) {
@@ -359,7 +360,7 @@ export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promis
   }
 };
 
-export const migrateFromJsonStore = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> => {
+const migrateFromJsonStoreUnlocked = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> => {
   await ensureRagitStructure(cwd);
   const storePath = legacyStorePath(cwd);
   try {
@@ -457,3 +458,18 @@ export const migrateFromJsonStore = async (cwd: string, dryRun: boolean): Promis
     closeCanonicalStore(canonical);
   }
 };
+
+export const migrateEmbeddings = async (cwd: string, dryRun: boolean): Promise<EmbeddingMigrationSummary> =>
+  dryRun
+    ? migrateEmbeddingsUnlocked(cwd, true)
+    : withStoreWriteLock(cwd, { command: "migrate-embeddings" }, () => migrateEmbeddingsUnlocked(cwd, false));
+
+export const migrateFromSqliteVss = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> =>
+  dryRun
+    ? migrateFromSqliteVssUnlocked(cwd, true)
+    : withStoreWriteLock(cwd, { command: "migrate-from-sqlite-vss" }, () => migrateFromSqliteVssUnlocked(cwd, false));
+
+export const migrateFromJsonStore = async (cwd: string, dryRun: boolean): Promise<MigrationSummary> =>
+  dryRun
+    ? migrateFromJsonStoreUnlocked(cwd, true)
+    : withStoreWriteLock(cwd, { command: "migrate-from-json-store" }, () => migrateFromJsonStoreUnlocked(cwd, false));

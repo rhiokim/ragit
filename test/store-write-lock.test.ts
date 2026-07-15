@@ -8,6 +8,7 @@ import {
   acquireStoreWriteLock,
   inspectStoreWriteLock,
   releaseStoreWriteLock,
+  withStoreWriteLock,
 } from "../src/core/store-write-lock.js";
 import { resolveRagitPaths } from "../src/core/project.js";
 
@@ -116,6 +117,20 @@ describe("store write lock", () => {
     expect(JSON.parse(await readFile(paths.storeWriteLockPath, "utf8"))).toMatchObject({ token: "remote-token" });
   });
 
+  it("does not steal a malformed lock", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ragit-store-lock-malformed-"));
+    const paths = resolveRagitPaths(cwd);
+    await mkdir(paths.runtimeDir, { recursive: true });
+    await writeFile(paths.storeWriteLockPath, "not-json\n", "utf8");
+
+    await expect(inspectStoreWriteLock(cwd)).resolves.toEqual({ state: "unknown", owner: null });
+    await expect(acquireStoreWriteLock(cwd, { command: "ingest" })).rejects.toMatchObject({
+      code: "STORE_WRITE_BUSY",
+      details: { lockState: "unknown", owner: null },
+    });
+    await expect(readFile(paths.storeWriteLockPath, "utf8")).resolves.toBe("not-json\n");
+  });
+
   it("does not release a lock when the token no longer matches", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "ragit-store-lock-release-"));
     const lock = await acquireStoreWriteLock(cwd, { command: "ingest" });
@@ -124,5 +139,17 @@ describe("store write lock", () => {
     await expect(access(lock.path, constants.F_OK)).resolves.toBeUndefined();
     await expect(lock.release()).resolves.toBe(true);
     await missing(lock.path);
+  });
+
+  it("releases the lock when a guarded operation fails", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ragit-store-lock-finally-"));
+    const paths = resolveRagitPaths(cwd);
+
+    await expect(
+      withStoreWriteLock(cwd, { command: "ingest" }, async () => {
+        throw new Error("operation failed");
+      }),
+    ).rejects.toThrow("operation failed");
+    await missing(paths.storeWriteLockPath);
   });
 });
