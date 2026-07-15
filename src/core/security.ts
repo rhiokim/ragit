@@ -9,6 +9,7 @@ import { toRepoPath } from "./identity.js";
 import { maskSecrets } from "./mask.js";
 import { ensureRagitStructure, resolveRagitPaths } from "./project.js";
 import { bootstrapCanonicalStore, closeCanonicalStore, readCanonicalStoreMeta } from "./store.js";
+import { withStoreWriteLock } from "./store-write-lock.js";
 import {
   AdmissionAction,
   AdmissionItem,
@@ -874,7 +875,7 @@ const purgeQuarantine = async (cwd: string, dryRun: boolean, result: SecurityPur
   result.deleted.push(toRepoPath(cwd, paths.quarantineDir));
 };
 
-export const runSecurityPurge = async (
+const runSecurityPurgeUnlocked = async (
   cwd: string,
   target: SecurityPurgeTarget,
   dryRun = false,
@@ -911,3 +912,14 @@ export const runSecurityPurge = async (
   }
   return result;
 };
+
+export const runSecurityPurge = async (
+  cwd: string,
+  target: SecurityPurgeTarget,
+  dryRun = false,
+): Promise<SecurityPurgeResult> =>
+  dryRun || (target !== "store" && target !== "all")
+    ? runSecurityPurgeUnlocked(cwd, target, dryRun)
+    : withStoreWriteLock(cwd, { command: "security-purge-store" }, () =>
+        runSecurityPurgeUnlocked(cwd, target, false),
+      );

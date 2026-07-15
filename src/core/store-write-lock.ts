@@ -194,3 +194,16 @@ export const acquireStoreWriteLock = async (
     release: () => releaseStoreWriteLock(cwd, owner.token),
   };
 };
+
+export const withStoreWriteLock = async <T>(
+  cwd: string,
+  input: { command: StoreWriteCommand; headSha?: string },
+  operation: () => Promise<T>,
+): Promise<T> => {
+  const lock = await acquireStoreWriteLock(cwd, input);
+  try {
+    return await operation();
+  } finally {
+    await lock.release();
+  }
+};
