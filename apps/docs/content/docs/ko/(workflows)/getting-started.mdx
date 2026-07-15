@@ -43,18 +43,25 @@ pnpm ragit --help
 
 1. published CLI 또는 로컬 저장소 스크립트로 RAGit을 설치합니다.
 2. `ragit init`으로 저장소를 초기화합니다.
-3. 프로젝트의 최소 문서 세트를 작성합니다.
-4. `ragit ingest --all`로 문서를 인덱싱합니다.
-5. `ragit status`와 `ragit query`로 결과를 확인합니다.
+3. 프로젝트의 최소 문서 세트를 작성하거나 검토합니다.
+4. 의도한 저장소 지식 상태를 커밋합니다.
+5. 해당 커밋을 대상으로 full ingest를 실행합니다.
+6. `ragit status`와 `ragit query`로 결과를 확인합니다.
 
 ```bash
 ragit init
+git add AGENTS.md docs .ragit/config.toml .gitignore
+git commit -m "initialize ragit knowledge"
 ragit ingest --all
-ragit status
-ragit query "project goal"
+ragit status --format json
+ragit query "project goal" --format json
 ```
 
 RAGit 저장소를 직접 개발 중이라면 `ragit` 대신 `pnpm ragit`을 사용하십시오.
+
+생성된 초안은 staging 전에 검토하십시오. 선택한 init 정책이 `.ragit/config.toml`을 ignore한다면 해당 정책이 추적 대상으로 유지하는 저장소 파일만 staging하고, ignore된 runtime state를 강제로 추가하지 마십시오.
+
+RAGit은 searchable knowledge를 커밋에 결속합니다. Apply-mode ingest는 관련 문서 후보가 modified, deleted, untracked 상태이면 거부하며, 조회 명령은 worktree 변경을 제외했다는 warning과 함께 커밋된 snapshot을 계속 사용합니다.
 
 ## Greenfield 최소 문서 세트
 
@@ -77,12 +84,15 @@ ragit hooks install
 다음 조건을 만족하면 신규 프로젝트 적용이 끝난 상태로 봅니다.
 
 - `status`에서 저장소가 초기화되고 인덱싱된 상태로 보입니다.
-- `query`가 방금 추가한 문서에서 관련 chunk를 반환합니다.
+- `status.data.snapshot.status`가 정확한 현재 HEAD에 대해 `indexed`입니다.
+- `query`가 관련 chunk를 반환하고 `snapshotSha`와 `snapshot.resolvedSha`에 같은 SHA를 보고합니다.
 - 팀이 bootstrap 과정을 다시 읽지 않아도 문서만으로 다음 작업을 이어갈 수 있습니다.
 
 첫 검증이 끝난 뒤에는 intent 기준으로 retrieval을 고르십시오. raw indexed hit가 필요하면 `query`, 다음 에이전트 단계에 넘길 bounded packet이 필요하면 `context pack`, working state까지 포함해 활성 작업을 재개해야 하면 `memory recall`을 사용하십시오.
 
 검증이 실패하면 워크플로를 바꾸기 전에 <a href="/ko/docs/commands/doctor">doctor</a>로 먼저 진단하십시오.
+
+이 흐름은 commit-bound snapshot integrity를 확립하지만 완전한 production readiness를 보장하지는 않습니다. Exclusive ingest locking, crash recovery, retrieval evaluation, distribution matrix 검증은 별도 작업으로 남아 있습니다.
 
 ## 다음 문서
 

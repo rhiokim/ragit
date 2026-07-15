@@ -224,14 +224,18 @@ Use [Getting Started](https://rhiokim.github.io/ragit/en/docs/getting-started/) 
 ### Happy Path
 
 `init` prepares the repository, but it does not make the repo search-ready.
-Retrieval starts only after `ingest` writes snapshot-backed knowledge state.
+Retrieval starts only after the intended foundational documents are reviewed, committed, and indexed as snapshot-backed knowledge state.
 
 ```bash
 pnpm ragit init
+git add AGENTS.md docs .ragit/config.toml .gitignore
+git commit -m "initialize ragit knowledge"
 pnpm ragit ingest --all
 pnpm ragit status --format json
-pnpm ragit query "project goal" --view minimal --format both
+pnpm ragit query "project goal" --view minimal --format json
 ```
+
+If the selected init policy ignores `.ragit/config.toml`, stage only the repository files that policy keeps trackable. Do not force-add ignored runtime state.
 
 ### Choose the Retrieval Command
 
@@ -359,7 +363,9 @@ The flow below shows how `ragit ingest` turns repository documents and bound art
 ```
 
 - Candidate resolution changes by mode: explicit `--path`, glob-style `--files`, incremental `--since`, or the default full-snapshot scan.
-- `--dry-run` stops before writing `.ragit/store` or a new manifest and only returns the planned ingest summary.
+- The no-selector form is a full ingest. `--since` requires the exact indexed base commit and proves that it is an ancestor of the current HEAD; partial path/glob ingest requires the exact HEAD manifest or, when absent, the exact parent manifest.
+- Apply mode rejects relevant modified, deleted, or untracked document candidates before reading content, embedding, binding artifacts, or writing the store, manifest, or ledger. Commit the intended document state before retrying.
+- `--dry-run` stops before persistent writes and reports all blocking `dirtyCandidates` with `wouldFail: true` instead of failing the process.
 - The apply path is where pending artifact binding, artifact chunk construction, and store/manifest writes actually happen.
 - The final searchable truth comes from the manifest snapshot, not from raw files or chunks alone.
 
@@ -405,13 +411,13 @@ For a normal product repository, accept the `safe` policy. For a repository that
 ## Memory OS MVP
 
 - `memory wrap`: save a session summary into `.ragit/memory/sessions/` and refresh working state in `.ragit/memory/working/`
-- `memory recall`: combine working state and snapshot-scoped retrieval into an agent-ready recall packet
-- `memory promote`: crystallize promotion candidates into searchable long-term docs under `docs/memory/**` and ingest them immediately when `HEAD` exists
+- `memory recall`: combine working state and exact snapshot-scoped retrieval into an agent-ready recall packet; if the snapshot is unavailable, return an explicit keyword-only degraded packet from working memory and reviewed artifacts
+- `memory promote`: crystallize promotion candidates into long-term docs under `docs/memory/**`; review and commit those docs before running ingest
 
 This split is intentional:
 
 - `.ragit/memory/**` is the local control plane for working state and session history; promote durable knowledge into `docs/memory/**` when it should be reviewed and tracked
-- `docs/memory/**` is the searchable long-term memory corpus that participates in normal ingest/query flows
+- `docs/memory/**` becomes searchable long-term memory only after the promoted docs are reviewed, committed, and included in a later ingest
 
 ## Agent CLI Contract
 
@@ -420,6 +426,9 @@ This split is intentional:
 - Prefer `--view minimal` for `query`, `context pack`, and `memory recall`.
 - Prefer `--input <path|->` for structured agent payloads.
 - Run mutating commands with `--dry-run` first: `ingest`, `hooks install`, `hooks uninstall`, `memory wrap`, `memory promote`.
+- Successful `query` and `context pack` JSON results retain `snapshotSha` and add a `snapshot` block that identifies the requested ref, exact resolved SHA, selection mode, readiness, branch, detached state, and dirty-worktree state.
+- Operational JSON failures use the same envelope with `ok: false`, `data: null`, and an `error` payload. Exit `2` means invalid input, `3` means not ready or transient repository state, and `4` means corrupt or incompatible snapshot state.
+- JSON failures go to stdout, text failures go to stderr, and `both` emits one on each stream with the same exit status.
 
 ## Canonical Agent Skill
 
@@ -489,21 +498,32 @@ Recommended flow after `init`:
 
 ```bash
 pnpm ragit migrate from-json-store   # only if summary says migrationRequired=true
-pnpm ragit hooks install
+git add AGENTS.md docs .ragit/config.toml .gitignore
+git commit -m "initialize ragit knowledge"
 pnpm ragit ingest --all
+pnpm ragit status --format json
+pnpm ragit query "project goal" --format json
+pnpm ragit hooks install              # optional, after the first successful ingest
 ```
+
+Review the generated foundational drafts before committing them. If the selected init policy ignores `.ragit/config.toml`, stage only the repository files that remain trackable under that policy.
 
 ## Hook Strategy
 
-- `post-commit`: automatically indexes changes from `HEAD~1..HEAD`
-- `post-merge`: automatically indexes changes from `${ORIG_HEAD:-HEAD~1}..HEAD`
-- Failures are warning-only and do not block commit/merge flows.
+- `post-commit`: resolves `HEAD^` to a full base SHA and requests exact incremental ingest.
+- `post-merge`: resolves `ORIG_HEAD` to a full base SHA and requests exact incremental ingest.
+- If a base cannot be resolved, the managed hook skips ingest. Ingest failures remain warning-only, recommend `ragit ingest --all`, and do not block completed commit/merge flows.
 
 ## Retrieval Strategy
 
+- An omitted `--at` selects only the exact current HEAD manifest. `--at` accepts `HEAD`, a full commit SHA, or a unique hexadecimal commit prefix and still loads only that exact commit.
+- A nearest indexed ancestor is recovery guidance, never an automatic retrieval result.
+- Dirty worktree reads stay pinned to the committed snapshot, exclude uncommitted content, and return a warning.
 - 1st pass: zvec vector search scoped to the snapshot manifest
 - 2nd pass: keyword score
 - Final score: `alpha * vector + (1-alpha) * keyword` (default `alpha=0.7`)
+
+These integrity guarantees do not by themselves establish practical production readiness. Exclusive ingest locking, crash recovery, retrieval evaluation, and the full distribution matrix remain separate workstreams.
 
 ## Security Defaults
 

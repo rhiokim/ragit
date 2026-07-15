@@ -9,10 +9,10 @@ description: working memory와 장기기억 승격을 관리합니다
 
 - <a href="/ko/docs/commands/memory/wrap">`memory wrap`</a>: 현재 세션 상태를 기록합니다.
 - <a href="/ko/docs/commands/memory/recall">`memory recall`</a>: 다음 세션 복원 패킷을 만듭니다.
-- <a href="/ko/docs/commands/memory/promote">`memory promote`</a>: 안정된 지식을 searchable doc으로 승격합니다.
+- <a href="/ko/docs/commands/memory/promote">`memory promote`</a>: 안정된 지식을 커밋과 ingest 이후 searchable해지는 durable doc으로 승격합니다.
 
 ## 패밀리 경계
 
 - `wrap`은 `.ragit/memory/**`에 control-plane state를 씁니다.
 - `recall`은 working state를 읽고 retrieval과 합칩니다.
-- `promote`는 `docs/memory/**`에 durable doc을 쓰고 targeted ingest를 연결할 수 있습니다.
+- `promote`는 `docs/memory/**`에 durable doc을 쓰지만 ingest하지 않습니다. 문서를 검토하고 커밋한 뒤 별도로 ingest해야 합니다.

@@ -6,7 +6,7 @@ command_path: memory recall
 
 ## What It Does
 
-`memory recall` reconstructs the packet you need to continue active work. It starts from current working memory and then supplements it with the same retrieval planner/executor used by `query` and `context pack`, plus recall-only artifact overlays that are relevant to the goal.
+`memory recall` reconstructs the packet you need to continue active work. It starts from current working memory and, when the exact HEAD snapshot is available, supplements it with the same strict retrieval used by `query` and `context pack` plus recall-only artifact overlays relevant to the goal.
 
 ## When To Use / When Not To Use
 
@@ -38,7 +38,8 @@ pnpm ragit memory recall <goal> \
 ## Input And Output Contract
 
 - Input is positional only.
-- JSON output includes `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, and `nextActions`.
+- JSON output includes `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, `nextActions`, `latestSessionId`, `sourceHeadSha`, `snapshotSha`, `snapshot`, `createdAt`, and `warnings`.
+- `snapshot` reports the attempted ref, resolved SHA when known, selection mode, status, branch, detached state, and dirty-worktree state.
 - `retrievedHits` can contain both snapshot hits and artifact-origin hits, but the packet still remains selective rather than replaying raw history.
 - `--view minimal` is the best default for agent resumes.
 - `--view default` balances readability and detail.
@@ -62,7 +63,9 @@ pnpm ragit memory recall "resume auth flow" --view minimal --format json
 
 - `memory recall` depends on working-memory state quality. If wraps are poor, recall quality drops too.
 - This command does not replay the entire session history. It intentionally produces a selective packet.
-- When snapshot retrieval is unavailable, recall can still return an artifact-backed packet with warnings instead of failing immediately.
+- When exact snapshot retrieval is unavailable because the manifest/store is missing, invalid, incompatible, or repeatedly moving, recall returns `snapshotSha: null`, `snapshot.status: unavailable`, and a warning containing the operational error code.
+- Degraded recall uses only working memory and reviewed artifact-derived content. It ranks without embeddings or a canonical-store call, and its hits must not be interpreted as snapshot-backed durable knowledge.
+- `query` and `context pack` do not degrade this way; they remain strict.
 
 ## Related Commands
 

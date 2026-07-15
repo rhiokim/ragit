@@ -6,7 +6,7 @@ command_path: memory recall
 
 ## 무엇을 하는 명령인가
 
-`memory recall`은 작업을 다시 이어가기 위해 필요한 패킷을 복원합니다. 현재 working memory에서 시작한 뒤, `query`와 `context pack`이 쓰는 동일한 retrieval planner/executor 결과와 goal에 맞는 recall 전용 artifact overlay를 덧붙입니다.
+`memory recall`은 작업을 다시 이어가기 위해 필요한 패킷을 복원합니다. 현재 working memory에서 시작하고, 정확한 HEAD snapshot을 사용할 수 있을 때 `query`와 `context pack`이 쓰는 동일한 strict retrieval 결과와 goal에 맞는 recall 전용 artifact overlay를 덧붙입니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -38,7 +38,8 @@ pnpm ragit memory recall <goal> \
 ## 입력/출력 계약
 
 - 입력은 positional 인자만 사용합니다.
-- JSON 출력에는 `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, `nextActions`가 포함됩니다.
+- JSON 출력에는 `goal`, `constraints`, `openLoops`, `relatedDecisions`, `retrievedHits`, `nextActions`, `latestSessionId`, `sourceHeadSha`, `snapshotSha`, `snapshot`, `createdAt`, `warnings`가 포함됩니다.
+- `snapshot`은 시도한 ref, 확인 가능한 resolved SHA, selection mode, status, branch, detached state, dirty-worktree state를 보고합니다.
 - `retrievedHits`에는 snapshot hit와 artifact-origin hit가 함께 들어올 수 있지만, 여전히 전체 이력을 재생하지 않고 선택된 packet만 반환합니다.
 - `--view minimal`은 에이전트 재개 흐름의 기본값으로 가장 적합합니다.
 - `--view default`는 읽기성과 상세의 균형을 맞춥니다.
@@ -62,7 +63,9 @@ pnpm ragit memory recall "resume auth flow" --view minimal --format json
 
 - `memory recall` 품질은 working memory 품질에 크게 의존합니다. wrap이 빈약하면 recall도 약해집니다.
 - 이 명령은 전체 세션 로그를 재생하지 않습니다. 의도적으로 선택된 패킷만 복원합니다.
-- snapshot retrieval이 당장 불가능해도, 관련 artifact를 기반으로 warning과 함께 최소 packet을 반환할 수 있습니다.
+- Exact snapshot retrieval이 manifest/store 누락, invalid, incompatible, 반복된 repository movement 때문에 불가능하면 recall은 `snapshotSha: null`, `snapshot.status: unavailable`, operational error code가 포함된 warning을 반환합니다.
+- Degraded recall은 working memory와 reviewed artifact-derived content만 사용합니다. Embedding이나 canonical store 호출 없이 순위를 계산하며, 해당 hit를 snapshot-backed durable knowledge로 해석하면 안 됩니다.
+- `query`와 `context pack`은 이 방식으로 degrade하지 않고 strict 상태를 유지합니다.
 
 ## 관련 명령
 

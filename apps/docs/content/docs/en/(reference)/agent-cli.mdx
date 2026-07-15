@@ -22,7 +22,7 @@ Most major commands can now return a shared envelope:
 {
   "command": "query",
   "ok": true,
-  "version": "1.0.1",
+  "version": "1.1.1",
   "cwd": "/repo/path",
   "data": {},
   "warnings": []
@@ -32,6 +32,41 @@ Most major commands can now return a shared envelope:
 That envelope is meant to stay stable even when the human text output changes.
 
 For per-command syntax, payload shapes, and failure notes, use <a href="/en/docs/commands">Commands</a> as the detailed reference.
+
+## Stable Operational Failures
+
+Typed operational failures keep the same envelope and add a stable `error` payload:
+
+```json
+{
+  "command": "query",
+  "ok": false,
+  "version": "1.1.1",
+  "cwd": "/repo/path",
+  "data": null,
+  "warnings": [],
+  "error": {
+    "code": "SNAPSHOT_NOT_INDEXED",
+    "category": "not_ready",
+    "message": "indexed snapshot을 찾을 수 없습니다: 0123456789abcdef0123456789abcdef01234567",
+    "retryable": false,
+    "details": { "resolvedSha": "0123456789abcdef0123456789abcdef01234567" },
+    "recovery": { "command": "ragit ingest --all" }
+  }
+}
+```
+
+- Exit `2`: invalid input, such as an invalid, ambiguous, or non-ancestor commit reference.
+- Exit `3`: a required snapshot/base/store is not ready, dirty ingest candidates exist, or repository state moved repeatedly.
+- Exit `4`: a manifest is corrupt or uses an unsupported future schema.
+- `json` writes the failure envelope to stdout, `text` writes the human failure to stderr, and `both` uses both streams with the same exit status. Unexpected non-operational errors remain exit `1` on stderr.
+
+## Snapshot Rules
+
+- An omitted `--at` means the exact current HEAD. Explicit selection accepts only `HEAD`, a full commit SHA, or a unique hexadecimal commit prefix.
+- A nearest indexed ancestor may appear in error details as recovery guidance; it is never selected automatically.
+- Dirty worktree reads use the committed snapshot, exclude uncommitted changes, and report that fact in `warnings`.
+- Successful `query` and `context pack` data retain `snapshotSha` and add `snapshot`; those two resolved SHAs must agree.
 
 ## Read Commands
 
@@ -64,6 +99,8 @@ ragit memory promote --input promote.json --dry-run --format json
 ragit memory promote --input promote.json --format json
 ```
 
+For `ingest --dry-run`, inspect `dirtyCandidates` and `wouldFail` before apply. `memory promote` and `harness promote` create durable documents with `ingested: false`; review and commit those documents before running ingest.
+
 ## Memory Caveat
 
 Do not confuse the two memory surfaces:
@@ -72,3 +109,5 @@ Do not confuse the two memory surfaces:
 - `docs/memory/**` is the searchable corpus that participates in ingest and snapshot retrieval.
 
 That means agents should use `memory wrap` and `memory recall` to manage active work, and `memory promote` only when knowledge is stable enough to become searchable project memory.
+
+These contracts establish snapshot integrity, not complete practical readiness. Exclusive ingest locking, crash recovery, retrieval evaluation, and distribution-matrix validation remain separate concerns.

@@ -6,7 +6,7 @@ command_path: memory promote
 
 ## What It Does
 
-`memory promote` takes promotion candidates and writes durable docs under `docs/memory/**`, such as decisions, glossary entries, or plans. When `HEAD` is available, it then ingests those docs so they become searchable immediately.
+`memory promote` takes promotion candidates and writes durable docs under `docs/memory/**`, such as decisions, glossary entries, or plans. It does not ingest those new worktree files. Review and commit them before a later ingest makes them searchable.
 
 ## When To Use / When Not To Use
 
@@ -30,7 +30,7 @@ pnpm ragit memory promote --input <path|-> \
 ## Arguments And Options
 
 - `--input <path|->`: Required JSON payload describing promotion candidates.
-- `--dry-run`: Validate candidates, planned target docs, and planned ingest without writing.
+- `--dry-run`: Validate candidates and planned target docs without writing.
 - `--format text|json|both`: Choose text, JSON, or both.
 - `--cwd <path>`: Run against another repository.
 
@@ -51,8 +51,8 @@ pnpm ragit memory promote --input <path|-> \
 ```
 
 - JSON output includes `createdFiles`, `plannedFiles`, `sourceHeadSha`, `ingested`, `dryRun`, and `warnings`.
-- `--dry-run` tells you which doc files and ingest targets would be touched.
-- If `HEAD` does not exist, promotion still plans file creation but warns that ingest is skipped.
+- `--dry-run` tells you which document files would be created.
+- Promotion reports `ingested: false`. A successful apply warns you to commit the generated documents and run `ragit ingest --all` for the first snapshot or a supported incremental ingest after a trusted base exists.
 
 ## Examples
 
@@ -60,6 +60,9 @@ Human terminal flow:
 
 ```bash
 pnpm ragit memory promote --input promotion-batch.json
+git add docs/memory
+git commit -m "promote durable memory"
+pnpm ragit ingest --all
 ```
 
 Agent-oriented flow:
@@ -72,7 +75,7 @@ pnpm ragit memory promote --input promotion-batch.json --dry-run --format json
 
 - Promotion is the deliberate filter that keeps `docs/memory/**` clean. Do not use it for raw scratch notes.
 - The payload must use valid promotion candidate types and fields.
-- Promoted docs affect searchable retrieval after ingest, not before.
+- Promoted docs affect searchable retrieval only after review, commit, and ingest. Do not index their uncommitted worktree contents under the previous HEAD.
 
 ## Related Commands
 

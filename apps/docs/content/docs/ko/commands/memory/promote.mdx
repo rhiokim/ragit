@@ -6,7 +6,7 @@ command_path: memory promote
 
 ## 무엇을 하는 명령인가
 
-`memory promote`는 promotion candidate를 받아 `docs/memory/**` 아래 durable doc으로 기록합니다. `HEAD`가 있으면 그 문서를 바로 ingest하여 검색 가능하게 만듭니다.
+`memory promote`는 promotion candidate를 받아 `docs/memory/**` 아래 durable doc으로 기록합니다. 새 worktree 파일을 ingest하지 않으며, 이후 검색 가능하게 만들려면 문서를 검토하고 커밋한 뒤 ingest해야 합니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -30,7 +30,7 @@ pnpm ragit memory promote --input <path|-> \
 ## 인자와 옵션
 
 - `--input <path|->`: promotion candidate를 설명하는 필수 JSON payload입니다.
-- `--dry-run`: 후보, 생성될 문서, planned ingest를 실제 쓰기 없이 검증합니다.
+- `--dry-run`: 후보와 생성될 문서를 실제 쓰기 없이 검증합니다.
 - `--format text|json|both`: 출력 형식을 선택합니다.
 - `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
 
@@ -51,8 +51,8 @@ pnpm ragit memory promote --input <path|-> \
 ```
 
 - JSON 출력에는 `createdFiles`, `plannedFiles`, `sourceHeadSha`, `ingested`, `dryRun`, `warnings`가 포함됩니다.
-- `--dry-run`은 어떤 문서 파일과 ingest target이 만져질지를 사전에 보여줍니다.
-- `HEAD`가 없으면 파일 생성 계획은 유지되지만 ingest는 건너뛰었다는 경고가 함께 반환됩니다.
+- `--dry-run`은 어떤 문서 파일이 생성될지를 사전에 보여줍니다.
+- Promote는 `ingested: false`를 보고합니다. Apply가 성공하면 생성 문서를 커밋하고, 첫 snapshot이면 `ragit ingest --all`, trusted base가 있으면 지원되는 증분 ingest를 실행하라는 warning을 반환합니다.
 
 ## 대표 사용 예시
 
@@ -60,6 +60,9 @@ pnpm ragit memory promote --input <path|-> \
 
 ```bash
 pnpm ragit memory promote --input promotion-batch.json
+git add docs/memory
+git commit -m "promote durable memory"
+pnpm ragit ingest --all
 ```
 
 에이전트 호출 예시:
@@ -72,7 +75,7 @@ pnpm ragit memory promote --input promotion-batch.json --dry-run --format json
 
 - promote는 `docs/memory/**`를 깨끗하게 유지하기 위한 의도적 필터입니다. raw scratch note에는 사용하지 마십시오.
 - payload는 유효한 candidate type과 필드를 따라야 합니다.
-- promote 후에야 searchable retrieval에 반영됩니다.
+- Promote된 문서는 검토·커밋·ingest 이후에만 searchable retrieval에 반영됩니다. 이전 HEAD 아래에 uncommitted worktree content를 인덱싱하면 안 됩니다.
 
 ## 관련 명령
 

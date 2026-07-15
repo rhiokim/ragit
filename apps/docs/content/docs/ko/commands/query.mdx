@@ -6,7 +6,7 @@ command_path: query
 
 ## 무엇을 하는 명령인가
 
-`query`는 인덱싱된 저장소 지식을 검색하고 질문에 맞는 hit를 반환합니다. 내부적으로는 shared retrieval planner/executor를 사용하지만, 결과는 여전히 snapshot 범위에 묶이므로 선택한 커밋 시점 기준으로 재현됩니다.
+`query`는 인덱싱된 저장소 지식을 검색하고 질문에 맞는 hit를 반환합니다. 질문을 embedding하기 전에 정확히 요청한 커밋의 validated manifest와 canonical store를 요구하므로 다른 snapshot 결과를 조용히 대신 반환하지 않습니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
@@ -36,7 +36,7 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
 - `--input <path|->`: `question`, `topK`, `at`를 담은 JSON payload를 전달합니다.
 - `--top-k <n>`: 반환 hit 개수를 조절합니다.
 - `--scope durable|session|harness|evidence|all`: durable snapshot만 볼지, explicit artifact scope를 볼지, 둘을 합칠지 고릅니다.
-- `--at <sha>`: 특정 snapshot SHA 또는 prefix를 사용합니다.
+- `--at <sha>`: `HEAD`, full commit SHA, unique hexadecimal commit prefix 중 하나를 사용합니다. Branch name, tag, revision expression은 허용하지 않습니다.
 - `--view minimal|default|full`: hit 투영의 상세 수준을 선택합니다.
 - `--format text|json|both`: 출력 형식을 선택합니다.
 - `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
@@ -54,7 +54,8 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
 }
 ```
 
-- JSON 출력은 `query`, `snapshotSha`, `hits`, `redactionSummary`를 반환합니다.
+- JSON 출력은 `query`, `snapshotSha`, `snapshot`, `hits`, `warnings`, `redactionSummary`를 반환합니다.
+- `snapshot`은 `requestedRef`, `resolvedSha`, `selection`, `status`, `branch`, `detached`, `worktreeDirty`를 보고합니다. 성공 시 `snapshotSha`는 항상 `snapshot.resolvedSha`와 같습니다.
 - hit에는 필요할 경우 `scope`, `originType`, `artifactId`, `artifactKind`, `authority`, `confidence` 같은 artifact-aware metadata가 함께 들어올 수 있습니다.
 - text/JSON 출력은 항상 다시 마스킹된 결과를 사용합니다.
 - `--view minimal`은 가장 작은 hit 형태를 반환합니다.
@@ -79,9 +80,13 @@ pnpm ragit query --input query.json --view minimal --format json
 
 - `--input`과 positional `question`, `--top-k`, `--at`를 함께 쓰면 안 됩니다.
 - `question`이 비어 있으면 실패합니다.
+- `--at`이 없으면 정확한 현재 HEAD manifest만 읽습니다. `--at HEAD`를 포함해 `--at`을 명시한 모든 호출은 explicit exact selection으로 보고됩니다.
+- Error details의 nearest indexed ancestor는 recovery hint일 뿐 자동 조회 결과가 아닙니다.
+- Dirty worktree 조회는 커밋된 snapshot을 사용하고 uncommitted change를 제외하며 warning을 포함합니다.
+- Invalid ref는 exit `2`, exact snapshot 누락 또는 store unavailable은 exit `3`, corrupt 또는 unsupported manifest는 exit `4`를 사용합니다. Typed failure는 stable CLI failure envelope를 반환합니다.
 - `query`는 working memory를 읽지 않습니다.
 - `--scope durable`에서는 snapshot에 인덱싱된 콘텐츠만 검색합니다.
-- `--scope session|harness|evidence|all`에서는 explicit artifact/evidence overlay를 함께 사용할 수 있지만, 결과는 여전히 sanitize된 상태로만 반환합니다.
+- `--scope session|harness|evidence|all`에서는 exact snapshot selection이 성공한 뒤에만 explicit artifact/evidence overlay를 함께 사용할 수 있으며, 결과는 여전히 sanitize된 상태로만 반환합니다.
 
 ## 관련 명령
 

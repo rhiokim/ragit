@@ -44,4 +44,4 @@ flowchart LR
 - `verify` checks bindings and structure, but it does not execute anything.
 - `run` executes selected cases, records `.ragit/log/harness-runs/**`, and can emit failure artifacts.
 - `pack` is the read side for agent payload assembly.
-- `promote` is the durable-write side that can trigger targeted ingest.
+- `promote` is the durable-write side; it does not ingest generated docs, so review and commit them before a later ingest.

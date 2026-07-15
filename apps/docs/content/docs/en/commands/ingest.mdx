@@ -6,7 +6,7 @@ command_path: ingest
 
 ## What It Does
 
-`ingest` scans supported documents, writes embeddings and records into the canonical store, and produces a snapshot manifest bound to the current commit.
+`ingest` scans supported documents from committed repository state, writes embeddings and records into the canonical store, and produces a snapshot manifest bound to the exact current commit.
 
 Admission control runs before persistence. Implicit selectors (`--all`, `--since`, managed hook-triggered ingest) follow the configured document surface, while explicit selectors (`--files`, `--path`, JSON `paths[]`) may bypass include rules but never bypass admission checks.
 
@@ -14,7 +14,7 @@ Admission control runs before persistence. Implicit selectors (`--all`, `--since
 
 ### When to use it
 
-- If you are onboarding a new project, read <a href="/en/docs/getting-started">Getting Started</a> first, then run `ingest` after `init`.
+- If you are onboarding a new project, read <a href="/en/docs/getting-started">Getting Started</a> first, then run `ingest` after reviewing and committing the documents produced by `init`.
 - You added or changed project docs and want retrieval to see them.
 - You promoted durable memory into `docs/memory/**`.
 - You want to preview which files would be indexed before running a real mutation.
@@ -28,15 +28,18 @@ Admission control runs before persistence. Implicit selectors (`--all`, `--since
 
 ```bash
 pnpm ragit ingest \
-  [--all | --since <sha> | --files <glob> | --input <path|->] \
+  [--all | --since <sha> | --files <glob> | --path <repo-path>... | --input <path|->] \
+  [--scope durable|all] \
   [--dry-run] [--format text|json|both]
 ```
 
 ## Arguments And Options
 
 - `--all`: Index all supported repository documents.
-- `--since <sha>`: Index only changes since a commit.
+- `--since <sha>`: Index committed changes after an exact indexed base. The base must resolve from `HEAD`, a full SHA, or a unique hexadecimal prefix and must be an ancestor of the current HEAD.
 - `--files <glob>`: Index a targeted glob.
+- `--path <repo-path>`: Index an exact repository-relative Markdown path. Repeat the option for multiple paths.
+- `--scope durable|all`: Include durable documents only, or durable documents plus bindable artifacts.
 - `--input <path|->`: Provide a structured JSON payload instead of flags.
 - `--dry-run`: Validate inputs and compute the plan without writing the store or manifest.
 - `--format text|json|both`: Choose the result envelope form.
@@ -49,14 +52,15 @@ pnpm ragit ingest \
 
 ```json
 {
-  "all": false,
-  "since": "HEAD~1",
-  "files": "docs/**/*.md"
+  "since": "0123456789abcdef0123456789abcdef01234567",
+  "scope": "durable"
 }
 ```
 
-- JSON output reports `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`, and `admission`.
-- `--dry-run` returns the same planned surface without mutating the store.
+- With no selector, `ingest` behaves like a full `--all` ingest and uses no incremental base.
+- `--since` requires the exact base manifest. Partial `--files` or `--path` ingest uses the exact HEAD manifest when present, otherwise the exact parent manifest; it never falls back to the latest or nearest snapshot.
+- JSON output reports `mode`, `processed`, `skipped`, `masked`, `commitSha`, `manifestPath`, `plannedFiles`, `deletedDocumentIds`, `dirtyCandidates`, `wouldFail`, `fullSnapshot`, `scope`, `admission`, `docAuthority`, and `warnings`.
+- `--dry-run` returns the planned surface with exit `0` and no persistent writes. When relevant worktree documents are dirty, it lists every blocking path in `dirtyCandidates` and sets `wouldFail: true`.
 - In `security.admission_mode=enforce`, blocked implicit candidates are skipped while blocked explicit candidates fail apply.
 
 ## Examples
@@ -77,6 +81,8 @@ pnpm ragit ingest --input ingest.json --dry-run --format json
 
 - Do not mix `--input` with selector flags in the same call.
 - Invalid globs and unsafe path patterns are rejected before indexing begins.
+- Apply mode throws `INGEST_CANDIDATES_DIRTY` with exit `3` before content reads, embedding, store writes, artifact binding, manifest publication, or ledger writes when a relevant document is modified, deleted, or untracked. Commit the intended state and retry.
+- A missing exact base throws `INGEST_BASE_NOT_INDEXED` with exit `3`; a non-ancestor `--since` base throws `INGEST_BASE_NOT_ANCESTOR` with exit `2`. Corrupt or future base manifests keep their exit-`4` manifest error.
 - `ingest` only sees searchable corpus docs, not `.ragit/memory/**` control-plane files.
 - `--all` and `--since` only consider the configured implicit doc surface (`doc_globs/include/exclude`), not every file in the repository.
 

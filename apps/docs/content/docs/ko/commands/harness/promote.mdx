@@ -6,7 +6,7 @@ command_path: harness promote
 
 ## 무엇을 하는 명령인가
 
-`harness promote`는 reviewed harness artifact를 durable `docs/harness/**` 문서로 변환하고, `HEAD`가 있으면 targeted ingest까지 이어갈 수 있습니다.
+`harness promote`는 reviewed harness artifact를 durable `docs/harness/**` 문서로 변환합니다. `ingested: false`를 보고하며, 생성 문서를 검토하고 커밋한 뒤 ingest를 실행해야 합니다.
 
 ## 기본 구문
 
@@ -19,4 +19,5 @@ pnpm ragit harness promote --input <path|-> \
 
 - `reviewed` 상태의 harness artifact만 승격할 수 있습니다.
 - `promote`는 durable docs를 쓰는 명령이며, 실행 엔진이 아닙니다.
+- Apply가 성공하면 생성 문서를 커밋하고, 첫 snapshot이면 `ragit ingest --all`, trusted base가 있으면 지원되는 증분 ingest를 실행하라는 warning을 반환합니다.
 - operational evidence가 필요하면 <a href="/ko/docs/commands/harness/run">`harness run`</a>을 사용하십시오.

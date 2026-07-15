@@ -234,15 +234,22 @@ Those states still belong to `ragit ingest`.
 ## `init` vs `ingest`
 
 `init` prepares the repository operating model.
-`ingest` prepares searchable knowledge.
+`ingest` prepares searchable knowledge from committed repository state. Generated or edited foundational documents must be reviewed and committed before ingest; relevant dirty document candidates make apply mode fail.
 
 Operational sequence:
 
-1. `pnpm ragit init`
-2. `pnpm ragit hooks install`
-3. `pnpm ragit ingest --all`
+```bash
+ragit init
+git add AGENTS.md docs .ragit/config.toml .gitignore
+git commit -m "initialize ragit knowledge"
+ragit ingest --all
+ragit status --format json
+ragit query "project goal" --format json
+```
+
+Review the generated drafts before staging them. If the selected init policy ignores `.ragit/config.toml`, stage only the repository files that policy keeps trackable; do not force-add ignored runtime state. Managed hooks are optional after the first successful ingest.
 
 Interpretation rule:
 
 - After `init`, the repository is **diagnosed + foundation-ready + zvec-store-ready**
-- After `ingest`, the repository becomes **search-ready**
+- After the intended docs are committed and the exact HEAD is successfully ingested, the repository becomes **search-ready for that commit**
