@@ -207,11 +207,34 @@ const fallbackBaseUrlFromEnv = (provider: EmbeddingProvider): string | undefined
   return undefined;
 };
 
+const invalidProviderBaseUrl = (): Error => new Error("embedding provider base URL configuration is invalid.");
+
+const normalizeProviderBaseUrl = (value: string): string => {
+  const trimmed = value.trim();
+  if (!/^https?:\/\//i.test(trimmed) || trimmed.includes("?") || trimmed.includes("#")) throw invalidProviderBaseUrl();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw invalidProviderBaseUrl();
+  }
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    !parsed.hostname ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw invalidProviderBaseUrl();
+  }
+  const pathname = parsed.pathname.replace(/\/+$/, "");
+  return `${parsed.protocol}//${parsed.host}${pathname}`;
+};
+
 const configuredBaseUrl = (provider: EmbeddingProvider, configValue?: string): string | null => {
-  if (configValue?.trim()) return configValue.trim().replace(/\/+$/, "");
-  const fallback = fallbackBaseUrlFromEnv(provider)?.trim();
-  if (fallback) return fallback.replace(/\/+$/, "");
-  return defaultBaseUrlForProvider(provider);
+  const value = configValue?.trim() || fallbackBaseUrlFromEnv(provider)?.trim() || defaultBaseUrlForProvider(provider);
+  return value ? normalizeProviderBaseUrl(value) : null;
 };
 
 const modelSpecForProvider = (provider: EmbeddingProvider, model: string): ModelSpec => {
@@ -285,7 +308,7 @@ export const resolveEmbeddingConfiguredState = (config: RagitConfig): EmbeddingC
       configuredModel && !(provider !== "local-placeholder" && configuredModel === "placeholder-v1")
         ? configuredModel
         : defaultModelForProvider(provider),
-    baseUrl: configuredBaseUrl(provider, config.embedding.base_url),
+    baseUrl: provider === "local-placeholder" ? null : configuredBaseUrl(provider, config.embedding.base_url),
     timeoutMs: config.embedding.timeout_ms && config.embedding.timeout_ms > 0 ? config.embedding.timeout_ms : 30_000,
     cacheEnabled: config.embedding.cache_enabled !== false,
     cacheDir: config.embedding.cache_dir?.trim() || ".ragit/cache/embeddings",
@@ -435,30 +458,6 @@ const requireApiKey = (provider: EmbeddingProvider, model: string): string => {
   return apiKey ?? "";
 };
 
-const withTimeout = async <T>(promise: Promise<T>, profile: EmbeddingProfile): Promise<T> => {
-  let timeoutId: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(
-            new EmbeddingProviderError({
-              code: "TIMEOUT",
-              provider: profile.provider,
-              model: profile.model,
-              message: `embedding 요청이 시간 초과되었습니다: ${profile.timeoutMs}ms`,
-              retryable: true,
-            }),
-          );
-        }, profile.timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-};
-
 const invalidEmbeddingResponse = (profile: EmbeddingProfile, message: string): EmbeddingProviderError =>
   new EmbeddingProviderError({
     code: "RESPONSE_INVALID",
@@ -493,29 +492,42 @@ const normalizeEmbeddingVectors = (vectors: unknown, profile: EmbeddingProfile, 
 };
 
 const requestJson = async (input: RequestInfo | URL, init: RequestInit, profile: EmbeddingProfile): Promise<unknown> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), profile.timeoutMs);
   try {
-    const response = await withTimeout(fetch(input, init), profile);
+    const response = await fetch(input, { ...init, signal: controller.signal });
     if (!response.ok) {
       const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
       throw new EmbeddingProviderError({
         code: "PROVIDER_UNREACHABLE",
         provider: profile.provider,
         model: profile.model,
-        message: `${profile.provider} embedding 요청이 실패했습니다: ${response.status} ${response.statusText}`,
+        message: `${profile.provider} embedding 요청이 실패했습니다: ${response.status}`,
         retryable: response.status >= 500 || response.status === 429,
         retryAfterMs,
       });
     }
-    return response.json();
+    return await response.json();
   } catch (error) {
+    if (controller.signal.aborted) {
+      throw new EmbeddingProviderError({
+        code: "TIMEOUT",
+        provider: profile.provider,
+        model: profile.model,
+        message: `embedding 요청이 시간 초과되었습니다: ${profile.timeoutMs}ms`,
+        retryable: true,
+      });
+    }
     if (error instanceof EmbeddingProviderError) throw error;
     throw new EmbeddingProviderError({
       code: "PROVIDER_UNREACHABLE",
       provider: profile.provider,
       model: profile.model,
-      message: error instanceof Error ? error.message : String(error),
+      message: "embedding provider 요청에 연결할 수 없습니다.",
       retryable: true,
     });
+  } finally {
+    clearTimeout(timeoutId);
   }
 };
 
@@ -602,10 +614,10 @@ const isRetryableEmbeddingError = (error: unknown): error is EmbeddingProviderEr
 
 const resolveRetryDelayMs = (error: EmbeddingProviderError, policy: EmbeddingRetryPolicy, attempt: number): number => {
   const configuredDelay = policy.scheduleMs[Math.min(attempt, policy.scheduleMs.length - 1)] ?? 0;
-  const base = error.retryAfterMs !== undefined ? Math.max(error.retryAfterMs, configuredDelay) : configuredDelay;
-  if (base <= 0) return 0;
+  if (configuredDelay <= 0 && error.retryAfterMs === undefined) return 0;
   const jitter = 0.85 + Math.random() * 0.3;
-  return Math.round(base * jitter);
+  const jitteredConfiguredDelay = Math.round(configuredDelay * jitter);
+  return Math.max(error.retryAfterMs ?? 0, jitteredConfiguredDelay);
 };
 
 const executeProviderBatchWithRetry = async (

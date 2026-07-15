@@ -61,6 +61,7 @@ const providerBody = (provider: "openai" | "ollama", vectors: unknown[]): unknow
     : { embeddings: vectors };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   if (ORIGINAL_FETCH === undefined) {
     // @ts-expect-error node fetch may be undefined in some runtimes
@@ -97,7 +98,7 @@ describe("embedding batching and retry", () => {
     expect(byteSplit[1]).toHaveLength(1);
   });
 
-  it("retries transient provider failures with the shared facade", async () => {
+  it.each([429, 500])("retries transient HTTP %i provider failures with the shared facade", async (status) => {
     process.env.OPENAI_API_KEY = "test-key";
     const profile = createOpenAiProfile();
     let calls = 0;
@@ -105,8 +106,8 @@ describe("embedding batching and retry", () => {
       calls += 1;
       if (calls === 1) {
         return new Response(JSON.stringify({ error: "rate limited" }), {
-          status: 429,
-          statusText: "Too Many Requests",
+          status,
+          statusText: status === 429 ? "Too Many Requests" : "Internal Server Error",
           headers: { "retry-after": "0" },
         });
       }
@@ -121,23 +122,59 @@ describe("embedding batching and retry", () => {
     expect(vectors[1]).toHaveLength(profile.dimensions);
   }, 10_000);
 
-  it("does not retry non-retryable provider failures", async () => {
+  it("does not shorten Retry-After with jitter", async () => {
     process.env.OPENAI_API_KEY = "test-key";
+    const profile = createOpenAiProfile();
+    let calls = 0;
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(JSON.stringify({ error: "rate limited" }), {
+          status: 429,
+          statusText: "Too Many Requests",
+          headers: { "retry-after": "1" },
+        });
+      }
+      return successResponse(parseInputs(init), profile.dimensions);
+    }) as typeof fetch;
+
+    const result = embedText("alpha", profile);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toHaveLength(profile.dimensions);
+    expect(calls).toBe(2);
+  });
+
+  it("does not retry non-retryable provider failures", async () => {
+    const apiKey = "openai-key-must-not-leak";
+    process.env.OPENAI_API_KEY = apiKey;
     const profile = createOpenAiProfile();
     let calls = 0;
     globalThis.fetch = vi.fn(async () => {
       calls += 1;
       return new Response(JSON.stringify({ error: "bad request" }), {
         status: 400,
-        statusText: "Bad Request",
+        statusText: `Bad Request ${apiKey}`,
       });
     }) as typeof fetch;
 
-    await expect(embedTexts(["alpha"], profile)).rejects.toMatchObject({
+    let error: unknown;
+    try {
+      await embedTexts(["alpha"], profile);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
       code: "PROVIDER_UNREACHABLE",
       retryable: false,
     });
     expect(calls).toBe(1);
+    expect((error as Error).message).not.toContain(apiKey);
   });
 
   it("restores OpenAI input order from response indexes", async () => {
