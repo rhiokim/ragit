@@ -1,19 +1,19 @@
 ---
 title: context pack
-description: 목표 기준 컨텍스트 패킷을 토큰 예산 안에서 구성합니다
+description: 목표 기준 컨텍스트 패킷을 엄격한 콘텐츠 단위 예산 안에서 구성합니다
 command_path: context pack
 ---
 
 ## 무엇을 하는 명령인가
 
-`context pack`은 검색된 지식을 특정 목표를 위한 bounded packet으로 바꿉니다. 내부적으로는 `query`와 같은 strict exact-snapshot selection 및 store validation을 사용한 뒤, 에이전트 프롬프트용 budget trimming만 추가합니다.
+`context pack`은 검색된 지식을 특정 목표를 위한 제한된 패킷으로 바꿉니다. 내부적으로는 `query`와 같은 strict exact-snapshot selection 및 store validation을 사용한 뒤, 별도 flag 없이 기본 `citation-diverse-v2` selector를 적용합니다.
 
 ## 언제 쓰는가 / 언제 쓰지 않는가
 
 ### 언제 쓰는가
 
 - 목표가 이미 있고 압축된 컨텍스트 handoff가 필요할 때
-- 토큰 예산이 중요할 때
+- 엄격한 콘텐츠 단위 예산이 필요할 때
 - 구조화된 입력을 안정적으로 에이전트에 넘기고 싶을 때
 
 ### 언제 쓰지 않는가
@@ -35,7 +35,7 @@ pnpm ragit context pack [goal] [--input <path|->] \
 
 - `goal`: 컨텍스트 선택을 이끌 목표입니다.
 - `--input <path|->`: `goal`, 선택적 `budget`, 선택적 `at`를 담은 JSON payload를 전달합니다.
-- `--budget <tokens>`: 선택된 패킷의 토큰 예산입니다.
+- `--budget <tokens>`: 기본값은 `1200`입니다. complete hit text의 결정적인 공백 구분 콘텐츠 단위로 계산하는 양의 안전한 정수 예산입니다. provider tokenizer 수나 serialized payload 크기가 아닙니다.
 - `--scope durable|session|harness|evidence|all`: durable snapshot만 사용할지, explicit artifact scope까지 합칠지 고릅니다.
 - `--at <sha>`: `HEAD`, full commit SHA, unique hexadecimal commit prefix 중 하나를 사용합니다. Branch name, tag, revision expression은 허용하지 않습니다.
 - `--view minimal|default|full`: 패킷 투영의 상세 수준을 조절합니다.
@@ -52,13 +52,26 @@ pnpm ragit context pack [goal] [--input <path|->] \
 }
 ```
 
-- JSON 출력에는 `goal`, `snapshotSha`, `snapshot`, `budget`, `usedTokens`, `selectedHits`, `hits`, `warnings`, `redactionSummary`가 포함됩니다.
+- JSON 출력에는 `goal`, `snapshotSha`, `snapshot`, `budget`, `usedTokens`, `selectedHits`, 추가 `selection`, `hits`, `warnings`, `redactionSummary`가 포함됩니다.
 - `snapshot`은 `requestedRef`, `resolvedSha`, `selection`, `status`, `branch`, `detached`, `worktreeDirty`를 보고합니다. 성공 시 `snapshotSha`는 항상 `snapshot.resolvedSha`와 같습니다.
-- hit selection은 별도의 검색 경로가 아니라, 동일한 retrieval 결과를 budget에 맞게 잘라낸 것입니다.
-- 출력은 downstream agent prompt에 들어가기 전에 다시 마스킹됩니다.
+- `selection`에는 `strategy`, `candidateHits`, `uniqueCitations`, `selectedSources`, `duplicateCitationsSkipped`, `budgetRejectedHits`가 들어갑니다. counter는 `uniqueCitations = selectedHits + budgetRejectedHits` 및 `candidateHits = uniqueCitations + duplicateCitationsSkipped`를 만족합니다.
+- text 출력은 같은 summary를 `selection_strategy`, `candidate_hits`, `unique_citations`, `selected_sources`, `duplicate_citations_skipped`, `budget_rejected_hits` header line으로 노출합니다.
+- 모든 Context Pack hit에는 citation이 남지만, Context Pack은 score breakdown을 노출하지 않습니다.
+- retrieval hit은 selection과 projection에 전달되기 전에 마스킹되며 기존 마스킹 계약은 그대로입니다.
 - `--view minimal`은 에이전트 context window에 가장 안전한 기본값입니다.
 - `--view default`는 읽기성과 상세의 균형을 맞춥니다.
 - `--view full`은 downstream reasoning에 richer text가 꼭 필요할 때만 쓰는 편이 좋습니다.
+
+## 선택과 예산
+
+`citation-diverse-v2`는 각 pass 안에서 들어온 retrieval rank를 안정적인 scan 순서로 사용합니다. Context Pack retrieval의 기존 `topK: 30` candidate limit이나 upstream retrieval ranking을 재점수화하거나 바꾸지 않습니다.
+
+- exact `citation.id` 중복은 예산 계산 전에 제거하며 첫 occurrence만 선택 대상입니다.
+- source family는 document의 경우 `document:<path>`, artifact의 경우 `artifact:<artifactId ?? citation.sourceId>`, evidence의 경우 `evidence:<artifactId ?? citation.sourceId>`입니다.
+- diversity pass는 원래 rank 순서로 각 source family에서 처음으로 complete hit 전체가 예산에 들어맞는 hit를 선택합니다.
+- fill pass는 남은 unique hit를 원래 rank 순서로 다시 살펴 남은 예산에 들어맞는 complete hit 전체를 선택합니다. 반환 순서는 diversity representative 다음 fill hit입니다.
+- hit은 나누지 않습니다. 첫 hit를 포함해 예산에 맞지 않는 hit은 건너뛰므로 항상 `usedTokens <= budget`입니다.
+- retrieval candidate가 있었지만 complete hit 하나도 맞지 않으면 패킷의 hit은 비어 있고 warning에 정확히 `context pack budget admitted no complete hit`가 포함됩니다.
 
 ## 대표 사용 예시
 
@@ -78,6 +91,7 @@ pnpm ragit context pack --input context-pack.json --view minimal --format json
 
 - `--input`과 positional `goal`, `--budget`, `--at`를 함께 쓰면 안 됩니다.
 - `goal`이 비어 있으면 거부됩니다.
+- `--budget`과 JSON `budget`은 양의 안전한 정수여야 합니다.
 - `--at`이 없으면 정확한 현재 HEAD manifest만 유효합니다. nearest indexed ancestor는 recovery guidance일 뿐 자동으로 pack되지 않습니다.
 - Dirty worktree 조회는 커밋된 snapshot을 사용하고 uncommitted change를 제외하며 warning을 포함합니다.
 - Invalid ref는 exit `2`, exact snapshot 누락 또는 store unavailable은 exit `3`, corrupt 또는 unsupported manifest는 exit `4`를 사용합니다. Typed failure는 stable CLI failure envelope를 반환합니다.

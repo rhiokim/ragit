@@ -256,11 +256,22 @@ If the selected init policy ignores `.ragit/config.toml`, stage only the reposit
 pnpm ragit query "DDD bounded context principles" --view minimal --format both
 ```
 
-`context pack` turns retrieval hits into a budgeted handoff packet for the next agent step.
+`context pack` turns retrieval hits into a content-unit-budgeted handoff packet for the next agent step.
 
 ```bash
 pnpm ragit context pack "Implementation plan for this sprint" --budget 1200 --view minimal --format both
 ```
+
+### Context Pack Selection
+
+- The flag-free default selector is `citation-diverse-v2`. It uses incoming retrieval rank as the stable scan order within each pass and does not rescore or alter the existing `topK: 30` candidate limit or upstream ranking.
+- Exact duplicate `citation.id` values keep only their first occurrence. Source families are `document:<path>`, `artifact:<artifactId ?? citation.sourceId>`, and `evidence:<artifactId ?? citation.sourceId>`.
+- First, the diversity pass selects each source family's first complete hit that fits in original rank order. Then the fill pass considers remaining unique hits in original rank order. Returned hits place diversity representatives before fill hits.
+- The default budget is `1200`; `--budget` and JSON `budget` must be positive safe integers. They measure deterministic whitespace-delimited content units in full hit text, not provider tokenizer tokens or serialized output size. Hits are indivisible, including the first hit, so `usedTokens <= budget`.
+- If retrieval produced candidates but no complete hit fits, the packet is empty and warnings include exactly `context pack budget admitted no complete hit`.
+- JSON adds `selection.strategy`, `selection.candidateHits`, `selection.uniqueCitations`, `selection.selectedSources`, `selection.duplicateCitationsSkipped`, and `selection.budgetRejectedHits`. The counters satisfy `uniqueCitations = selectedHits + budgetRejectedHits` and `candidateHits = uniqueCitations + duplicateCitationsSkipped`.
+- Text exposes the same summary as `selection_strategy`, `candidate_hits`, `unique_citations`, `selected_sources`, `duplicate_citations_skipped`, and `budget_rejected_hits` header lines.
+- Snapshot selection, `--scope`, masking, and `--view` contracts are unchanged. Context Pack keeps citations on hits and does not expose score breakdowns.
 
 `memory recall` rebuilds a resume packet by layering working state on top of retrieval.
 
