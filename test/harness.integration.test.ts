@@ -311,10 +311,11 @@ for await (const chunk of process.stdin) chunks.push(chunk);
 const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
 if (payload.case.title.includes("long pass")) {
   process.stdout.write("a".repeat(17000) + " needle");
-  process.exit(0);
+  process.exitCode = 0;
+} else {
+  process.stdout.write("needle");
+  process.exitCode = 1;
 }
-process.stdout.write("needle");
-process.exit(1);
 `,
         "utf8",
       );

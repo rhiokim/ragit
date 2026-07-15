@@ -17,6 +17,7 @@ Make RAGit's declared runtime and native-platform support match what the packed 
   - `darwin/arm64`
   - `linux/arm64`
   - `linux/x64`
+- Linux requires the zvec runtime dependency `libaio`; Debian/Ubuntu CI installs `libaio-dev` before loading the binding.
 - `win32/x64` is unsupported in this release and must fail before `@zvec/zvec` loads.
 - Keep `@zvec/zvec@0.2.1` pinned. A zvec upgrade and Windows support require a separate compatibility workstream.
 - Do not change package version, retrieval behavior, provider thresholds, MCP, or publishing behavior in C.
@@ -64,7 +65,7 @@ The pull-request matrix uses standard GitHub-hosted runners:
 | Minimum Linux ARM64 | `ubuntu-24.04-arm` | `22.14.0` | `linux/arm64` |
 | Minimum macOS ARM64 | `macos-latest` | `22.14.0` | `darwin/arm64` |
 
-Every lane verifies its actual target, performs a frozen install, runs tests, builds, verifies the build and pack contracts, and executes both packed smokes.
+Every lane verifies its actual target, installs declared system prerequisites, performs a frozen install, imports the zvec binding directly, runs tests, builds, verifies the build and pack contracts, and executes both packed smokes.
 
 ## Exit Criteria
 

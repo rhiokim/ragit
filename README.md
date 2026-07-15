@@ -146,6 +146,7 @@ Requirements:
 
 - Node.js `22.14.0` or newer
 - pnpm `10.13.1` or newer
+- Linux requires `libaio` (`sudo apt-get install libaio-dev` on Debian/Ubuntu)
 
 Supported production runtime matrix:
 
