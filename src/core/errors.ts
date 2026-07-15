@@ -18,6 +18,9 @@ export type RagitErrorCode =
   | "INGEST_RECOVERY_REQUIRED"
   | "STORE_WRITE_BUSY"
   | "STORE_WRITE_LOCK_STALE"
+  | "STORE_REBUILD_UNREBUILDABLE"
+  | "STORE_REBUILD_VERIFICATION_FAILED"
+  | "STORE_REBUILD_PROMOTION_FAILED"
   | "REPOSITORY_STATE_CHANGED";
 
 export interface RagitRecovery {
@@ -98,6 +101,21 @@ export const RAGIT_ERROR_DEFINITIONS = {
     category: "not_ready",
     exitCode: 3,
     retryable: false,
+  },
+  STORE_REBUILD_UNREBUILDABLE: {
+    category: "not_ready",
+    exitCode: 3,
+    retryable: false,
+  },
+  STORE_REBUILD_VERIFICATION_FAILED: {
+    category: "corrupt_or_incompatible",
+    exitCode: 4,
+    retryable: false,
+  },
+  STORE_REBUILD_PROMOTION_FAILED: {
+    category: "transient",
+    exitCode: 3,
+    retryable: true,
   },
   REPOSITORY_STATE_CHANGED: {
     category: "transient",

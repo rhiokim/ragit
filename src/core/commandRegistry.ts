@@ -208,7 +208,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     description: "drift 결과를 기반으로 기존 복구 명령을 계획하거나 safe action만 적용합니다.",
     group: "root",
     docSlug: "commands/repair",
-    relatedCommands: ["drift", "ingest", "harness verify", "doc refresh", "artifact review", "memory promote"],
+    relatedCommands: ["drift", "ingest", "migrate embeddings", "harness verify", "doc refresh", "artifact review", "memory promote"],
     stability: "mutating",
     mutating: true,
     supportsDryRun: false,
@@ -226,7 +226,7 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
         name: "--action",
         type: "enum",
         description: "계획 또는 실행할 action 필터",
-        enum: ["ingest", "doc-refresh", "artifact-review", "harness-verify", "harness-run", "memory-promote"],
+        enum: ["ingest", "ingest-recover", "store-rebuild", "doc-refresh", "artifact-review", "harness-verify", "harness-run", "memory-promote"],
       },
       { name: "--view", type: "enum", description: "출력 축소 수준", enum: ["minimal", "default", "full"], defaultValue: "default" },
       { name: "--format", type: "enum", description: "출력 형식", enum: ["text", "json", "both"], defaultValue: "json" },
@@ -235,6 +235,8 @@ const COMMAND_SPECS: CommandDescribeSpec[] = [
     examples: [
       "ragit repair --scope all --format json",
       "ragit repair --apply --action ingest --action harness-verify --format both",
+      "ragit repair --apply --action ingest-recover --format json",
+      "ragit repair --apply --action store-rebuild --format json",
     ],
   },
   {

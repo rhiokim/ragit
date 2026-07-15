@@ -8,6 +8,7 @@ export type DriftStatus = "fresh" | "suspect" | "stale";
 export type RepairActionKind =
   | "ingest"
   | "ingest-recover"
+  | "store-rebuild"
   | "doc-refresh"
   | "artifact-review"
   | "harness-verify"
@@ -522,6 +523,12 @@ export interface ArtifactManifestEntry {
   goalId: string | null;
   episodeId: string | null;
   bindingStatus: ArtifactBindingStatus;
+  rebuildPayload?: ArtifactManifestRebuildPayload;
+}
+
+export interface ArtifactManifestRebuildPayload {
+  schemaVersion: 1;
+  chunks: Array<Omit<ChunkRecord, "embedding">>;
 }
 
 export interface SnapshotChunkScopes {
