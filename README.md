@@ -154,9 +154,8 @@ Supported production runtime matrix:
 | --- | --- | --- |
 | macOS | ARM64 | `>=22.14.0` (Node 24 compatible) |
 | Linux | ARM64 | `>=22.14.0` (Node 24 compatible) |
-| Linux | x64 | `>=22.14.0` (Node 24 compatible) |
 
-Windows x64 is not supported by the pinned `@zvec/zvec@0.2.1` runtime. RAGit rejects unsupported targets before loading the native binding and reports the supported matrix. Windows support requires a separate zvec compatibility and store-reopen gate.
+Linux x64 and Windows x64 are not supported by the pinned `@zvec/zvec@0.2.1` runtime. RAGit rejects unsupported targets before loading the native binding and reports the supported matrix. Support for either target requires a separate zvec compatibility and store-reopen gate.
 
 For repository-local development:
 
@@ -537,7 +536,7 @@ pnpm ragit init --output json      # JSON summary output
 - `--mode` overrides repository-mode detection.
 - `--strategy` controls how aggressively stage-1 draft docs are generated.
 - `--dry-run` computes the full analysis report without writing files or bootstrapping storage.
-- zvec bootstrap supports `darwin/arm64`, `linux/arm64`, and `linux/x64`; other targets fail before native binding load with the supported matrix.
+- zvec bootstrap supports `darwin/arm64` and `linux/arm64`; other targets fail before native binding load with the supported matrix.
 
 Recommended flow after `init`:
 

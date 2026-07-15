@@ -437,7 +437,7 @@ Recall packets should restore active work instead of replaying raw logs.`,
         platform: {
           current: `${process.platform}/${process.arch}`,
           supported: true,
-          supportedTargets: ["darwin/arm64", "linux/arm64", "linux/x64"],
+          supportedTargets: ["darwin/arm64", "linux/arm64"],
         },
         supported: true,
       });

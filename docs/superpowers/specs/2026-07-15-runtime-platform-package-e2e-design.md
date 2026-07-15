@@ -1,6 +1,6 @@
 # Runtime, Platform, and Packed Package E2E Design
 
-**Status:** Approved
+**Status:** Approved (evidence-based target revision)
 **Owner:** Sol Max
 **Implementation boundary:** Workstream C only
 **Date:** 2026-07-15
@@ -16,13 +16,14 @@ Make RAGit's declared runtime and native-platform support match what the packed 
 - Production-supported native targets:
   - `darwin/arm64`
   - `linux/arm64`
-  - `linux/x64`
 - Linux requires the zvec runtime dependency `libaio`; Debian/Ubuntu CI installs `libaio-dev` before loading the binding.
-- `win32/x64` is unsupported in this release and must fail before `@zvec/zvec` loads.
+- `linux/x64` and `win32/x64` are unsupported in this release and must fail before `@zvec/zvec` loads.
 - Keep `@zvec/zvec@0.2.1` pinned. A zvec upgrade and Windows support require a separate compatibility workstream.
 - Do not change package version, retrieval behavior, provider thresholds, MCP, or publishing behavior in C.
 
 Node 20 is excluded because it is end-of-life. Node 22 and 24 are the supported LTS lines for this package contract.
+
+The initial matrix included Linux x64. PR run [29422478371](https://github.com/rhiokim/ragit/actions/runs/29422478371) proved that the pinned zvec 0.2.1 binding terminates with `SIGILL` during direct import on the standard Ubuntu 24 x64 runner under both Node 22.14 and Node 24, even with `libaio` installed. The contract therefore excludes Linux x64 instead of hiding the binding failure or changing zvec inside C.
 
 ## Runtime Boundary
 
@@ -60,10 +61,10 @@ The pull-request matrix uses standard GitHub-hosted runners:
 
 | Lane | Runner | Node | Expected target |
 | --- | --- | --- | --- |
-| Minimum Linux x64 | `ubuntu-24.04` | `22.14.0` | `linux/x64` |
-| Current LTS Linux x64 | `ubuntu-24.04` | `24` | `linux/x64` |
 | Minimum Linux ARM64 | `ubuntu-24.04-arm` | `22.14.0` | `linux/arm64` |
+| Current LTS Linux ARM64 | `ubuntu-24.04-arm` | `24` | `linux/arm64` |
 | Minimum macOS ARM64 | `macos-latest` | `22.14.0` | `darwin/arm64` |
+| Current LTS macOS ARM64 | `macos-latest` | `24` | `darwin/arm64` |
 
 Every lane verifies its actual target, installs declared system prerequisites, performs a frozen install, imports the zvec binding directly, runs tests, builds, verifies the build and pack contracts, and executes both packed smokes.
 
@@ -71,6 +72,6 @@ Every lane verifies its actual target, installs declared system prerequisites, p
 
 - Package metadata requires Node `>=22.14.0`.
 - Unsupported Node and platform cases fail before zvec binding import with an accurate RAGit diagnostic.
-- `status`, `doctor`, README, bilingual docs, runtime constants, and CI list the same three targets.
+- `status`, `doctor`, README, bilingual docs, runtime constants, and CI list the same two targets.
 - The full packed flow and registry-baseline reopen smoke pass locally and on all four CI lanes.
 - Full tests, docs checks/build, build verification, pack verification, and `git diff --check` pass.

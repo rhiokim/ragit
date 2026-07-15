@@ -1,5 +1,5 @@
 export const MINIMUM_NODE_VERSION = "22.14.0";
-export const SUPPORTED_ZVEC_TARGETS = ["darwin/arm64", "linux/arm64", "linux/x64"] as const;
+export const SUPPORTED_ZVEC_TARGETS = ["darwin/arm64", "linux/arm64"] as const;
 
 export interface NodeRuntimeSupport {
   current: string;
