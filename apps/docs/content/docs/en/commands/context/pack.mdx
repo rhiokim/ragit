@@ -1,19 +1,19 @@
 ---
 title: context pack
-description: Build a goal-scoped context packet with a token budget
+description: Build a goal-scoped context packet with a strict content-unit budget
 command_path: context pack
 ---
 
 ## What It Does
 
-`context pack` turns retrieved knowledge into a bounded packet for a specific goal. It uses the same strict exact-snapshot selection and store validation as `query`, then applies budget-based trimming for the next agent prompt.
+`context pack` turns retrieved knowledge into a bounded packet for a specific goal. It uses the same strict exact-snapshot selection and store validation as `query`, then applies the default `citation-diverse-v2` selector without a flag.
 
 ## When To Use / When Not To Use
 
 ### When to use it
 
 - You have a goal and want a compact context handoff.
-- You need token budgeting.
+- You need a strict content-unit budget.
 - You want to pass structured input to an agent reliably.
 
 ### When not to use it
@@ -35,7 +35,7 @@ pnpm ragit context pack [goal] [--input <path|->] \
 
 - `goal`: The goal that should drive context selection.
 - `--input <path|->`: Provide a JSON payload with `goal`, optional `budget`, and optional `at`.
-- `--budget <tokens>`: Token budget for the selected packet.
+- `--budget <tokens>`: Default `1200`. A positive safe integer budget measured as deterministic whitespace-delimited content units in complete hit text. It is not a provider tokenizer count or a serialized-payload size.
 - `--scope durable|session|harness|evidence|all`: Choose whether the packet is built from durable snapshot knowledge only or from explicit artifact scopes too.
 - `--at <sha>`: Use `HEAD`, a full commit SHA, or a unique hexadecimal commit prefix. Branch names, tags, and revision expressions are not accepted.
 - `--view minimal|default|full`: Control how much detail is projected into the packet.
@@ -52,13 +52,26 @@ pnpm ragit context pack [goal] [--input <path|->] \
 }
 ```
 
-- JSON output includes `goal`, `snapshotSha`, `snapshot`, `budget`, `usedTokens`, `selectedHits`, `hits`, `warnings`, and `redactionSummary`.
+- JSON output includes `goal`, `snapshotSha`, `snapshot`, `budget`, `usedTokens`, `selectedHits`, additive `selection`, `hits`, `warnings`, and `redactionSummary`.
 - `snapshot` reports `requestedRef`, `resolvedSha`, `selection`, `status`, `branch`, `detached`, and `worktreeDirty`. On success, `snapshotSha` always equals `snapshot.resolvedSha`.
-- Hit selection is not a separate search path. It is the same retrieval result, trimmed down to fit the requested budget.
-- Output is re-masked before projection, so packets stay safe for downstream agent prompts.
+- `selection` includes `strategy`, `candidateHits`, `uniqueCitations`, `selectedSources`, `duplicateCitationsSkipped`, and `budgetRejectedHits`. Its counters satisfy `uniqueCitations = selectedHits + budgetRejectedHits` and `candidateHits = uniqueCitations + duplicateCitationsSkipped`.
+- Text output exposes the same summary as `selection_strategy`, `candidate_hits`, `unique_citations`, `selected_sources`, `duplicate_citations_skipped`, and `budget_rejected_hits` header lines.
+- Every Context Pack hit retains its citation, but Context Pack does not expose a score breakdown.
+- Retrieval hits remain masked before selection and projection; the masking contract is unchanged.
 - `--view minimal` is the safest default for agent context windows.
 - `--view default` preserves a balanced amount of detail.
 - `--view full` is useful only when downstream reasoning truly needs richer text.
+
+## Selection And Budget
+
+`citation-diverse-v2` uses the incoming retrieval rank as the stable scan order within each pass. It does not rescore or alter Context Pack retrieval's existing `topK: 30` candidate limit or upstream retrieval ranking.
+
+- Exact duplicate `citation.id` values are deduplicated before budgeting; only the first occurrence is eligible.
+- A source family is `document:<path>` for documents, `artifact:<artifactId ?? citation.sourceId>` for artifacts, and `evidence:<artifactId ?? citation.sourceId>` for evidence.
+- The diversity pass selects the first complete fitting hit for each source family in original rank order.
+- The fill pass scans the remaining unique hits in original rank order and selects each complete hit that fits the remaining budget. Returned hits list diversity representatives first, then fill hits.
+- Hits are indivisible: a hit that does not fit is skipped, including the first hit. Therefore `usedTokens <= budget` always holds.
+- If retrieval returned candidates but no complete hit fits, the packet has no hits and its warnings include exactly `context pack budget admitted no complete hit`.
 
 ## Examples
 
@@ -78,6 +91,7 @@ pnpm ragit context pack --input context-pack.json --view minimal --format json
 
 - Do not mix `--input` with positional `goal`, `--budget`, or `--at`.
 - An empty `goal` is rejected.
+- `--budget` and JSON `budget` must be positive safe integers.
 - With no `--at`, only the exact current HEAD manifest is valid. A nearest indexed ancestor is recovery guidance and is never packed automatically.
 - Dirty worktree reads use the committed snapshot, exclude uncommitted changes, and include a warning.
 - Invalid references exit `2`; a missing exact snapshot or unavailable store exits `3`; corrupt or unsupported manifests exit `4`. Typed failures use the stable CLI failure envelope.
