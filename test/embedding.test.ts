@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defaultConfig } from "../src/core/config.js";
+import { defaultConfig, parseToml, stringifyToml } from "../src/core/config.js";
 import { embedText, EmbeddingProviderError, resolveEmbeddingConfiguredState, resolveEmbeddingProfile } from "../src/core/embedding.js";
 
 const ORIGINAL_ENV = {
@@ -10,6 +10,25 @@ const ORIGINAL_ENV = {
 };
 
 const ORIGINAL_FETCH = globalThis.fetch;
+
+describe("config serialization", () => {
+  it("omits an absent optional embedding base_url without dropping a defined value", () => {
+    const config = parseToml(`
+[embedding]
+provider = "openai"
+model = "text-embedding-3-small"
+`);
+
+    const withoutBaseUrl = stringifyToml(config);
+
+    expect(withoutBaseUrl).not.toContain("base_url");
+    expect(withoutBaseUrl).not.toContain('"undefined"');
+
+    config.embedding.base_url = "https://gateway.example/root";
+
+    expect(stringifyToml(config)).toContain('base_url = "https://gateway.example/root"');
+  });
+});
 
 afterEach(() => {
   vi.useRealTimers();
