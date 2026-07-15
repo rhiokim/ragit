@@ -182,6 +182,15 @@ const parseOptionalPositiveNumber = (value: string | undefined, label: string): 
   return parsed;
 };
 
+const parseOptionalPositiveSafeInteger = (value: string | undefined, label: string): number | undefined => {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${label} 값은 양의 안전한 정수여야 합니다.`);
+  }
+  return parsed;
+};
+
 const collectRepeatedOption = (value: string, previous: string[] = []): string[] => [...previous, value];
 
 program
@@ -690,7 +699,7 @@ program
   .description("목표 기준 컨텍스트 생성")
   .argument("[goal]")
   .option("--input <path|->", "JSON 입력 파일 경로 또는 -")
-  .option("--budget <tokens>", "토큰 예산")
+  .option("--budget <tokens>", "공백 구분 콘텐츠 단위 기준의 양의 안전한 정수 예산")
   .option("--scope <scope>", "durable|session|harness|evidence|all", "durable")
   .option("--format <format>", "text|json|both", "both")
   .option("--view <view>", "minimal|default|full", "default")
@@ -707,7 +716,7 @@ program
       ? normalizeContextPackCommandInput(await readJsonInput(cwd, options.input, "context pack"))
       : {
           goal: String(goal ?? "").trim(),
-          budget: parseOptionalPositiveNumber(options.budget as string | undefined, "context.budget"),
+          budget: parseOptionalPositiveSafeInteger(options.budget as string | undefined, "context.budget"),
           at: options.at as string | undefined,
           scope: options.scope as "durable" | "session" | "harness" | "evidence" | "all" | undefined,
         };

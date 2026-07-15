@@ -475,21 +475,6 @@ const finalizeHits = (hits: RetrievalHit[], topK: number): RetrievalHit[] => {
     .slice(0, topK);
 };
 
-const countTokens = (text: string): number => text.split(/\s+/).filter(Boolean).length;
-
-export const selectHitsWithinBudget = (hits: RetrievalHit[], budget: number): { hits: RetrievalHit[]; usedTokens: number } => {
-  const selected: RetrievalHit[] = [];
-  let usedTokens = 0;
-  for (const hit of hits) {
-    const tokens = countTokens(hit.text);
-    if (selected.length > 0 && usedTokens + tokens > budget) continue;
-    selected.push(hit);
-    usedTokens += tokens;
-    if (usedTokens >= budget) break;
-  }
-  return { hits: selected, usedTokens };
-};
-
 const unavailableSnapshotMetadata = (at?: string): SnapshotMetadata => ({
   requestedRef: at ?? "HEAD",
   resolvedSha: null,

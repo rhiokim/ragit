@@ -1,8 +1,9 @@
 import { CliView } from "./cliContract.js";
+import { ContextPackSelectionSummary, selectContextHits } from "./context-selection.js";
 import { formatQueryResultText, projectRetrievalHits } from "./output.js";
 import { RedactionSummary, RetrievalHit } from "./types.js";
 import { mergeRedactionSummaries, sanitizeKnowledgeText } from "./security.js";
-import { runUnifiedRetrieval, selectHitsWithinBudget, UnifiedArtifactRetrievalOptions } from "./retrieval.js";
+import { runUnifiedRetrieval, UnifiedArtifactRetrievalOptions } from "./retrieval.js";
 import type { SnapshotMetadata } from "./snapshot.js";
 
 export interface ContextPackOptions {
@@ -18,6 +19,7 @@ export interface ContextPackResult {
   budget: number;
   usedTokens: number;
   selectedHits: number;
+  selection: ContextPackSelectionSummary;
   hits: RetrievalHit[];
   warnings: string[];
   redactionSummary: RedactionSummary;
@@ -51,7 +53,11 @@ export const packContext = async (
     throw new Error("사용 가능한 snapshot이 없습니다.");
   }
   const sanitizedGoal = sanitizeKnowledgeText(goal, "context.pack", "goal");
-  const selected = selectHitsWithinBudget(result.hits, budget);
+  const selected = selectContextHits(result.hits, budget);
+  const warnings = [...result.warnings];
+  if (result.hits.length > 0 && selected.hits.length === 0) {
+    warnings.push("context pack budget admitted no complete hit");
+  }
   return {
     goal: sanitizedGoal.text,
     snapshotSha: result.snapshotSha,
@@ -59,8 +65,9 @@ export const packContext = async (
     budget,
     usedTokens: selected.usedTokens,
     selectedHits: selected.hits.length,
+    selection: selected.summary,
     hits: selected.hits,
-    warnings: result.warnings,
+    warnings,
     redactionSummary: mergeRedactionSummaries(result.redactionSummary, sanitizedGoal.summary),
   };
 };
@@ -84,6 +91,12 @@ export const formatContextPackText = (packet: ContextPackResult, view: CliView):
     `- budget: ${packet.budget}`,
     `- used_tokens: ${packet.usedTokens}`,
     `- selected_hits: ${packet.selectedHits}`,
+    `- selection_strategy: ${packet.selection.strategy}`,
+    `- candidate_hits: ${packet.selection.candidateHits}`,
+    `- unique_citations: ${packet.selection.uniqueCitations}`,
+    `- selected_sources: ${packet.selection.selectedSources}`,
+    `- duplicate_citations_skipped: ${packet.selection.duplicateCitationsSkipped}`,
+    `- budget_rejected_hits: ${packet.selection.budgetRejectedHits}`,
     `- warnings: ${packet.warnings.length}`,
     `- view: ${view}`,
     `- redaction_applied: ${packet.redactionSummary.applied}`,
@@ -102,6 +115,7 @@ export const projectContextPack = (packet: ContextPackResult, view: CliView): Om
   budget: packet.budget,
   usedTokens: packet.usedTokens,
   selectedHits: packet.selectedHits,
+  selection: packet.selection,
   warnings: packet.warnings,
   redactionSummary: packet.redactionSummary,
   hits: projectRetrievalHits(packet.hits, view),
