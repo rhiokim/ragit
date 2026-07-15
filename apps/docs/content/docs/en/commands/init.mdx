@@ -134,7 +134,7 @@ pnpm ragit init --dry-run --output json
 - In TTY-less environments, interactive mode is not available.
 - `--dry-run` performs repository analysis but does not write files or create the zvec store.
 - `--dry-run` reports the `.gitignore` policy and entries that would be added, but does not edit `.gitignore`.
-- RAGit requires Node.js 22.14 or newer. zvec bootstrap supports `darwin/arm64`, `linux/arm64`, and `linux/x64`; other targets fail before native binding load with the supported matrix.
+- RAGit requires Node.js 22.14 or newer. zvec bootstrap supports `darwin/arm64` and `linux/arm64`; other targets fail before native binding load with the supported matrix.
 - `init` can inspect repository docs, but it still does **not** make the repository search-ready. Run <a href="/en/docs/commands/ingest">`ingest`</a> after setup.
 
 ## Related Commands

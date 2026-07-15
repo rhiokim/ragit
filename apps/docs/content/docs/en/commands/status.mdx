@@ -36,7 +36,7 @@ pnpm ragit status [--format text|json|both] [--cwd <path>]
 
 - There is no positional input and no JSON payload input.
 - JSON output includes `branch`, `head`, `snapshot`, `runtime`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `events`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.cache`, `embedding.ready`, `embedding.needsMigration`, `security`, and `format`.
-- `runtime` reports the current and minimum Node versions, the current `platform/arch`, the three supported native targets, and aggregate `supported` state.
+- `runtime` reports the current and minimum Node versions, the current `platform/arch`, the two supported native targets, and aggregate `supported` state.
 - `snapshot.status` is `missing` when HEAD or its exact manifest is absent, `invalid` for malformed/mismatched/future manifests, `store-unavailable` for a valid exact manifest without a usable canonical store, and `indexed` only when both exact manifest and store are usable.
 - `zvec.searchReady` and `knowledge.durableReady` are true only for `snapshot.status: indexed`. The `manifests` count is historical context and an unrelated manifest never makes the current HEAD ready.
 - `embedding.cache` reports `enabled`, `dir`, `namespaceId`, `entryCount`, `batchPolicy`, `retryPolicy`, `writable`, and `namespaceReadable`.

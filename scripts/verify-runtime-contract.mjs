@@ -42,9 +42,15 @@ assertFailure(
 );
 
 assertFailure(
+  runSimulated({ nodeVersion: "24.0.0", platform: "linux", arch: "x64" }),
+  "현재 플랫폼에서는 zvec를 지원하지 않습니다: linux/x64 unsupported (supported: darwin/arm64, linux/arm64)",
+  "unsupported Linux x64 target",
+);
+
+assertFailure(
   runSimulated({ nodeVersion: "24.0.0", platform: "win32", arch: "x64" }),
-  "현재 플랫폼에서는 zvec를 지원하지 않습니다: win32/x64 unsupported (supported: darwin/arm64, linux/arm64, linux/x64)",
-  "unsupported native target",
+  "현재 플랫폼에서는 zvec를 지원하지 않습니다: win32/x64 unsupported (supported: darwin/arm64, linux/arm64)",
+  "unsupported Windows x64 target",
 );
 
 console.log("runtime guard contract verified");

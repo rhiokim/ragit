@@ -16,8 +16,8 @@ Files:
 Verify:
 
 - Node `22.14.0` and 24 pass; Node 20 and `22.13.x` fail.
-- Only `darwin/arm64`, `linux/arm64`, and `linux/x64` pass.
-- Windows diagnostics enumerate the supported matrix.
+- Only `darwin/arm64` and `linux/arm64` pass.
+- Linux x64 and Windows diagnostics enumerate the supported matrix.
 
 ## 2. Guard executable startup
 
@@ -32,7 +32,7 @@ Files:
 Verify:
 
 - The built executable preserves its shebang and executable bit.
-- A simulated `win32/x64` process receives the RAGit diagnostic before zvec can throw.
+- Simulated `linux/x64` and `win32/x64` processes receive the RAGit diagnostic before zvec can throw.
 - Package metadata and the startup check both require Node `>=22.14.0`.
 
 ## 3. Project the same contract through diagnostics
@@ -80,9 +80,9 @@ Files:
 
 Verify:
 
-- Documentation and code name the same Node floor and three targets.
+- Documentation and code name the same Node floor and two targets.
 - Linux guidance and CI declare and install the zvec `libaio` prerequisite.
-- Windows is explicitly unsupported for zvec 0.2.1.
+- Linux x64 and Windows are explicitly unsupported for zvec 0.2.1.
 - All docs checks and the static docs build pass.
 
 ## 6. Release gate for C

@@ -15,9 +15,9 @@ If you are developing RAGit itself inside this repository, start with <a href="/
 - Node.js 22.14+
 - pnpm 10+
 - Linux: `libaio` (`sudo apt-get install libaio-dev` on Debian/Ubuntu)
-- A supported zvec bootstrap platform for local initialization: `darwin/arm64`, `linux/arm64`, or `linux/x64`
+- A supported zvec bootstrap platform for local initialization: `darwin/arm64` or `linux/arm64`
 
-Node 24 is covered by the compatibility lane. Windows x64 is not supported by the pinned zvec 0.2.1 runtime; unsupported targets fail before the native binding loads and report the supported matrix.
+Node 24 is covered on both supported targets. Linux x64 and Windows x64 are not supported by the pinned zvec 0.2.1 runtime; unsupported targets fail before the native binding loads and report the supported matrix.
 
 ## Choose Your Install Path
 

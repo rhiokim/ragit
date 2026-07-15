@@ -36,7 +36,7 @@ pnpm ragit status [--format text|json|both] [--cwd <path>]
 
 - positional 입력도 JSON payload 입력도 없습니다.
 - JSON 출력에는 `branch`, `head`, `snapshot`, `runtime`, `backend`, `zvec`, `supported_types`, `docsAuthority`, `knowledge`, `events`, `manifests`, `embedding.configured`, `embedding.store`, `embedding.cache`, `embedding.ready`, `embedding.needsMigration`, `security`, `format`이 포함됩니다.
-- `runtime`은 현재 및 최소 Node 버전, 현재 `platform/arch`, 세 개의 지원 native target, 종합 `supported` 상태를 보고합니다.
+- `runtime`은 현재 및 최소 Node 버전, 현재 `platform/arch`, 두 개의 지원 native target, 종합 `supported` 상태를 보고합니다.
 - `snapshot.status`는 HEAD 또는 exact manifest가 없으면 `missing`, manifest가 malformed/mismatched/future 상태이면 `invalid`, exact valid manifest가 있지만 usable canonical store가 없으면 `store-unavailable`, 둘 다 사용할 수 있을 때만 `indexed`입니다.
 - `zvec.searchReady`와 `knowledge.durableReady`는 `snapshot.status: indexed`일 때만 true입니다. `manifests` 개수는 historical context이며 unrelated manifest가 current HEAD를 ready 상태로 만들지 않습니다.
 - `embedding.cache`에는 `enabled`, `dir`, `namespaceId`, `entryCount`, `batchPolicy`, `retryPolicy`, `writable`, `namespaceReadable`가 들어 있습니다.
