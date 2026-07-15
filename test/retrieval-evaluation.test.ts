@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   buildRetrievalBenchmarkReport,
@@ -47,6 +48,25 @@ describe("retrieval evaluation dataset", () => {
       "alpha/topic-1/mixed-noisy",
       "alpha/topic-10/en",
     ]);
+  });
+
+  it("keeps the committed bilingual corpus at 108 valid cases", async () => {
+    const raw = await readFile(new URL("../benchmarks/retrieval/v1/dataset.json", import.meta.url), "utf8");
+    const dataset = parseRetrievalBenchmarkDataset(JSON.parse(raw));
+    const cases = expandRetrievalBenchmarkCases(dataset);
+    const byVariant = Object.fromEntries(["en", "ko", "mixed-noisy"].map((variant) => [
+      variant,
+      cases.filter((benchmarkCase) => benchmarkCase.variant === variant).length,
+    ]));
+
+    expect(dataset.repositories).toHaveLength(3);
+    expect(dataset.repositories.every((repositoryValue) => repositoryValue.documents.length === 12)).toBe(true);
+    expect(dataset.repositories.every((repositoryValue) => repositoryValue.topics.length === 12)).toBe(true);
+    expect(dataset.repositories.every((repositoryValue) =>
+      repositoryValue.documents.every((document) => document.content.startsWith("---\ntype: spec\n---\n# ")),
+    )).toBe(true);
+    expect(cases).toHaveLength(108);
+    expect(byVariant).toEqual({ en: 36, ko: 36, "mixed-noisy": 36 });
   });
 
   it.each([
