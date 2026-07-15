@@ -7,6 +7,7 @@ export type DriftScope = "durable" | "memory" | "harness" | "all";
 export type DriftStatus = "fresh" | "suspect" | "stale";
 export type RepairActionKind =
   | "ingest"
+  | "ingest-recover"
   | "doc-refresh"
   | "artifact-review"
   | "harness-verify"

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -94,5 +94,35 @@ describe("ingest transaction journal", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  it("rejects unsafe transaction ids before constructing a journal path", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ragit-ingest-transaction-safe-id-"));
+    await expect(readIngestTransaction(cwd, "../outside")).rejects.toThrow(/unsafe ingest transaction id/i);
+    await expect(readIngestTransaction(cwd, "nested/file")).rejects.toThrow(/unsafe ingest transaction id/i);
+  });
+
+  it("rejects a regular journal file whose embedded id differs from the requested id", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ragit-ingest-transaction-mismatch-"));
+    const paths = resolveRagitPaths(cwd);
+    await mkdir(paths.runtimeTransactionsDir, { recursive: true });
+    await writeFile(
+      path.join(paths.runtimeTransactionsDir, "requested-id.json"),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        transactionId: "different-id",
+        kind: "ingest",
+        status: "completed",
+        phase: "completed",
+        targetHeadSha: "abc123",
+        manifestPath: ".ragit/manifest/abc123.json",
+        startedAt: "2026-07-15T10:00:00.000Z",
+        updatedAt: "2026-07-15T10:01:00.000Z",
+        documentVersionIds: [],
+        chunkIds: [],
+      })}\n`,
+      "utf8",
+    );
+    await expect(readIngestTransaction(cwd, "requested-id")).rejects.toThrow(/does not match requested id/i);
   });
 });

@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { countArtifactState } from "../core/artifacts.js";
-import { loadConfig, setConfigValue, writeConfig } from "../core/config.js";
+import { defaultConfig, loadConfig, setConfigValue, writeConfig } from "../core/config.js";
 import { readDocAuthorityIndex } from "../core/doc-authority.js";
 import {
   checkEmbeddingCacheHealth,
@@ -14,6 +14,7 @@ import {
 import { isRagitOperationalError } from "../core/errors.js";
 import { readEventLedgerStats } from "../core/event-ledger.js";
 import { ensureGitRepository, tryGetGitRoot } from "../core/git.js";
+import { scanIngestTransactions } from "../core/ingest-recovery.js";
 import { loadSnapshotManifest } from "../core/manifest.js";
 import { ensureRagitStructure, resolveRagitPaths } from "../core/project.js";
 import {
@@ -31,6 +32,7 @@ import {
   hasLegacyJsonStore,
   readCanonicalStoreMeta,
 } from "../core/store.js";
+import { inspectStoreWriteLock } from "../core/store-write-lock.js";
 import { resolveRepositoryContext, type SnapshotMetadata } from "../core/snapshot.js";
 
 export const runConfigSet = async (cwd: string, key: string, value: string): Promise<void> => {
@@ -66,7 +68,13 @@ const hasReadableStoreMeta = (
   if (typeof contract !== "object" || contract === null) return false;
   const embeddingContract = contract as Record<string, unknown>;
   return (
+    candidate.backend === "zvec" &&
+    typeof candidate.layoutVersion === "number" &&
     typeof candidate.schemaVersion === "number" &&
+    typeof candidate.collections === "object" &&
+    candidate.collections !== null &&
+    typeof (candidate.collections as Record<string, unknown>).documents === "string" &&
+    typeof (candidate.collections as Record<string, unknown>).chunks === "string" &&
     typeof embeddingContract.provider === "string" &&
     typeof embeddingContract.dimensions === "number" &&
     typeof embeddingContract.version === "string"
@@ -130,15 +138,70 @@ export interface StatusResult {
     lastAuditAt: string | null;
     legacyUnsafeState: boolean;
   };
+  storeWriter: {
+    state: "missing" | "active" | "stale" | "unknown";
+    owner: {
+      pid: number;
+      hostname: string;
+      startedAt: string;
+      command: string;
+      headSha?: string;
+    } | null;
+  };
+  ingestRecovery: {
+    summary: Awaited<ReturnType<typeof scanIngestTransactions>>["summary"];
+    pending: Array<{
+      transactionId: string;
+      status?: string;
+      phase?: string;
+      targetHeadSha?: string;
+      lastError?: { name: string; message: string; code?: string };
+    }>;
+    lastCompleted: {
+      transactionId: string;
+      updatedAt?: string;
+      targetHeadSha?: string;
+    } | null;
+  };
   format: Awaited<ReturnType<typeof loadConfig>>["output"]["format"];
 }
+
+const listManifestFiles = async (cwd: string): Promise<string[]> => {
+  try {
+    return (await readdir(resolveRagitPaths(cwd).manifestDir)).filter((name) => name.endsWith(".json"));
+  } catch {
+    return [];
+  }
+};
+
+const projectStoreWriteOwner = (
+  owner: Awaited<ReturnType<typeof inspectStoreWriteLock>>["owner"],
+): StatusResult["storeWriter"]["owner"] =>
+  owner
+    ? {
+        pid: owner.pid,
+        hostname: owner.hostname,
+        startedAt: owner.startedAt,
+        command: owner.command,
+        ...(owner.headSha === undefined ? {} : { headSha: owner.headSha }),
+      }
+    : null;
+
+const loadStatusConfig = async (cwd: string): Promise<Awaited<ReturnType<typeof loadConfig>>> => {
+  try {
+    return await loadConfig(cwd);
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+      return defaultConfig();
+    }
+    throw error;
+  }
+};
 
 export const runStatus = async (cwd: string): Promise<StatusResult> => {
   const context = await resolveRepositoryContext(cwd);
   cwd = context.gitRoot;
-  await ensureRagitStructure(cwd);
-  const paths = resolveRagitPaths(cwd);
-  const config = await loadConfig(cwd);
+  const config = await loadStatusConfig(cwd);
   const configuredProfile = resolveEmbeddingProfile(config);
   const rawStoreMeta = await readCanonicalStoreMeta(cwd);
   const storeMeta = hasReadableStoreMeta(rawStoreMeta) ? rawStoreMeta : null;
@@ -147,7 +210,11 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   const securityState = await readSecurityState(cwd);
   const quarantineEntries = await countQuarantineEntries(cwd);
   const admissionStats = await readAdmissionStats(cwd);
-  const manifests = (await readdir(paths.manifestDir)).filter((name) => name.endsWith(".json"));
+  const [manifests, writerLock, ingestRecovery] = await Promise.all([
+    listManifestFiles(cwd),
+    inspectStoreWriteLock(cwd),
+    scanIngestTransactions(cwd),
+  ]);
   let exactManifestState: "missing" | "invalid" | "valid" = context.headSha === null ? "missing" : "valid";
   if (context.headSha !== null) {
     try {
@@ -262,6 +329,29 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
       lastAuditAt: securityState?.lastAuditAt ?? null,
       legacyUnsafeState: securityState?.legacyUnsafeState ?? false,
     },
+    storeWriter: {
+      state: writerLock.state,
+      owner: projectStoreWriteOwner(writerLock.owner),
+    },
+    ingestRecovery: {
+      summary: ingestRecovery.summary,
+      pending: ingestRecovery.pending.map((transaction) => ({
+        transactionId: transaction.transactionId,
+        ...(transaction.status === undefined ? {} : { status: transaction.status }),
+        ...(transaction.phase === undefined ? {} : { phase: transaction.phase }),
+        ...(transaction.targetHeadSha === undefined ? {} : { targetHeadSha: transaction.targetHeadSha }),
+        ...(transaction.lastError === undefined ? {} : { lastError: transaction.lastError }),
+      })),
+      lastCompleted: ingestRecovery.lastCompleted
+        ? {
+            transactionId: ingestRecovery.lastCompleted.transactionId,
+            ...(ingestRecovery.lastCompleted.updatedAt === undefined ? {} : { updatedAt: ingestRecovery.lastCompleted.updatedAt }),
+            ...(ingestRecovery.lastCompleted.targetHeadSha === undefined
+              ? {}
+              : { targetHeadSha: ingestRecovery.lastCompleted.targetHeadSha }),
+          }
+        : null,
+    },
     format: config.output.format,
   };
   const docAuthorityIndex = await readDocAuthorityIndex(cwd);
@@ -284,7 +374,6 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
 const checkManifestConsistency = async (
   cwd: string,
   manifestFiles: string[],
-  config: Awaited<ReturnType<typeof loadConfig>>,
 ): Promise<{ manifests: number; missingChunkIds: number }> => {
   if (manifestFiles.length === 0) {
     return {
@@ -345,12 +434,35 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
     checks.push({ name: "git.repository", ok: false, detail: message });
   }
   try {
-    const paths = await ensureRagitStructure(cwd);
-    const manifests = (await readdir(paths.manifestDir)).filter((name) => name.endsWith(".json"));
+    const manifests = await listManifestFiles(cwd);
+    await readdir(resolveRagitPaths(cwd).ragitDir);
     checks.push({ name: "ragit.structure", ok: true, detail: `manifest=${manifests.length}` });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     checks.push({ name: "ragit.structure", ok: false, detail: message });
+  }
+  try {
+    const lock = await inspectStoreWriteLock(cwd);
+    checks.push({
+      name: "store-write-lock",
+      ok: lock.state === "missing" || lock.state === "active",
+      detail: `state=${lock.state}${lock.owner ? `, pid=${lock.owner.pid}, hostname=${lock.owner.hostname}, command=${lock.owner.command}` : ""}`,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push({ name: "store-write-lock", ok: false, detail: message });
+  }
+  try {
+    const transactions = await scanIngestTransactions(cwd);
+    const { summary } = transactions;
+    checks.push({
+      name: "ingest.transactions",
+      ok: summary.finalizationPending === 0 && summary.inconsistent === 0 && summary.invalid === 0,
+      detail: `completed=${summary.completed}, precommit=${summary.precommitIncomplete}, pending=${summary.finalizationPending}, inconsistent=${summary.inconsistent}, invalid=${summary.invalid}`,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    checks.push({ name: "ingest.transactions", ok: false, detail: message });
   }
   const config = await (async () => {
     try {
@@ -529,7 +641,7 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
     try {
       const paths = resolveRagitPaths(cwd);
       const manifests = (await readdir(paths.manifestDir)).filter((name) => name.endsWith(".json"));
-      const consistency = await checkManifestConsistency(cwd, manifests, config);
+      const consistency = await checkManifestConsistency(cwd, manifests);
       checks.push({
         name: "ragit.manifest-consistency",
         ok: consistency.missingChunkIds === 0,
@@ -551,7 +663,7 @@ export const runDoctor = async (cwd: string): Promise<DoctorResult> => {
       checks.push({ name: "ragit.legacy-json-store", ok: false, detail: message });
     }
     try {
-      const securityAudit = await runSecurityAudit(cwd);
+      const securityAudit = await runSecurityAudit(cwd, { readOnly: true });
       checks.push({
         name: "security.legacy-control-plane",
         ok: securityAudit.summary.legacyControlPlaneFiles === 0,

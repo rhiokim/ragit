@@ -535,7 +535,6 @@ export const persistQuarantineSummary = async (
 };
 
 export const countQuarantineEntries = async (cwd: string): Promise<number> => {
-  await ensureRagitStructure(cwd);
   const files = await listFiles(resolveRagitPaths(cwd).quarantineDir);
   let count = 0;
   for (const file of files) {
@@ -567,7 +566,6 @@ export const appendAdmissionRecord = async (
 };
 
 export const readAdmissionStats = async (cwd: string): Promise<AdmissionStats> => {
-  await ensureRagitStructure(cwd);
   const files = await listFiles(resolveRagitPaths(cwd).admissionDir);
   let blocked = 0;
   let quarantined = 0;
@@ -765,8 +763,11 @@ const buildAuditSummary = (
   repoDocsFlagged: buckets.repoDocs.size,
 });
 
-export const runSecurityAudit = async (cwd: string): Promise<SecurityAuditResult> => {
-  await ensureRagitStructure(cwd);
+export const runSecurityAudit = async (
+  cwd: string,
+  options: { readOnly?: boolean } = {},
+): Promise<SecurityAuditResult> => {
+  if (!options.readOnly) await ensureRagitStructure(cwd);
   const config = await loadConfig(cwd);
   const embeddingProfile = resolveEmbeddingProfile(config);
   const egressClass = classifyEmbeddingEgress(embeddingProfile);
@@ -806,10 +807,12 @@ export const runSecurityAudit = async (cwd: string): Promise<SecurityAuditResult
     findings,
   };
 
-  await writeSecurityState(cwd, {
-    lastAuditAt: new Date().toISOString(),
-    legacyUnsafeState: summary.critical > 0 || summary.warn > 0,
-  });
+  if (!options.readOnly) {
+    await writeSecurityState(cwd, {
+      lastAuditAt: new Date().toISOString(),
+      legacyUnsafeState: summary.critical > 0 || summary.warn > 0,
+    });
+  }
   return result;
 };
 
