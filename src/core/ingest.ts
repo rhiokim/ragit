@@ -1,7 +1,7 @@
 import { access, lstat, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
-import { buildArtifactIndexData, bindPendingArtifacts } from "./artifacts.js";
+import { buildArtifactIndexData, planPendingArtifactBindings } from "./artifacts.js";
 import { chunkSections, parseSections } from "./chunk.js";
 import { CONFIG_PATH, defaultConfig, loadConfig } from "./config.js";
 import { validateKnownDoc } from "./doc-authority.js";
@@ -21,9 +21,12 @@ import { chunkVersionId, documentIdFromPath, documentVersionId, toRepoPath } fro
 import {
   createIngestTransaction,
   failIngestTransaction,
+  ingestTransactionError,
   IngestTransactionJournal,
+  readIngestTransaction,
   updateIngestTransaction,
 } from "./ingest-transaction.js";
+import { finalizeIngestTransaction, type IngestFinalizationTestBoundary } from "./ingest-finalization.js";
 import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
@@ -59,7 +62,12 @@ export interface IngestOptions {
   dryRun?: boolean;
 }
 
-export type IngestTestBoundary = "store-written" | "store-verified" | "before-manifest" | "after-manifest";
+export type IngestTestBoundary =
+  | "store-written"
+  | "store-verified"
+  | "before-manifest"
+  | "after-manifest"
+  | IngestFinalizationTestBoundary;
 
 export interface IngestTestHookContext {
   cwd: string;
@@ -471,6 +479,10 @@ const runIngestUnlocked = async (
   }
   const cacheMode = options.dryRun ? "readonly" : "readwrite";
   const scope = options.scope ?? "durable";
+  const finalizationRecordedAt = options.dryRun ? null : new Date().toISOString();
+  const artifactPlan = options.dryRun
+    ? null
+    : await planPendingArtifactBindings(cwd, headSha, finalizationRecordedAt!);
   let processed = 0;
   let skipped = 0;
   let masked = 0;
@@ -610,7 +622,6 @@ const runIngestUnlocked = async (
   }
 
   const parentSha = await getParentShaForCommit(cwd, headSha);
-  const boundArtifactIds = await bindPendingArtifacts(cwd, headSha);
   const baseSnapshot = baseSelection.manifest;
   const documentMap = new Map<string, DocumentRecord>();
   const chunkEntries = new Map<string, Pick<ChunkRecord, "id" | "documentId" | "documentVersionId">>();
@@ -644,7 +655,14 @@ const runIngestUnlocked = async (
   }
 
   const newDocuments = Array.from(changedDocuments.values());
-  const artifactIndex = await buildArtifactIndexData(cwd, headSha, scope, embeddingProfile, cacheMode);
+  const artifactIndex = await buildArtifactIndexData(
+    cwd,
+    headSha,
+    scope,
+    embeddingProfile,
+    cacheMode,
+    artifactPlan!.projectedArtifacts,
+  );
   const newChunks = [...Array.from(changedChunks.values()).flat(), ...artifactIndex.chunks];
   const documentVersionIds = newDocuments.map((document) => document.versionId);
   const chunkIds = newChunks.map((chunk) => chunk.id);
@@ -655,6 +673,14 @@ const runIngestUnlocked = async (
     manifestPath,
     documentVersionIds,
     chunkIds,
+    finalization: {
+      recordedAt: finalizationRecordedAt!,
+      processed,
+      scope,
+      plannedFiles,
+      plannedArtifactIds: artifactPlan!.plannedArtifactIds,
+      plannedArtifactBindings: artifactPlan!.plannedArtifactBindings,
+    },
   });
 
   try {
@@ -785,27 +811,18 @@ const runIngestUnlocked = async (
       chunkIds,
     });
 
-    await appendLedgerEvent(cwd, {
-      eventType: "ingest.completed",
-      goalId: null,
-      episodeId: null,
-      sessionId: null,
-      sourceHeadSha: headSha,
-      summary: `Ingested ${processed} document${processed === 1 ? "" : "s"} into ${scope} scope`,
-      artifactIds: boundArtifactIds,
-      relatedPaths: plannedFiles,
-      provenance: {
-        actor: "assistant",
-        producer: "ragit",
-        producerVersion: RAGIT_VERSION,
-        operation: "ingest.completed",
-        inputRefs: plannedFiles,
-        outputRefs: [manifestPath],
-        evidenceRefs: [],
-        contentHash: `${headSha}:${processed}:${scope}:${manifestPath}`,
+    const finalized = await finalizeIngestTransaction(cwd, transaction.transactionId, {
+      testHook: async (boundary, finalizedTransaction) => {
+        await runIngestTestHook(dependencies, boundary, {
+          cwd,
+          headSha,
+          transaction: finalizedTransaction,
+          documentVersionIds,
+          chunkIds,
+        });
       },
     });
-    await updateIngestTransaction(cwd, transaction, { status: "completed", phase: "completed" });
+    transaction = finalized.transaction;
     return {
       mode: "apply",
       processed,
@@ -820,7 +837,7 @@ const runIngestUnlocked = async (
       wouldFail: false,
       fullSnapshot: candidates.fullSnapshot,
       scope,
-      boundArtifactIds,
+      boundArtifactIds: finalized.boundArtifactIds,
       admission,
       docAuthority: {
         validated: config.docs_authority.validate_on_ingest,
@@ -830,7 +847,13 @@ const runIngestUnlocked = async (
       warnings,
     };
   } catch (error) {
-    await failIngestTransaction(cwd, transaction, error);
+    const failure = ingestTransactionError(error);
+    try {
+      transaction = (await readIngestTransaction(cwd, transaction.transactionId)) ?? transaction;
+    } catch {}
+    if (transaction.lastError?.name !== failure.name || transaction.lastError?.message !== failure.message) {
+      await failIngestTransaction(cwd, transaction, error);
+    }
     throw error;
   }
 };

@@ -10,6 +10,8 @@ export type IngestTransactionPhase =
   | "store-written"
   | "store-verified"
   | "manifest-committed"
+  | "artifacts-finalized"
+  | "ledger-finalized"
   | "completed";
 
 export type IngestTransactionStatus =
@@ -22,6 +24,20 @@ export interface IngestTransactionLastError {
   name: string;
   message: string;
   code?: string;
+}
+
+export interface IngestTransactionArtifactBinding {
+  artifactId: string;
+  updatedAt: string;
+}
+
+export interface IngestTransactionFinalization {
+  recordedAt: string;
+  processed: number;
+  scope: "durable" | "all";
+  plannedFiles: string[];
+  plannedArtifactIds: string[];
+  plannedArtifactBindings: IngestTransactionArtifactBinding[];
 }
 
 export interface IngestTransactionJournal {
@@ -37,6 +53,7 @@ export interface IngestTransactionJournal {
   updatedAt: string;
   documentVersionIds: string[];
   chunkIds: string[];
+  finalization?: IngestTransactionFinalization;
   lastError?: IngestTransactionLastError;
 }
 
@@ -46,6 +63,7 @@ export interface CreateIngestTransactionInput {
   manifestPath: string;
   documentVersionIds: string[];
   chunkIds: string[];
+  finalization?: IngestTransactionFinalization;
 }
 
 export interface IngestTransactionUpdate {
@@ -63,11 +81,25 @@ const isNonEmptyString = (value: unknown): value is string =>
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every(isNonEmptyString);
 
+const isNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
+
+const isCanonicalUtcTimestamp = (value: unknown): value is string => {
+  if (!isNonEmptyString(value)) return false;
+  try {
+    return new Date(value).toISOString() === value;
+  } catch {
+    return false;
+  }
+};
+
 const isPhase = (value: unknown): value is IngestTransactionPhase =>
   value === "prepared" ||
   value === "store-written" ||
   value === "store-verified" ||
   value === "manifest-committed" ||
+  value === "artifacts-finalized" ||
+  value === "ledger-finalized" ||
   value === "completed";
 
 const isStatus = (value: unknown): value is IngestTransactionStatus =>
@@ -84,6 +116,46 @@ const parseLastError = (value: unknown): IngestTransactionLastError | null | und
     name: value.name,
     message: value.message,
     ...(typeof value.code === "string" ? { code: value.code } : {}),
+  };
+};
+
+const parseFinalization = (value: unknown): IngestTransactionFinalization | null | undefined => {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return null;
+  const plannedFiles = value.plannedFiles;
+  const plannedArtifactIds = value.plannedArtifactIds;
+  const plannedArtifactBindingsValue = value.plannedArtifactBindings;
+  if (
+    !isCanonicalUtcTimestamp(value.recordedAt) ||
+    !isNonNegativeInteger(value.processed) ||
+    (value.scope !== "durable" && value.scope !== "all") ||
+    !isStringArray(plannedFiles) ||
+    !isStringArray(plannedArtifactIds) ||
+    !Array.isArray(plannedArtifactBindingsValue)
+  ) {
+    return null;
+  }
+  const plannedArtifactBindings: IngestTransactionArtifactBinding[] = [];
+  for (const binding of plannedArtifactBindingsValue) {
+    if (!isRecord(binding) || !isNonEmptyString(binding.artifactId) || !isNonEmptyString(binding.updatedAt)) {
+      return null;
+    }
+    plannedArtifactBindings.push({ artifactId: binding.artifactId, updatedAt: binding.updatedAt });
+  }
+  if (
+    plannedArtifactBindings.length !== plannedArtifactIds.length ||
+    new Set(plannedArtifactIds).size !== plannedArtifactIds.length ||
+    plannedArtifactBindings.some((binding, index) => binding.artifactId !== plannedArtifactIds[index])
+  ) {
+    return null;
+  }
+  return {
+    recordedAt: value.recordedAt,
+    processed: value.processed,
+    scope: value.scope,
+    plannedFiles,
+    plannedArtifactIds,
+    plannedArtifactBindings,
   };
 };
 
@@ -106,7 +178,8 @@ export const parseIngestTransactionJournal = (value: unknown): IngestTransaction
     return null;
   }
   const lastError = parseLastError(value.lastError);
-  if (lastError === null) return null;
+  const finalization = parseFinalization(value.finalization);
+  if (lastError === null || finalization === null) return null;
   return {
     schemaVersion: value.schemaVersion,
     transactionId: value.transactionId,
@@ -120,6 +193,7 @@ export const parseIngestTransactionJournal = (value: unknown): IngestTransaction
     updatedAt: value.updatedAt,
     documentVersionIds: value.documentVersionIds,
     chunkIds: value.chunkIds,
+    ...(finalization === undefined ? {} : { finalization }),
     ...(lastError === undefined ? {} : { lastError }),
   };
 };
@@ -164,6 +238,7 @@ export const createIngestTransaction = async (
     updatedAt: recordedAt,
     documentVersionIds: input.documentVersionIds,
     chunkIds: input.chunkIds,
+    ...(input.finalization === undefined ? {} : { finalization: input.finalization }),
   };
   await writeNewTransaction(cwd, journal);
   return journal;
@@ -223,6 +298,11 @@ export const failIngestTransaction = async (
   error: unknown,
 ): Promise<IngestTransactionJournal> =>
   updateIngestTransaction(cwd, journal, {
-    status: journal.phase === "manifest-committed" ? "failed-postcommit" : "failed-precommit",
+    status:
+      journal.phase === "manifest-committed" ||
+      journal.phase === "artifacts-finalized" ||
+      journal.phase === "ledger-finalized"
+        ? "failed-postcommit"
+        : "failed-precommit",
     lastError: ingestTransactionError(error),
   });
