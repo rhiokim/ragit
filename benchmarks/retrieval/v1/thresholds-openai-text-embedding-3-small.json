@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "ragit-retrieval-v1",
+  "profile": "openai/text-embedding-3-small/openai-text-embedding-3-small-1536",
+  "minimum": {
+    "recallAt5": 0.654166,
+    "mrrAt10": 0.515446,
+    "ndcgAt10": 0.569941
+  },
+  "maximum": {
+    "relativeNoiseDrop": 0.05,
+    "p95LatencyMs": 2000
+  }
+}

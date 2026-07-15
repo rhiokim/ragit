@@ -64,7 +64,10 @@ export interface RetrievalBenchmarkProfile {
   dimensions: number;
   version: string;
   developmentOnly: boolean;
+  endpointClass?: RetrievalBenchmarkEndpointClass;
 }
+
+export type RetrievalBenchmarkEndpointClass = "openai-public" | "ollama-local" | "custom";
 
 export interface RetrievalBenchmarkReportInput {
   dataset: RetrievalBenchmarkDataset;
@@ -343,7 +346,21 @@ const validateProfile = (profile: RetrievalBenchmarkProfile): RetrievalBenchmark
     !Number.isInteger(profile.dimensions) || profile.dimensions <= 0 || typeof profile.developmentOnly !== "boolean") {
     throw new Error("benchmark profile is invalid");
   }
-  return { ...profile };
+  const endpointClass = profile.endpointClass;
+  if (
+    (profile.developmentOnly && endpointClass !== undefined) ||
+    (!profile.developmentOnly && endpointClass !== "openai-public" && endpointClass !== "ollama-local" && endpointClass !== "custom")
+  ) {
+    throw new Error("benchmark profile is invalid");
+  }
+  return {
+    provider: profile.provider,
+    model: profile.model,
+    dimensions: profile.dimensions,
+    version: profile.version,
+    developmentOnly: profile.developmentOnly,
+    ...(endpointClass === undefined ? {} : { endpointClass }),
+  };
 };
 
 const validateGeneratedAt = (generatedAt: string): void => {

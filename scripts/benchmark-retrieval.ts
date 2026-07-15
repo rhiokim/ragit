@@ -5,7 +5,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 import { runInit } from "../src/commands/init.js";
-import { loadConfig } from "../src/core/config.js";
+import { loadConfig, writeConfig } from "../src/core/config.js";
 import { resolveEmbeddingProfile } from "../src/core/embedding.js";
 import { getHeadSha } from "../src/core/git.js";
 import { runIngest } from "../src/core/ingest.js";
@@ -23,6 +23,7 @@ import {
   type RetrievalBenchmarkProfile,
   type RetrievalBenchmarkReport,
 } from "../src/core/retrieval-evaluation.js";
+import type { EmbeddingProfile } from "../src/core/types.js";
 
 const DEFAULT_DATASET_PATH = path.resolve("benchmarks/retrieval/v1/dataset.json");
 const DEFAULT_THRESHOLDS_PATH = path.resolve("benchmarks/retrieval/v1/thresholds.json");
@@ -32,7 +33,17 @@ export interface RetrievalBenchmarkArgs {
   thresholdsPath: string;
   outputPath: string | null;
   verify: boolean;
+  embeddingProfile?: string;
+  embeddingBaseUrl?: string;
+  embeddingTimeoutMs?: number;
 }
+
+const EMBEDDING_BENCHMARK_PROFILES = {
+  "openai/text-embedding-3-small": { provider: "openai", model: "text-embedding-3-small" },
+  "openai/text-embedding-3-large": { provider: "openai", model: "text-embedding-3-large" },
+  "ollama/nomic-embed-text": { provider: "ollama", model: "nomic-embed-text" },
+  "ollama/mxbai-embed-large": { provider: "ollama", model: "mxbai-embed-large" },
+} as const;
 
 const git = (cwd: string, args: string[]): string =>
   execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -40,6 +51,21 @@ const git = (cwd: string, args: string[]): string =>
 const codePointCompare = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 
 const normalizeRepositoryPath = (value: string): string => value.replaceAll("\\", "/").replace(/^\.\//, "");
+
+export const classifyRetrievalBenchmarkEndpoint = (
+  profile: Pick<EmbeddingProfile, "provider" | "baseUrl">,
+): "openai-public" | "ollama-local" | "custom" => {
+  if (profile.provider === "openai" && profile.baseUrl === "https://api.openai.com") return "openai-public";
+  if (profile.provider === "ollama") {
+    try {
+      const hostname = new URL(profile.baseUrl ?? "http://127.0.0.1:11434").hostname.toLowerCase().replace(/^\[|\]$/g, "");
+      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return "ollama-local";
+    } catch {
+      // resolveEmbeddingProfile validates configured roots before this point.
+    }
+  }
+  return "custom";
+};
 
 const assertSafeFixturePath = (value: string): void => {
   const normalized = normalizeRepositoryPath(value);
@@ -65,9 +91,35 @@ export const assertRetrievalBenchmarkDatasetPaths = (dataset: RetrievalBenchmark
   }
 };
 
-const materializeRepository = async (
+const applyEmbeddingBenchmarkProfile = async (cwd: string, args: RetrievalBenchmarkArgs): Promise<void> => {
+  if (args.embeddingProfile === undefined) return;
+  if (!Object.hasOwn(EMBEDDING_BENCHMARK_PROFILES, args.embeddingProfile)) {
+    throw new Error(`unsupported embedding profile: ${args.embeddingProfile}`);
+  }
+  const selected = EMBEDDING_BENCHMARK_PROFILES[args.embeddingProfile as keyof typeof EMBEDDING_BENCHMARK_PROFILES];
+  const config = await loadConfig(cwd);
+  config.embedding.provider = selected.provider;
+  config.embedding.model = selected.model;
+  if (args.embeddingBaseUrl === undefined) delete config.embedding.base_url;
+  else config.embedding.base_url = args.embeddingBaseUrl;
+  if (args.embeddingTimeoutMs !== undefined) config.embedding.timeout_ms = args.embeddingTimeoutMs;
+  await writeConfig(cwd, config);
+  await rm(path.join(cwd, config.storage.vector_dir), { recursive: true, force: true });
+};
+
+const toBenchmarkProfile = (profile: EmbeddingProfile, explicit: boolean): RetrievalBenchmarkProfile => ({
+  provider: profile.provider,
+  model: profile.model,
+  dimensions: profile.dimensions,
+  version: profile.version,
+  developmentOnly: profile.provider === "local-placeholder",
+  ...(explicit ? { endpointClass: classifyRetrievalBenchmarkEndpoint(profile) } : {}),
+});
+
+export const materializeRetrievalBenchmarkRepository = async (
   dataset: RetrievalBenchmarkDataset,
   repositoryId: string,
+  args: RetrievalBenchmarkArgs,
 ): Promise<{ cwd: string; headSha: string; profile: RetrievalBenchmarkProfile }> => {
   const repository = dataset.repositories.find((candidate) => candidate.id === repositoryId);
   if (!repository) throw new Error(`unknown benchmark repository: ${repositoryId}`);
@@ -86,6 +138,7 @@ const materializeRepository = async (
     git(cwd, ["add", "--", ...documentPaths]);
     git(cwd, ["commit", "-m", "seed retrieval benchmark"]);
     await runInit(cwd, { nonInteractive: true, quiet: true });
+    await applyEmbeddingBenchmarkProfile(cwd, args);
     git(cwd, ["add", "-A"]);
     git(cwd, ["commit", "-m", "initialize ragit"]);
     await runIngest(cwd, { all: true, scope: "durable" });
@@ -101,13 +154,7 @@ const materializeRepository = async (
     return {
       cwd,
       headSha,
-      profile: {
-        provider: resolvedProfile.provider,
-        model: resolvedProfile.model,
-        dimensions: resolvedProfile.dimensions,
-        version: resolvedProfile.version,
-        developmentOnly: resolvedProfile.provider === "local-placeholder",
-      },
+      profile: toBenchmarkProfile(resolvedProfile, args.embeddingProfile !== undefined),
     };
   } catch (error) {
     await rm(cwd, { recursive: true, force: true });
@@ -119,8 +166,9 @@ const materializeRepository = async (
 const runRepositoryCases = async (
   dataset: RetrievalBenchmarkDataset,
   repositoryId: string,
+  args: RetrievalBenchmarkArgs,
 ): Promise<{ observations: RetrievalBenchmarkObservation[]; profile: RetrievalBenchmarkProfile }> => {
-  const materialized = await materializeRepository(dataset, repositoryId);
+  const materialized = await materializeRetrievalBenchmarkRepository(dataset, repositoryId, args);
   try {
     const cases = expandRetrievalBenchmarkCases(dataset).filter((benchmarkCase) => benchmarkCase.repositoryId === repositoryId);
     const observations: RetrievalBenchmarkObservation[] = [];
@@ -161,16 +209,49 @@ export const parseRetrievalBenchmarkArgs = (argv: string[]): RetrievalBenchmarkA
       args.verify = true;
       continue;
     }
-    if (argument !== "--dataset" && argument !== "--thresholds" && argument !== "--output") {
+    if (
+      argument !== "--dataset" &&
+      argument !== "--thresholds" &&
+      argument !== "--output" &&
+      argument !== "--embedding-profile" &&
+      argument !== "--embedding-base-url" &&
+      argument !== "--embedding-timeout-ms"
+    ) {
       throw new Error(`unsupported benchmark argument: ${argument}`);
     }
     const value = argv[index + 1];
-    if (!value || value.startsWith("--")) throw new Error(`${argument} requires a path`);
+    if (!value || value.startsWith("--")) {
+      const existingPathArgument = argument === "--dataset" || argument === "--thresholds" || argument === "--output";
+      throw new Error(`${argument} requires a ${existingPathArgument ? "path" : "value"}`);
+    }
+    if (argument === "--embedding-profile") {
+      if (!Object.hasOwn(EMBEDDING_BENCHMARK_PROFILES, value)) throw new Error(`unsupported embedding profile: ${value}`);
+      args.embeddingProfile = value;
+      index += 1;
+      continue;
+    }
+    if (argument === "--embedding-base-url") {
+      args.embeddingBaseUrl = value;
+      index += 1;
+      continue;
+    }
+    if (argument === "--embedding-timeout-ms") {
+      const timeoutMs = Number(value);
+      if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+        throw new Error("--embedding-timeout-ms must be a positive safe integer");
+      }
+      args.embeddingTimeoutMs = timeoutMs;
+      index += 1;
+      continue;
+    }
     const resolved = path.resolve(value);
     if (argument === "--dataset") args.datasetPath = resolved;
     if (argument === "--thresholds") args.thresholdsPath = resolved;
     if (argument === "--output") args.outputPath = resolved;
     index += 1;
+  }
+  if (args.embeddingProfile === undefined && (args.embeddingBaseUrl !== undefined || args.embeddingTimeoutMs !== undefined)) {
+    throw new Error("--embedding-base-url and --embedding-timeout-ms require --embedding-profile");
   }
   return args;
 };
@@ -188,7 +269,7 @@ export const runRetrievalBenchmark = async (args: RetrievalBenchmarkArgs): Promi
   let profile: RetrievalBenchmarkProfile | null = null;
   for (const repository of [...dataset.repositories].sort((left, right) => codePointCompare(left.id, right.id))) {
     reportProgress(`materializing ${repository.id}`);
-    const result = await runRepositoryCases(dataset, repository.id);
+    const result = await runRepositoryCases(dataset, repository.id, args);
     if (profile !== null && retrievalBenchmarkProfileId(profile) !== retrievalBenchmarkProfileId(result.profile)) {
       throw new Error(`benchmark embedding profile differs for ${repository.id}`);
     }
