@@ -43,6 +43,9 @@ import {
   sanitizeKnowledgeText,
   sanitizeStructuredValue,
 } from "./security.js";
+import { calculateHybridScore } from "./retrieval-explanation.js";
+
+export { calculateHybridScore };
 
 const normalizeText = (text: string): string =>
   text
@@ -65,9 +68,6 @@ const keywordScore = (query: string, target: string): number => {
   }
   return matched / queryTokens.length;
 };
-
-export const calculateHybridScore = (scoreVector: number, scoreKeyword: number, alpha: number): number =>
-  alpha * scoreVector + (1 - alpha) * scoreKeyword;
 
 export interface QueryOptions {
   topK?: number;
