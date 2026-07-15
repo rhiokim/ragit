@@ -26,18 +26,19 @@ command_path: query
 ```bash
 pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
   [--scope durable|session|harness|evidence|all] \
-  [--at <sha>] [--view minimal|default|full] \
+  [--at <sha>] [--view minimal|default|full] [--explain] \
   [--format text|json|both]
 ```
 
 ## Arguments And Options
 
 - `question`: A direct search question.
-- `--input <path|->`: Provide a JSON payload with `question`, `topK`, and optional `at`.
+- `--input <path|->`: Provide a JSON payload with `question`, `topK`, optional `at`, optional `scope`, and optional boolean `explain`.
 - `--top-k <n>`: Control how many hits to return.
 - `--scope durable|session|harness|evidence|all`: Choose whether to search the durable snapshot only, explicit artifact scopes, or both.
 - `--at <sha>`: Query `HEAD`, a full commit SHA, or a unique hexadecimal commit prefix. Branch names, tags, and revision expressions are not accepted.
 - `--view minimal|default|full`: Choose how much hit detail to project.
+- `--explain`: Include score inputs and contributions. It is independent of `--view` and does not change retrieval, deduplication, or ranking.
 - `--format text|json|both`: Choose the output form.
 - `--cwd <path>`: Run against another repository.
 
@@ -50,17 +51,28 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
 {
   "question": "restore auth context",
   "topK": 5,
-  "at": "HEAD"
+  "at": "HEAD",
+  "explain": true
 }
 ```
 
-- JSON output returns `query`, `snapshotSha`, `snapshot`, `hits`, `warnings`, and `redactionSummary`.
+- JSON output returns `query`, `snapshotSha`, `snapshot`, `explain`, `hits`, `warnings`, and `redactionSummary`.
 - `snapshot` reports `requestedRef`, `resolvedSha`, `selection`, `status`, `branch`, `detached`, and `worktreeDirty`. On success, `snapshotSha` always equals `snapshot.resolvedSha`.
+- Every hit in every view includes `citation: { id, sourceType, sourceId, sourceVersion, sourceSha }`. It identifies the source version; it does not include query text, rank, score, time, source text, or an absolute path.
+- `scoreBreakdown` is included only when `explain` is true. It reports hybrid or keyword mode, vector/keyword inputs, authority and recency contributions, and the final score.
 - Each hit can carry artifact-aware metadata such as `scope`, `originType`, `artifactId`, `artifactKind`, `authority`, and `confidence` when the indexed chunk originated from reviewed artifact material inside the snapshot.
 - Output is always re-masked before printing or JSON projection.
 - `--view minimal` returns the smallest useful hit shape.
 - `--view default` returns the standard readable hit projection.
 - `--view full` keeps the richest text projection and is the most expensive for context windows.
+
+## Scoring And Citations
+
+- Hybrid retrieval subtotal: `alpha * vector + (1-alpha) * keyword`, with default `alpha=0.7`.
+- Artifact/evidence candidates without actually computed embeddings use keyword mode: `1.0 * keyword`.
+- Final score: `0.80 * retrieval + 0.15 * authority + 0.05 * recency`.
+- Exact score ties use deterministic repository path, section, citation, then chunk ordering.
+- `--explain` projects this already-computed breakdown; it never changes candidate selection, scoring, deduplication, sorting, snapshot selection, or source identity.
 
 ## Examples
 
@@ -68,6 +80,12 @@ Human terminal flow:
 
 ```bash
 pnpm ragit query "restore auth context" --format both
+```
+
+Explained JSON flow:
+
+```bash
+pnpm ragit query "restore auth context" --explain --view minimal --format json
 ```
 
 Agent-oriented flow:
@@ -78,7 +96,7 @@ pnpm ragit query --input query.json --view minimal --format json
 
 ## Failures And Cautions
 
-- Do not mix `--input` with positional `question`, `--top-k`, or `--at`.
+- Do not mix `--input` with positional `question`, `--top-k`, `--scope`, `--at`, or `--explain`. Put `explain: true` in the JSON payload instead. Output-only `--view`, `--format`, and `--cwd` remain valid with `--input`.
 - If `question` is empty, the command fails.
 - With no `--at`, `query` loads only the exact current HEAD manifest. Any supplied `--at`, including `--at HEAD`, is reported as an explicit exact selection.
 - A nearest indexed ancestor in error details is a recovery hint only and is never queried automatically.

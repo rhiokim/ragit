@@ -26,18 +26,19 @@ command_path: query
 ```bash
 pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
   [--scope durable|session|harness|evidence|all] \
-  [--at <sha>] [--view minimal|default|full] \
+  [--at <sha>] [--view minimal|default|full] [--explain] \
   [--format text|json|both]
 ```
 
 ## 인자와 옵션
 
 - `question`: 직접 검색할 질문입니다.
-- `--input <path|->`: `question`, `topK`, `at`를 담은 JSON payload를 전달합니다.
+- `--input <path|->`: `question`, `topK`, 선택적 `at`, 선택적 `scope`, 선택적 boolean `explain`을 담은 JSON payload를 전달합니다.
 - `--top-k <n>`: 반환 hit 개수를 조절합니다.
 - `--scope durable|session|harness|evidence|all`: durable snapshot만 볼지, explicit artifact scope를 볼지, 둘을 합칠지 고릅니다.
 - `--at <sha>`: `HEAD`, full commit SHA, unique hexadecimal commit prefix 중 하나를 사용합니다. Branch name, tag, revision expression은 허용하지 않습니다.
 - `--view minimal|default|full`: hit 투영의 상세 수준을 선택합니다.
+- `--explain`: 점수 입력과 기여도를 출력합니다. `--view`와 독립적이며 검색, deduplication, ranking을 바꾸지 않습니다.
 - `--format text|json|both`: 출력 형식을 선택합니다.
 - `--cwd <path>`: 다른 저장소를 대상으로 실행합니다.
 
@@ -50,17 +51,28 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
 {
   "question": "restore auth context",
   "topK": 5,
-  "at": "HEAD"
+  "at": "HEAD",
+  "explain": true
 }
 ```
 
-- JSON 출력은 `query`, `snapshotSha`, `snapshot`, `hits`, `warnings`, `redactionSummary`를 반환합니다.
+- JSON 출력은 `query`, `snapshotSha`, `snapshot`, `explain`, `hits`, `warnings`, `redactionSummary`를 반환합니다.
 - `snapshot`은 `requestedRef`, `resolvedSha`, `selection`, `status`, `branch`, `detached`, `worktreeDirty`를 보고합니다. 성공 시 `snapshotSha`는 항상 `snapshot.resolvedSha`와 같습니다.
+- 모든 view의 hit에는 `citation: { id, sourceType, sourceId, sourceVersion, sourceSha }`가 포함됩니다. 이는 source version을 식별하며 query text, rank, score, time, source text, absolute path는 포함하지 않습니다.
+- `scoreBreakdown`은 `explain`이 true일 때만 포함됩니다. hybrid 또는 keyword mode, vector/keyword 입력, authority/recency 기여도, final score를 보고합니다.
 - hit에는 필요할 경우 `scope`, `originType`, `artifactId`, `artifactKind`, `authority`, `confidence` 같은 artifact-aware metadata가 함께 들어올 수 있습니다.
 - text/JSON 출력은 항상 다시 마스킹된 결과를 사용합니다.
 - `--view minimal`은 가장 작은 hit 형태를 반환합니다.
 - `--view default`는 사람이 읽기 좋은 기본 투영입니다.
 - `--view full`은 richer text를 유지하므로 context window 비용이 가장 큽니다.
+
+## 점수와 Citation
+
+- Hybrid retrieval subtotal: `alpha * vector + (1-alpha) * keyword`, 기본 `alpha=0.7`입니다.
+- 실제 candidate embedding을 계산하지 못한 artifact/evidence는 keyword mode `1.0 * keyword`를 사용합니다.
+- Final score: `0.80 * retrieval + 0.15 * authority + 0.05 * recency`입니다.
+- Exact score tie는 repository path, section, citation, chunk 순서로 결정적으로 정렬합니다.
+- `--explain`은 이미 계산된 breakdown을 투영할 뿐 candidate selection, scoring, deduplication, sorting, snapshot selection, source identity를 바꾸지 않습니다.
 
 ## 대표 사용 예시
 
@@ -68,6 +80,12 @@ pnpm ragit query [question] [--input <path|->] [--top-k <n>] \
 
 ```bash
 pnpm ragit query "restore auth context" --format both
+```
+
+설명 포함 JSON 예시:
+
+```bash
+pnpm ragit query "restore auth context" --explain --view minimal --format json
 ```
 
 에이전트 호출 예시:
@@ -78,7 +96,7 @@ pnpm ragit query --input query.json --view minimal --format json
 
 ## 실패/주의 사항
 
-- `--input`과 positional `question`, `--top-k`, `--at`를 함께 쓰면 안 됩니다.
+- `--input`과 positional `question`, `--top-k`, `--scope`, `--at`, `--explain`을 함께 쓰면 안 됩니다. 대신 JSON payload에 `explain: true`를 넣으십시오. 출력 전용 `--view`, `--format`, `--cwd`는 `--input`과 함께 사용할 수 있습니다.
 - `question`이 비어 있으면 실패합니다.
 - `--at`이 없으면 정확한 현재 HEAD manifest만 읽습니다. `--at HEAD`를 포함해 `--at`을 명시한 모든 호출은 explicit exact selection으로 보고됩니다.
 - Error details의 nearest indexed ancestor는 recovery hint일 뿐 자동 조회 결과가 아닙니다.
