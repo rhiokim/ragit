@@ -618,6 +618,41 @@ export interface RagitLogSemanticOverlay {
   artifacts: RagitLogSemanticArtifactSupport[];
 }
 
+export type RetrievalCitationSourceType = "document" | "artifact" | "evidence";
+
+export interface RetrievalCitation {
+  id: string;
+  sourceType: RetrievalCitationSourceType;
+  sourceId: string;
+  sourceVersion: string;
+  sourceSha: string | null;
+}
+
+export interface RetrievalScoreInput {
+  score: number;
+  weight: number;
+  contribution: number;
+}
+
+export interface RetrievalScoreStage {
+  score: number;
+  weight: number;
+  contribution: number;
+}
+
+export interface RetrievalScoreBreakdown {
+  mode: "hybrid" | "keyword";
+  retrieval: RetrievalScoreStage & {
+    inputs: {
+      vector: RetrievalScoreInput;
+      keyword: RetrievalScoreInput;
+    };
+  };
+  authority: RetrievalScoreStage;
+  recency: RetrievalScoreStage;
+  final: number;
+}
+
 export interface RetrievalHit {
   chunkId: string;
   path: string;
