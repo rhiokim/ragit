@@ -105,7 +105,7 @@ pnpm vitest run test/embedding.test.ts test/embedding-batch.test.ts
 
 ```bash
 pnpm vitest run test/retrieval-evaluation.test.ts
-pnpm benchmark:retrieval:verify -- --output /tmp/ragit-retrieval-b4-local.json
+pnpm benchmark:retrieval:verify --output /tmp/ragit-retrieval-b4-local.json
 ```
 
 Compare the B4 local report with the B3 reference for identical aggregate quality, slices, noise values, per-case metrics, and all 108 ranked-path arrays.
@@ -146,7 +146,7 @@ pnpm docs:build
 
 ```bash
 ollama pull nomic-embed-text
-pnpm benchmark:retrieval:ollama:verify -- --output /tmp/ragit-retrieval-b4-ollama.json
+pnpm benchmark:retrieval:ollama:verify --output /tmp/ragit-retrieval-b4-ollama.json
 ```
 
 Record Ollama version, model digest, OS/architecture class, report SHA-256, aggregate metrics, noise drop, p95 latency, and gate result. Do not record local usernames or absolute paths.
@@ -155,7 +155,7 @@ Record Ollama version, model digest, OS/architecture class, report SHA-256, aggr
 
 ```bash
 test -n "$OPENAI_API_KEY"
-pnpm benchmark:retrieval:openai:verify -- --output /tmp/ragit-retrieval-b4-openai.json
+pnpm benchmark:retrieval:openai:verify --output /tmp/ragit-retrieval-b4-openai.json
 ```
 
 Stop if the credential is unavailable or paid use has not been authorized. Record report SHA-256, aggregate metrics, noise drop, p95 latency, and gate result; never print or persist the key.
@@ -167,7 +167,7 @@ Sol Max runs:
 ```bash
 pnpm vitest run test/embedding.test.ts test/embedding-batch.test.ts test/embedding-cache.test.ts test/embedding-execution.integration.test.ts test/embedding-migrate.integration.test.ts test/retrieval-evaluation.test.ts
 pnpm test
-pnpm benchmark:retrieval:verify -- --output /tmp/ragit-retrieval-b4-parent.json
+pnpm benchmark:retrieval:verify --output /tmp/ragit-retrieval-b4-parent.json
 pnpm build
 pnpm build:verify
 pnpm pack:verify
