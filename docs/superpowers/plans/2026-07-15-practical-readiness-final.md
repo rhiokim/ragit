@@ -3,7 +3,7 @@
 **Status:** Approved
 **Design/review owner:** Sol Max
 **Bounded implementation worker:** Terra
-**Baseline:** `origin/main` at `4633ba5`, package `ragit@1.1.2`
+**Baseline:** `origin/main` at `89e25dd`, package `ragit@1.1.2`
 **Date:** 2026-07-15
 
 ## Outcome
@@ -38,8 +38,8 @@ Terra must not tune retrieval weights, revise thresholds, widen provider or MCP 
 | --- | --- | --- | --- |
 | B1 | Complete | Versioned retrieval benchmark | Dataset, thresholds, noise pairs, latency gate, and repeatable local report |
 | B2 | Complete | Citations and score explanations | PR #23 merged; citations stable; explanations opt-in; B1 rankings unchanged |
-| B3 | In progress | Context Pack v2 | Strict budget, deterministic citation dedupe, source diversity, additive selection telemetry |
-| B4 | Pending | Production embedding evidence | Explicit OpenAI/Ollama profiles pass provider-labeled contract and quality gates |
+| B3 | Complete | Context Pack v2 | PR #24 merged; strict budget, deterministic citation dedupe, source diversity, additive selection telemetry |
+| B4 | In progress | Production embedding evidence | Explicit OpenAI/Ollama profiles pass provider-labeled contract and quality gates |
 | C | Pending | Distribution matrix | Packed CLI installs and completes E2E on every declared Node/OS/architecture target |
 | D | Pending | Read-only MCP projection | Query, context pack, and status are reachable over stdio with no write-capable path |
 | E | Pending | Release and registry verification | Release PR, trusted publish, clean registry install, provenance and smoke verification |
