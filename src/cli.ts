@@ -630,13 +630,14 @@ program
   .option("--scope <scope>", "durable|session|harness|evidence|all", "durable")
   .option("--format <format>", "text|json|both", "both")
   .option("--view <view>", "minimal|default|full", "default")
+  .option("--explain", "점수 구성과 기여도를 출력")
   .option("--at <sha>", "특정 커밋 시점 조회")
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (question, options) => {
     const cwd = await resolveCwd(options.cwd);
     ensureNoMixedInput(
       options.input,
-      [question, options.topK, options.at, options.scope === "durable" ? undefined : options.scope],
+      [question, options.topK, options.at, options.scope === "durable" ? undefined : options.scope, options.explain],
       "query",
     );
     const input = options.input
@@ -646,11 +647,13 @@ program
           topK: parseOptionalPositiveNumber(options.topK as string | undefined, "query.topK"),
           at: options.at as string | undefined,
           scope: options.scope as "durable" | "session" | "harness" | "evidence" | "all" | undefined,
+          explain: Boolean(options.explain),
         };
     if (!input.question) {
       throw new Error("query 질문이 필요합니다.");
     }
     const view = normalizeCliView(options.view, "default");
+    const explain = input.explain ?? false;
     const result = await searchKnowledge(cwd, input.question, {
       topK: input.topK,
       at: input.at,
@@ -666,7 +669,8 @@ program
         snapshotSha: result.snapshotSha,
         snapshot: result.snapshot,
         scope: input.scope ?? "durable",
-        hits: projectRetrievalHits(result.hits, view),
+        explain,
+        hits: projectRetrievalHits(result.hits, view, explain),
         warnings: result.warnings,
         redactionSummary,
       },
@@ -675,7 +679,7 @@ program
     emitCliOutput({
       envelope,
       format: normalizeCliFormat(options.format, "both"),
-      text: formatQueryResultText(sanitizedQuestion.text, { ...result, redactionSummary }, view),
+      text: formatQueryResultText(sanitizedQuestion.text, { ...result, redactionSummary }, view, explain),
     });
   });
 

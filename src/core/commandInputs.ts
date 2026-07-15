@@ -6,6 +6,7 @@ export interface QueryCommandInput {
   topK?: number;
   at?: string;
   scope?: RetrievalScope;
+  explain?: boolean;
 }
 
 export interface ContextPackCommandInput {
@@ -82,12 +83,13 @@ const asOptionalIngestScope = (value: unknown, label: string): "durable" | "all"
 
 export const normalizeQueryCommandInput = (value: unknown): QueryCommandInput => {
   const raw = asObject(value, "query");
-  assertAllowedKeys(raw, ["question", "topK", "at", "scope"], "query");
+  assertAllowedKeys(raw, ["question", "topK", "at", "scope", "explain"], "query");
   return {
     question: asTrimmedString(raw.question, "query.question"),
     topK: asOptionalNumber(raw.topK, "query.topK"),
     at: raw.at === undefined ? undefined : asTrimmedString(raw.at, "query.at"),
     scope: asOptionalRetrievalScope(raw.scope, "query.scope"),
+    explain: asOptionalBoolean(raw.explain, "query.explain"),
   };
 };
 

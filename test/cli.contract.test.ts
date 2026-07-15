@@ -96,7 +96,7 @@ Recall packets should restore active work instead of replaying raw logs.`,
         promotionCandidates: [],
       });
 
-      await writeFile(path.join(temp, "query.json"), JSON.stringify({ question: "restore active work", topK: 2 }, null, 2), "utf8");
+      await writeFile(path.join(temp, "query.json"), JSON.stringify({ question: "restore active work", topK: 2, explain: true }, null, 2), "utf8");
       await writeFile(path.join(temp, "context-pack.json"), JSON.stringify({ goal: "resume auth flow", budget: 80 }, null, 2), "utf8");
       const nestedQueryCwd = path.join(temp, "packages", "app");
       await mkdir(nestedQueryCwd, { recursive: true });
@@ -107,6 +107,9 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(describeOutput.data.spec.path).toBe("query");
       expect(describeOutput.data.spec.supportsRawJsonInput).toBe(true);
       expect(describeOutput.data.spec.outputSchemaSummary).toContain("snapshot");
+      expect(describeOutput.data.spec.outputSchemaSummary).toContain("hits[].citation");
+      expect(describeOutput.data.spec.outputSchemaSummary).toContain("hits[].scoreBreakdown (when explain=true)");
+      expect(describeOutput.data.spec.options.some((option: { name: string }) => option.name === "--explain")).toBe(true);
 
       const describeIngestOutput = JSON.parse(runCli(["describe", "ingest", "--format", "json"]));
       expect(describeIngestOutput.data.spec.outputSchemaSummary).toContain("dirtyCandidates");
@@ -218,7 +221,24 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(queryOutput.data.hits[0].excerpt).toBeTruthy();
       expect(queryOutput.data.hits[0].scope).toBe("durable");
       expect(queryOutput.data.hits[0].text).toBeUndefined();
+      expect(queryOutput.data.explain).toBe(true);
+      expect(queryOutput.data.hits[0].citation.id).toMatch(/^cite-[a-f0-9]{24}$/);
+      expect(queryOutput.data.hits[0].scoreBreakdown.mode).toMatch(/^(hybrid|keyword)$/);
       expect(queryOutput.warnings).toEqual(queryOutput.data.warnings);
+      expect(() => runCli(["query", "--input", "query.json", "--explain", "--cwd", temp, "--format", "json"])).toThrow(
+        "--input과 positional/도메인 옵션을 함께 사용할 수 없습니다",
+      );
+      const positionalExplainedOutput = JSON.parse(
+        runCli(["query", "restore active work", "--explain", "--cwd", temp, "--format", "json"]),
+      );
+      expect(positionalExplainedOutput.data.explain).toBe(true);
+      expect(positionalExplainedOutput.data.hits[0].scoreBreakdown).toBeTruthy();
+      const defaultQueryOutput = JSON.parse(
+        runCli(["query", "restore active work", "--cwd", temp, "--format", "json"]),
+      );
+      expect(defaultQueryOutput.data.explain).toBe(false);
+      expect(defaultQueryOutput.data.hits[0].citation.id).toMatch(/^cite-[a-f0-9]{24}$/);
+      expect(defaultQueryOutput.data.hits[0].scoreBreakdown).toBeUndefined();
       const queryTextOutput = runCli([
         "query",
         "restore active work",
