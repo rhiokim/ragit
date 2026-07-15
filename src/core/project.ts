@@ -37,6 +37,7 @@ export interface RagitPaths {
   cacheDir: string;
   hooksDir: string;
   runtimeDir: string;
+  runtimeTransactionsDir: string;
   storeWriteLockPath: string;
 }
 
@@ -70,6 +71,7 @@ export const resolveRagitPaths = (cwd: string): RagitPaths => ({
   cacheDir: path.join(cwd, ".ragit", "cache"),
   hooksDir: path.join(cwd, ".ragit", "hooks"),
   runtimeDir: path.join(cwd, ".ragit", "runtime"),
+  runtimeTransactionsDir: path.join(cwd, ".ragit", "runtime", "transactions"),
   storeWriteLockPath: path.join(cwd, ".ragit", "runtime", "store-write.lock"),
 });
 

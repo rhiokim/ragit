@@ -79,6 +79,7 @@ describe("project helpers", () => {
     const paths = resolveRagitPaths(temp);
 
     expect(paths.runtimeDir).toBe(path.join(temp, ".ragit", "runtime"));
+    expect(paths.runtimeTransactionsDir).toBe(path.join(temp, ".ragit", "runtime", "transactions"));
     expect(paths.storeWriteLockPath).toBe(path.join(temp, ".ragit", "runtime", "store-write.lock"));
     await expect(stat(paths.runtimeDir)).rejects.toThrow();
   });

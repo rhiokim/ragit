@@ -10,6 +10,7 @@ import { RagitOperationalError } from "./errors.js";
 import { appendLedgerEvent } from "./event-ledger.js";
 import { hashFileContent, listAllDocumentFiles, listDocumentFilesByGlob } from "./files.js";
 import {
+  getHeadShaIfExists,
   getParentShaForCommit,
   listChangedFilesBetween,
   listDirtyPathsAgainstHead,
@@ -17,6 +18,12 @@ import {
   workingTreePathMatchesHead,
 } from "./git.js";
 import { chunkVersionId, documentIdFromPath, documentVersionId, toRepoPath } from "./identity.js";
+import {
+  createIngestTransaction,
+  failIngestTransaction,
+  IngestTransactionJournal,
+  updateIngestTransaction,
+} from "./ingest-transaction.js";
 import { maskSecrets } from "./mask.js";
 import { buildSnapshotManifest, writeSnapshotManifest } from "./manifest.js";
 import { embedTexts, resolveEmbeddingProfile, toEmbeddingContract } from "./embedding.js";
@@ -32,7 +39,13 @@ import {
   recordAdmissionDecision,
   sanitizeKnowledgeText,
 } from "./security.js";
-import { bootstrapCanonicalStore, closeCanonicalStore, writeChunksToCanonicalStore, writeDocumentsToCanonicalStore } from "./store.js";
+import {
+  bootstrapCanonicalStore,
+  CanonicalStore,
+  closeCanonicalStore,
+  writeChunksToCanonicalStore,
+  writeDocumentsToCanonicalStore,
+} from "./store.js";
 import { resolveRepositoryContext, selectIngestBase } from "./snapshot.js";
 import { AdmissionSummary, ChunkRecord, DocType, DocumentRecord, isKnownDocType } from "./types.js";
 import { RAGIT_VERSION } from "./version.js";
@@ -44,6 +57,21 @@ export interface IngestOptions {
   paths?: string[];
   scope?: "durable" | "all";
   dryRun?: boolean;
+}
+
+export type IngestTestBoundary = "store-written" | "store-verified" | "before-manifest" | "after-manifest";
+
+export interface IngestTestHookContext {
+  cwd: string;
+  headSha: string;
+  transaction: IngestTransactionJournal;
+  documentVersionIds: string[];
+  chunkIds: string[];
+  store?: CanonicalStore;
+}
+
+export interface RunIngestDependencies {
+  testHook?: (boundary: IngestTestBoundary, context: IngestTestHookContext) => Promise<void> | void;
 }
 
 interface ResolvedIngestTargets {
@@ -317,6 +345,28 @@ const sortChunkEntries = (chunks: Array<Pick<ChunkRecord, "id" | "documentId" | 
   Pick<ChunkRecord, "id" | "documentId" | "documentVersionId">
 > => [...chunks].sort((left, right) => left.id.localeCompare(right.id));
 
+const runIngestTestHook = async (
+  dependencies: RunIngestDependencies,
+  boundary: IngestTestBoundary,
+  context: IngestTestHookContext,
+): Promise<void> => {
+  await dependencies.testHook?.(boundary, context);
+};
+
+const unverifiedStoreWrite = (
+  transactionId: string,
+  missingDocumentVersionIds: string[],
+  missingChunkIds: string[],
+): RagitOperationalError =>
+  new RagitOperationalError(
+    "INGEST_STORE_WRITE_UNVERIFIED",
+    "새 ingest record를 canonical store에서 다시 읽을 수 없습니다.",
+    {
+      details: { transactionId, missingDocumentVersionIds, missingChunkIds },
+      recovery: { command: "ragit ingest --all" },
+    },
+  );
+
 const appendIngestAdmissionEvent = async (
   cwd: string,
   admission: AdmissionSummary,
@@ -360,7 +410,11 @@ const appendIngestAdmissionEvent = async (
   });
 };
 
-const runIngestUnlocked = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
+const runIngestUnlocked = async (
+  cwd: string,
+  options: IngestOptions,
+  dependencies: RunIngestDependencies = {},
+): Promise<IngestSummary> => {
   const context = await resolveRepositoryContext(cwd);
   if (context.headSha === null) throw missingHeadForIngest();
   cwd = context.gitRoot;
@@ -557,47 +611,132 @@ const runIngestUnlocked = async (cwd: string, options: IngestOptions): Promise<I
 
   const parentSha = await getParentShaForCommit(cwd, headSha);
   const boundArtifactIds = await bindPendingArtifacts(cwd, headSha);
-  const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), false);
+  const baseSnapshot = baseSelection.manifest;
+  const documentMap = new Map<string, DocumentRecord>();
+  const chunkEntries = new Map<string, Pick<ChunkRecord, "id" | "documentId" | "documentVersionId">>();
+
+  if (baseSnapshot) {
+    for (const document of baseSnapshot.docs) {
+      documentMap.set(document.id, document);
+    }
+    for (const chunk of baseSnapshot.chunks) {
+      chunkEntries.set(chunk.id, chunk);
+    }
+  }
+
+  const removedDocumentIds = new Set<string>(candidates.deletedDocumentIds);
+  for (const documentId of changedDocuments.keys()) {
+    removedDocumentIds.add(documentId);
+  }
+
+  if (candidates.fullSnapshot) {
+    documentMap.clear();
+    chunkEntries.clear();
+  } else if (removedDocumentIds.size > 0) {
+    for (const documentId of removedDocumentIds) {
+      documentMap.delete(documentId);
+    }
+    for (const [chunkId, chunk] of chunkEntries.entries()) {
+      if (removedDocumentIds.has(chunk.documentId)) {
+        chunkEntries.delete(chunkId);
+      }
+    }
+  }
+
+  const newDocuments = Array.from(changedDocuments.values());
+  const artifactIndex = await buildArtifactIndexData(cwd, headSha, scope, embeddingProfile, cacheMode);
+  const newChunks = [...Array.from(changedChunks.values()).flat(), ...artifactIndex.chunks];
+  const documentVersionIds = newDocuments.map((document) => document.versionId);
+  const chunkIds = newChunks.map((chunk) => chunk.id);
+  const manifestPath = `.ragit/manifest/${headSha}.json`;
+  let transaction = await createIngestTransaction(cwd, {
+    targetHeadSha: headSha,
+    baseSha: baseSelection.baseSha,
+    manifestPath,
+    documentVersionIds,
+    chunkIds,
+  });
 
   try {
-    const baseSnapshot = baseSelection.manifest;
-
-    const documentMap = new Map<string, DocumentRecord>();
-    const chunkEntries = new Map<string, Pick<ChunkRecord, "id" | "documentId" | "documentVersionId">>();
-
-    if (baseSnapshot) {
-      for (const document of baseSnapshot.docs) {
-        documentMap.set(document.id, document);
-      }
-      for (const chunk of baseSnapshot.chunks) {
-        chunkEntries.set(chunk.id, chunk);
-      }
+    const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), false);
+    try {
+      writeDocumentsToCanonicalStore(store, newDocuments);
+      writeChunksToCanonicalStore(store, newChunks);
+      transaction = await updateIngestTransaction(cwd, transaction, { phase: "store-written" });
+      await runIngestTestHook(dependencies, "store-written", {
+        cwd,
+        headSha,
+        transaction,
+        documentVersionIds,
+        chunkIds,
+        store,
+      });
+    } finally {
+      closeCanonicalStore(store);
     }
 
-    const removedDocumentIds = new Set<string>(candidates.deletedDocumentIds);
-    for (const documentId of changedDocuments.keys()) {
-      removedDocumentIds.add(documentId);
+    const verificationStore = await bootstrapCanonicalStore(cwd, toEmbeddingContract(embeddingProfile), true);
+    try {
+      const fetchedDocuments = documentVersionIds.length === 0
+        ? {}
+        : verificationStore.documents.fetchSync(documentVersionIds);
+      const fetchedChunks = chunkIds.length === 0
+        ? {}
+        : verificationStore.chunks.fetchSync(chunkIds);
+      const missingDocumentVersionIds = documentVersionIds.filter((id) => !(id in fetchedDocuments));
+      const missingChunkIds = chunkIds.filter((id) => !(id in fetchedChunks));
+      if (missingDocumentVersionIds.length > 0 || missingChunkIds.length > 0) {
+        throw unverifiedStoreWrite(transaction.transactionId, missingDocumentVersionIds, missingChunkIds);
+      }
+    } finally {
+      closeCanonicalStore(verificationStore);
     }
 
-    if (candidates.fullSnapshot) {
-      documentMap.clear();
-      chunkEntries.clear();
-    } else if (removedDocumentIds.size > 0) {
-      for (const documentId of removedDocumentIds) {
-        documentMap.delete(documentId);
-      }
-      for (const [chunkId, chunk] of chunkEntries.entries()) {
-        if (removedDocumentIds.has(chunk.documentId)) {
-          chunkEntries.delete(chunkId);
-        }
-      }
-    }
+    transaction = await updateIngestTransaction(cwd, transaction, { phase: "store-verified" });
+    await runIngestTestHook(dependencies, "store-verified", {
+      cwd,
+      headSha,
+      transaction,
+      documentVersionIds,
+      chunkIds,
+    });
 
-    const newDocuments = Array.from(changedDocuments.values());
-    const artifactIndex = await buildArtifactIndexData(cwd, headSha, scope, embeddingProfile, cacheMode);
-    const newChunks = [...Array.from(changedChunks.values()).flat(), ...artifactIndex.chunks];
-    writeDocumentsToCanonicalStore(store, newDocuments);
-    writeChunksToCanonicalStore(store, newChunks);
+    const finalHeadSha = await getHeadShaIfExists(cwd);
+    if (finalHeadSha !== headSha) {
+      throw new RagitOperationalError(
+        "REPOSITORY_STATE_CHANGED",
+        "ingest 중 HEAD가 변경되었습니다.",
+        {
+          details: { selectedHeadSha: headSha, finalHeadSha },
+          recovery: { command: "git status" },
+        },
+      );
+    }
+    const finalDirtyCandidates = await resolveDirtyCandidates(
+      cwd,
+      config,
+      options,
+      headSha,
+      baseSelection.baseSha,
+      candidates.files,
+    );
+    if (finalDirtyCandidates.length > 0) {
+      throw new RagitOperationalError(
+        "INGEST_CANDIDATES_DIRTY",
+        "ingest 대상에 커밋되지 않은 변경이 있습니다.",
+        {
+          details: { dirtyCandidates: finalDirtyCandidates },
+          recovery: { command: "git status --short" },
+        },
+      );
+    }
+    await runIngestTestHook(dependencies, "before-manifest", {
+      cwd,
+      headSha,
+      transaction,
+      documentVersionIds,
+      chunkIds,
+    });
 
     for (const document of newDocuments) {
       documentMap.set(document.id, document);
@@ -636,7 +775,16 @@ const runIngestUnlocked = async (cwd: string, options: IngestOptions): Promise<I
       },
     );
     await writeSnapshotManifest(cwd, manifest);
-    const manifestPath = `.ragit/manifest/${headSha}.json`;
+    transaction = { ...transaction, phase: "manifest-committed" };
+    transaction = await updateIngestTransaction(cwd, transaction, { phase: "manifest-committed" });
+    await runIngestTestHook(dependencies, "after-manifest", {
+      cwd,
+      headSha,
+      transaction,
+      documentVersionIds,
+      chunkIds,
+    });
+
     await appendLedgerEvent(cwd, {
       eventType: "ingest.completed",
       goalId: null,
@@ -657,6 +805,7 @@ const runIngestUnlocked = async (cwd: string, options: IngestOptions): Promise<I
         contentHash: `${headSha}:${processed}:${scope}:${manifestPath}`,
       },
     });
+    await updateIngestTransaction(cwd, transaction, { status: "completed", phase: "completed" });
     return {
       mode: "apply",
       processed,
@@ -680,20 +829,25 @@ const runIngestUnlocked = async (cwd: string, options: IngestOptions): Promise<I
       },
       warnings,
     };
-  } finally {
-    closeCanonicalStore(store);
+  } catch (error) {
+    await failIngestTransaction(cwd, transaction, error);
+    throw error;
   }
 };
 
-export const runIngest = async (cwd: string, options: IngestOptions): Promise<IngestSummary> => {
-  if (options.dryRun) return runIngestUnlocked(cwd, options);
+export const runIngest = async (
+  cwd: string,
+  options: IngestOptions,
+  dependencies: RunIngestDependencies = {},
+): Promise<IngestSummary> => {
+  if (options.dryRun) return runIngestUnlocked(cwd, options, dependencies);
 
   const context = await resolveRepositoryContext(cwd);
-  if (context.headSha === null) return runIngestUnlocked(context.gitRoot, options);
+  if (context.headSha === null) return runIngestUnlocked(context.gitRoot, options, dependencies);
 
   return withStoreWriteLock(
     context.gitRoot,
     { command: "ingest", headSha: context.headSha },
-    () => runIngestUnlocked(context.gitRoot, options),
+    () => runIngestUnlocked(context.gitRoot, options, dependencies),
   );
 };
