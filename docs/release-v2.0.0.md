@@ -91,12 +91,18 @@ The package gate creates state with registry `ragit@1.1.2`, then installs the ca
 
 ## Verification
 
-The release candidate is accepted only after all of the following pass on the final release commit:
+The committed local release candidate passed:
 
-- focused B1-D tests and the full test suite;
-- deterministic and Ollama-labeled retrieval gates;
-- build, runtime, packed CLI/MCP, and `1.1.2` upgrade smoke contracts;
-- bilingual documentation build and consistency checks;
+- 13 focused B1-D files with 132 tests;
+- the complete 63-file, 421-test suite;
+- the deterministic 108-case retrieval gate;
+- the loopback Ollama `nomic-embed-text` 108-case gate with Recall@10 `1.0`, MRR@10 `0.9423`, and nDCG@10 `0.9497`;
+- build, runtime, 17-file pack, installed CLI/MCP, byte-invariance, and `1.1.2 -> 2.0.0` upgrade smoke contracts;
+- a 351-page bilingual docs build plus command, link, i18n, and search checks;
+- npm dry-run for `ragit@2.0.0` with both executable modes set to `0755`.
+
+The public release is accepted only after all of the following also pass on the final release commit:
+
 - four-axis pull-request runtime matrix;
 - tag-triggered Trusted Publishing;
 - clean public-registry install, provenance, integrity, executable, CLI workflow, and MCP protocol verification.
