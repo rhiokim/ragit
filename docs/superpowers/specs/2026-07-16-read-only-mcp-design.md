@@ -1,7 +1,7 @@
 # Read-only MCP Projection Design
 
 **Design direction:** Approved
-**Written-spec review:** Pending
+**Written-spec review:** Approved
 **Workstream:** D
 **Approved approach:** Fixed-repository, in-process stdio adapter
 **Baseline:** `origin/main` at `19d9708`, package `ragit@1.1.2`
@@ -100,11 +100,13 @@ The CLI delegates its existing query, context-pack, and status actions to this m
 
 ### MCP registration boundary
 
-`src/mcp/server.ts` statically registers the three tools. It does not import `commandRegistry`, `cli.ts`, ingest, repair, memory, artifact mutation, config mutation, migration, hooks, or security-purge modules.
+`src/mcp/server.ts` constructs the SDK's low-level `Server` and installs static `tools/list` and `tools/call` request handlers for the three tools. It does not import `commandRegistry`, `cli.ts`, ingest, repair, memory, artifact mutation, config mutation, migration, hooks, or security-purge modules.
+
+The low-level server is intentional. In SDK 1.29.0, high-level `McpServer.registerTool` validates a Zod input before invoking the tool callback and converts validation failures to an SDK-owned text-only error. Owning the two tool request handlers lets RAGit advertise strict JSON Schemas while returning the same structured RAGit failure envelope for schema, normalization, and execution failures. No generic protocol router is added.
 
 The server constructor receives a narrow dependency object containing only the three shared read-command functions. This makes the allowed call graph explicit and lets tests prove that no generic or mutating executor is available.
 
-Every tool is annotated as read-only, non-destructive, idempotent, and closed-world:
+Every listed tool is annotated as read-only, non-destructive, idempotent, and closed-world:
 
 ```text
 readOnlyHint=true
@@ -235,7 +237,7 @@ Tests compare a deterministic map of repository-relative path to content hash be
 1. Embedding tests prove readonly hits do not touch entries and remote misses make zero provider requests and zero writes.
 2. Retrieval tests prove the policy reaches query and artifact embedding paths while the default CLI path remains read-write compatible.
 3. Shared read-command tests prove CLI-equivalent normalization and projection.
-4. Registration tests prove the exact tool-name set and read-only annotations.
+4. Protocol-handler tests prove the exact tool-name set, strict input JSON Schemas, and read-only annotations.
 5. A source/import coverage test rejects forbidden mutating imports from the MCP subtree.
 6. Handler tests cover success, operational failure, invalid input, remote-cache-miss, and unexpected-error envelopes.
 

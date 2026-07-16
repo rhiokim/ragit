@@ -41,7 +41,7 @@ Terra must not tune retrieval weights, revise thresholds, widen provider or MCP 
 | B3 | Complete | Context Pack v2 | PR #24 merged; strict budget, deterministic citation dedupe, source diversity, additive selection telemetry |
 | B4 | Complete | Production embedding evidence | Ollama `nomic-embed-text` passed live gates; OpenAI remains recognized but explicitly outside production support |
 | C | Complete | Distribution matrix | Packed CLI installs and completes E2E on every declared Node/OS/architecture target |
-| D | Spec review pending | Read-only MCP projection | Query, context pack, and status are reachable over stdio with no write-capable path |
+| D | Implementation planning | Read-only MCP projection | Query, context pack, and status are reachable over stdio with no write-capable path |
 | E | Pending | Release and registry verification | Release PR, trusted publish, clean registry install, provenance and smoke verification |
 
 ## B3 — Context Pack v2
