@@ -26,16 +26,15 @@ import {
   resolveCliFailureContext,
 } from "./core/cliContract.js";
 import { assertSafeGlobText, readJsonInput } from "./core/cliInput.js";
-import { normalizeContextPackCommandInput, normalizeIngestCommandInput, normalizeQueryCommandInput } from "./core/commandInputs.js";
+import { normalizeIngestCommandInput } from "./core/commandInputs.js";
 import { describeCommandPath, listDescribableCommands } from "./core/commandRegistry.js";
-import { formatContextPackText, packContext, projectContextPack } from "./core/context.js";
+import { formatContextPackText } from "./core/context.js";
 import { isRagitOperationalError } from "./core/errors.js";
 import { runIngest } from "./core/ingest.js";
 import { formatRagitLogText, projectRagitLogResult, runRagitLog } from "./core/log.js";
-import { formatQueryResultText, projectRetrievalHits } from "./core/output.js";
+import { formatQueryResultText } from "./core/output.js";
+import { readCommandExecutor } from "./core/readCommands.js";
 import { normalizeRepairActionKind } from "./core/repair.js";
-import { searchKnowledge } from "./core/retrieval.js";
-import { mergeRedactionSummaries, sanitizeKnowledgeText } from "./core/security.js";
 import { normalizeKnownDocType } from "./core/types.js";
 import { RAGIT_VERSION } from "./core/version.js";
 
@@ -654,46 +653,35 @@ program
       [question, options.topK, options.at, options.scope === "durable" ? undefined : options.scope, options.explain],
       "query",
     );
+    const positionalQuestion = String(question ?? "").trim();
+    if (!options.input && !positionalQuestion) {
+      throw new Error("query 질문이 필요합니다.");
+    }
     const input = options.input
-      ? normalizeQueryCommandInput(await readJsonInput(cwd, options.input, "query"))
+      ? await readJsonInput(cwd, options.input, "query")
       : {
-          question: String(question ?? "").trim(),
+          question: positionalQuestion,
           topK: parseOptionalPositiveNumber(options.topK as string | undefined, "query.topK"),
           at: options.at as string | undefined,
           scope: options.scope as "durable" | "session" | "harness" | "evidence" | "all" | undefined,
           explain: Boolean(options.explain),
         };
-    if (!input.question) {
-      throw new Error("query 질문이 필요합니다.");
-    }
-    const view = normalizeCliView(options.view, "default");
-    const explain = input.explain ?? false;
-    const result = await searchKnowledge(cwd, input.question, {
-      topK: input.topK,
-      at: input.at,
-      scope: input.scope,
-    });
-    const sanitizedQuestion = sanitizeKnowledgeText(input.question, "query.output", "query");
-    const redactionSummary = mergeRedactionSummaries(sanitizedQuestion.summary, result.redactionSummary);
+    const executed = await readCommandExecutor.query(cwd, input, { view: options.view });
     const envelope = buildCliEnvelope(
       "query",
       cwd,
-      {
-        query: sanitizedQuestion.text,
-        snapshotSha: result.snapshotSha,
-        snapshot: result.snapshot,
-        scope: input.scope ?? "durable",
-        explain,
-        hits: projectRetrievalHits(result.hits, view, explain),
-        warnings: result.warnings,
-        redactionSummary,
-      },
-      result.warnings,
+      executed.data,
+      executed.warnings,
     );
     emitCliOutput({
       envelope,
       format: normalizeCliFormat(options.format, "both"),
-      text: formatQueryResultText(sanitizedQuestion.text, { ...result, redactionSummary }, view, explain),
+      text: formatQueryResultText(
+        executed.data.query,
+        executed.result,
+        executed.view,
+        executed.data.explain,
+      ),
     });
   });
 
@@ -717,35 +705,29 @@ program
       [goal, options.budget, options.at, options.scope === "durable" ? undefined : options.scope],
       "context pack",
     );
+    const positionalGoal = String(goal ?? "").trim();
+    if (!options.input && !positionalGoal) {
+      throw new Error("context pack goal이 필요합니다.");
+    }
     const input = options.input
-      ? normalizeContextPackCommandInput(await readJsonInput(cwd, options.input, "context pack"))
+      ? await readJsonInput(cwd, options.input, "context pack")
       : {
-          goal: String(goal ?? "").trim(),
+          goal: positionalGoal,
           budget: parseOptionalPositiveSafeInteger(options.budget as string | undefined, "context.budget"),
           at: options.at as string | undefined,
           scope: options.scope as "durable" | "session" | "harness" | "evidence" | "all" | undefined,
         };
-    if (!input.goal) {
-      throw new Error("context pack goal이 필요합니다.");
-    }
-    const view = normalizeCliView(options.view, "default");
-    const packed = await packContext(cwd, input.goal, {
-      budget: input.budget,
-      at: input.at,
-      scope: input.scope,
-    });
+    const executed = await readCommandExecutor.contextPack(cwd, input, { view: options.view });
     const envelope = buildCliEnvelope(
       "context pack",
       cwd,
-      {
-        ...projectContextPack(packed, view),
-      },
-      packed.warnings,
+      executed.data,
+      executed.warnings,
     );
     emitCliOutput({
       envelope,
       format: normalizeCliFormat(options.format, "both"),
-      text: formatContextPackText(packed, view),
+      text: formatContextPackText(executed.packet, executed.view),
     });
   });
 
@@ -938,12 +920,12 @@ program
   .option("--cwd <path>", "대상 저장소 경로")
   .action(async (options) => {
     const cwd = await resolveCwd(options.cwd);
-    const status = await runStatus(cwd);
-    const envelope = buildCliEnvelope("status", cwd, status);
+    const executed = await readCommandExecutor.status(cwd);
+    const envelope = buildCliEnvelope("status", cwd, executed.data, executed.warnings);
     emitCliOutput({
       envelope,
       format: normalizeCliFormat(options.format, "json"),
-      text: formatStatusText(status),
+      text: formatStatusText(executed.data),
     });
   });
 
