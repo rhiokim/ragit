@@ -1,6 +1,6 @@
 # RAGit Practical Readiness — Final Implementation Plan
 
-**Status:** Approved
+**Status:** Complete — all B1–E gates passed; `ragit@2.0.0` was accepted from the public registry on 2026-07-16
 **Design/review owner:** Sol Max
 **Bounded implementation worker:** Terra
 **Baseline:** `origin/main` at `89e25dd`, package `ragit@1.1.2`
@@ -42,7 +42,7 @@ Terra must not tune retrieval weights, revise thresholds, widen provider or MCP 
 | B4 | Complete | Production embedding evidence | Ollama `nomic-embed-text` passed live gates; OpenAI remains recognized but explicitly outside production support |
 | C | Complete | Distribution matrix | Packed CLI installs and completes E2E on every declared Node/OS/architecture target |
 | D | Complete | Read-only MCP projection | Query, context pack, and status are reachable over stdio with no write-capable path |
-| E | Release ready | Release and registry verification | Release PR, trusted publish, clean registry install, provenance and smoke verification |
+| E | Complete | Release and registry verification | PR #30 merged; trusted publish, clean registry install, provenance, signatures, and smoke verification passed |
 
 ## B3 — Context Pack v2
 
@@ -149,6 +149,8 @@ Use the stable v1 `@modelcontextprotocol/sdk` for this release. The split v2 SDK
 
 ## E — Release, Trusted Publishing, and Registry Verification
 
+**Status:** Complete. The release commit, immutable tag, GitHub release, npm metadata, provenance, and clean installed smoke all identify `ragit@2.0.0`.
+
 ### Scope
 
 1. Create a release-only PR:
@@ -165,7 +167,7 @@ Use the stable v1 `@modelcontextprotocol/sdk` for this release. The split v2 SDK
    - MCP read-only E2E.
 3. Confirm npm trusted publisher configuration matches `rhiokim/ragit`, `publish.yml`, and the allowed `npm publish` action.
 4. Keep GitHub-hosted publishing with `id-token: write`, npm CLI >= 11.5.1, and Node >= 22.14.
-5. Merge the release PR, create the matching signed/tagged release, and let the tag workflow publish.
+5. Merge the release PR, create the matching immutable tag and GitHub release, and let the tag workflow publish.
 6. Verify from the registry in a clean directory:
    - exact version and integrity;
    - provenance;
@@ -176,6 +178,14 @@ Use the stable v1 `@modelcontextprotocol/sdk` for this release. The split v2 SDK
 ### Exit
 
 The registry tarball, GitHub tag, package version, documentation, and provenance identify the same release, and a clean install passes the release smoke on the declared primary platform.
+
+### Completion evidence
+
+- Release PR [#30](https://github.com/rhiokim/ragit/pull/30) was rebase-merged as `58d5d127c23111119e4395f98df957709b0b3bfe` after all four runtime-matrix jobs passed.
+- Tag [`v2.0.0`](https://github.com/rhiokim/ragit/releases/tag/v2.0.0) resolves to that exact commit, and the tag-triggered [publish workflow](https://github.com/rhiokim/ragit/actions/runs/29466921111) completed successfully.
+- Public npm metadata reports [`ragit@2.0.0`](https://www.npmjs.com/package/ragit/v/2.0.0) as `latest`, with the candidate shasum and SHA-512 integrity unchanged.
+- npm provenance identifies `rhiokim/ragit`, `refs/tags/v2.0.0`, `.github/workflows/publish.yml`, and the exact release commit; registry signatures and attestations verify.
+- A source-independent clean install exercised both executables, the CLI workflow, all three read-only MCP tools, and byte-preserving MCP calls on `darwin/arm64`.
 
 ## Cross-Workstream Gates
 

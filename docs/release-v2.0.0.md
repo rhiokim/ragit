@@ -101,11 +101,14 @@ The committed local release candidate passed:
 - a 351-page bilingual docs build plus command, link, i18n, and search checks;
 - npm dry-run for `ragit@2.0.0` with both executable modes set to `0755`.
 
-The public release is accepted only after all of the following also pass on the final release commit:
+The public release also passed:
 
-- four-axis pull-request runtime matrix;
-- tag-triggered Trusted Publishing;
-- clean public-registry install, provenance, integrity, executable, CLI workflow, and MCP protocol verification.
+- the four-axis pull-request runtime matrix in [run 29466554145](https://github.com/rhiokim/ragit/actions/runs/29466554145);
+- rebase merge as `58d5d127c23111119e4395f98df957709b0b3bfe`, with [`v2.0.0`](https://github.com/rhiokim/ragit/releases/tag/v2.0.0) resolving to that exact commit;
+- tag-triggered Trusted Publishing in [run 29466921111](https://github.com/rhiokim/ragit/actions/runs/29466921111);
+- npm `latest` resolution to [`ragit@2.0.0`](https://www.npmjs.com/package/ragit/v/2.0.0), with the expected 17 files, shasum, and SHA-512 integrity;
+- Sigstore/SLSA provenance matching the package, repository, tag, workflow, and source commit, plus registry signature and attestation verification;
+- a clean source-independent `darwin/arm64` registry install covering executable modes, CLI lifecycle, all three MCP tools, and repository-byte invariance.
 
 ## Risk / notes
 
