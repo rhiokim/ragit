@@ -19,6 +19,8 @@ If you are developing RAGit itself inside this repository, start with <a href="/
 
 Node 24 is covered on both supported targets. Linux x64 and Windows x64 are not supported by the pinned zvec 0.2.1 runtime; unsupported targets fail before the native binding loads and report the supported matrix.
 
+This guide targets RAGit `2.0.0`. Upgrading from `1.1.2` raises the Node.js floor from `20.19.0` and narrows the evidence-backed native matrix to the two ARM64 targets above. Existing `1.1.2` stores are covered by the release reopen-and-query gate; back up `.ragit` before depending on a downgrade after new `2.0.0` writes.
+
 ## Choose Your Install Path
 
 ### Published CLI

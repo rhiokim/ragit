@@ -148,7 +148,9 @@ Requirements:
 - pnpm `10.13.1` or newer
 - Linux requires `libaio` (`sudo apt-get install libaio-dev` on Debian/Ubuntu)
 
-Supported production runtime matrix:
+RAGit `2.0.0` is a major compatibility boundary: it raises the Node.js floor from `20.19.0` and declares only the native targets proved by the packed-package matrix. Stores created by registry `ragit@1.1.2` are covered by the candidate reopen-and-query gate without manifest or store-metadata rewrites.
+
+Supported production runtime matrix for RAGit `2.0.0`:
 
 | OS | Architecture | Node.js |
 | --- | --- | --- |
