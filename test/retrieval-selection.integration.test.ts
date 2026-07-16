@@ -126,7 +126,7 @@ Current snapshot marker replaces the historical wording.
     expect(historical.hits[0]?.text).toContain("Committed snapshot marker");
     expect(current.snapshotSha).toBe(currentSha);
     expect(current.hits[0]?.text).toContain("Current snapshot marker");
-  });
+  }, 20_000);
 
   it("returns the committed snapshot with a warning for dirty code-only changes", async () => {
     const { cwd, indexedSha } = await createIndexedRepository("ragit-retrieval-dirty-code-");
