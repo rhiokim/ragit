@@ -1,0 +1,95 @@
+---
+title: Read-only MCP
+description: 쓰기 경로를 노출하지 않고 하나의 RAGit 저장소를 MCP 클라이언트에 연결하기
+---
+
+RAGit의 MCP 실행 파일은 로컬 에이전트에 commit-bound 상태와 retrieval을 제한적으로 제공합니다. 전체 CLI보다 의도적으로 작으며, 프로세스 하나가 stdio로 저장소 하나만 서비스하고 저장소 상태를 쓰는 명령은 노출하지 않습니다.
+
+## 요구 사항
+
+- 초기화된 Git 저장소
+- query와 context pack 호출에 사용할 정확한 RAGit snapshot
+- Node.js 22.14 이상
+- 지원되는 native target: macOS ARM64 또는 Linux ARM64
+- MCP 클라이언트가 `ragit-mcp`를 찾을 수 있는 위치에 설치된 published `ragit` 패키지
+
+Node 24는 두 지원 대상 모두에서 검증합니다. 고정된 zvec 0.2.1 런타임은 Linux x64와 Windows x64를 지원하지 않습니다. `ragit-mcp`는 CLI와 같은 early runtime guard를 사용합니다.
+
+## 저장소마다 서버 하나 시작하기
+
+저장소 절대 경로를 지정해 실행합니다.
+
+```bash
+ragit-mcp --cwd /absolute/path/to/repository
+```
+
+`--cwd`를 생략하면 프로세스 시작 working directory를 한 번만 해석합니다. Tool input은 저장소 경로를 받지 않으므로 실행 중인 프로세스가 workspace를 바꿀 수 없습니다.
+
+대표적인 MCP 클라이언트 설정은 다음과 같습니다.
+
+```json
+{
+  "mcpServers": {
+    "ragit": {
+      "command": "ragit-mcp",
+      "args": ["--cwd", "/absolute/path/to/repository"]
+    }
+  }
+}
+```
+
+Transport는 stdio 전용입니다. HTTP나 SSE listener, remote transport, 인증 surface, startup banner, 호출별 workspace 선택은 없습니다. 다른 저장소가 필요하면 별도의 프로세스를 설정하십시오.
+
+## 사용 가능한 도구
+
+서버는 정확히 세 도구만 나열합니다.
+
+| Tool | 필수 input | 제한과 선택 input |
+| --- | --- | --- |
+| `ragit_status` | 없음; `{}` 전달 | 추가 필드 없음 |
+| `ragit_query` | `question` | `topK` 1–50; 선택적 `at`, `scope`, `view`, `explain` |
+| `ragit_context_pack` | `goal` | `budget` 1–32,000; 선택적 `at`, `scope`, `view` |
+
+`scope`는 `durable`, `session`, `harness`, `evidence`, `all`을 허용합니다. `view`는 `minimal`, `default`, `full`을 허용합니다. Input은 strict합니다. 알 수 없는 필드, 소수 제한값, 빈 필수 문자열, 제어 문자는 구조화된 `MCP_INVALID_INPUT` 오류로 거부됩니다.
+
+Query와 context pack 결과는 CLI의 snapshot selection, masking, citation, view, projection 계약을 재사용합니다. 성공 결과와 실패 모두 동일한 JSON text와 structured content를 포함합니다.
+
+## Read-only 보장
+
+성공하거나 실패하는 모든 tool call은 `.ragit`을 포함한 저장소 소유 regular-file 경로와 바이트를 모두 보존합니다. 서버는 ingest, repair, memory mutation, artifact mutation, migration, hook, config mutation, security purge 명령에 도달할 수 없습니다.
+
+보장에는 다음 동작이 포함됩니다.
+
+- `ragit_status`는 초기화되지 않은 저장소를 초기화하거나 embedding provider를 호출하지 않습니다.
+- zvec 0.2.1은 read-only 모드에서도 RocksDB metadata를 회전시킬 수 있으므로 status는 임시 copy-on-write store clone을 검사합니다.
+- Query와 context pack은 격리된 store clone을 열고 canonical zvec store를 변경하지 않습니다.
+- Embedding cache entry와 namespace manifest는 읽기만 하며 생성, touch, update하지 않습니다.
+- 서버는 auto-ingest, cache warming, report 쓰기, write path fallback을 수행하지 않습니다.
+
+MCP annotation은 세 도구를 read-only, non-destructive, idempotent, closed-world로 표시합니다. 이 annotation은 runtime과 filesystem test가 강제하는 실제 동작과 같습니다.
+
+## Embedding cache 동작
+
+Cache miss 시 provider 동작은 설정된 provider가 데이터를 머신 밖으로 보낼 수 있는지에 따라 달라집니다.
+
+| Provider target | MCP cache miss 동작 |
+| --- | --- |
+| `local-placeholder` | 로컬 계산 후 cache하지 않음. 개발과 regression 전용. |
+| Loopback Ollama | loopback 서버를 호출하고 cache하지 않음. |
+| OpenAI | 요청한 embedding이 모두 cache되어 있지 않으면 provider 요청 전에 실패. |
+| Non-loopback Ollama | 요청한 embedding이 모두 cache되어 있지 않으면 provider 요청 전에 실패. |
+
+일부만 cache된 remote batch도 전체가 `MCP_REMOTE_EMBEDDING_CACHE_MISS`로 실패합니다. 오류에는 private query text가 포함되지 않습니다. Remote provider 사용이 의도된 경우 MCP 밖에서 동일한 CLI query를 정상 security policy로 실행해 cache를 채운 뒤 MCP 호출을 다시 시도하십시오.
+
+Loopback Ollama와 local-placeholder miss는 write-free 상태를 유지하므로 같은 uncached input을 이후 호출에서 다시 계산할 수 있습니다.
+
+## 복구
+
+MCP는 저장소 상태를 복구하지 않습니다. 쓰기가 필요하면 MCP 프로세스 밖의 전체 CLI를 사용하십시오.
+
+- `SNAPSHOT_NOT_INDEXED`: 의도한 knowledge state를 검토하고 커밋한 뒤 `ragit ingest --all`을 실행합니다.
+- `MCP_REMOTE_EMBEDDING_CACHE_MISS`: 동일한 CLI query로 허용된 remote cache를 채운 뒤 다시 시도합니다.
+- `SNAPSHOT_MANIFEST_INVALID` 또는 `SNAPSHOT_STORE_UNAVAILABLE`: `ragit doctor --format json`을 실행하고 recovery guidance를 따릅니다.
+- `MCP_INTERNAL_ERROR`: 재시도 전에 MCP client가 캡처한 stderr를 확인하고 `ragit doctor`를 실행합니다.
+
+Tool call에 `cwd`를 추가하거나 서버가 두 번째 저장소를 보게 하거나 복구 명령을 수행할 것으로 기대하지 마십시오. 저장소 binding을 변경해야 한다면 전용 `ragit-mcp` 프로세스를 다시 시작하십시오.

@@ -11,7 +11,7 @@ RAGit is not a giant transcript archive. It is an agent-first collaboration memo
 
 ## Runtime Structure
 
-The runtime structure below shows how `ragit` connects the CLI, command layer, core services, git-bound snapshots, and local storage.
+The runtime structure below shows how the full `ragit` CLI and fixed-repository `ragit-mcp` read adapter connect to the command layer, core services, git-bound snapshots, and local storage.
 
 ```text
                                ┌────────────┐
@@ -20,10 +20,10 @@ The runtime structure below shows how `ragit` connects the CLI, command layer, c
                                └────────────┘
                                       |
                                       |
-                                 ┌─────────┐
-                                 │ragit CLI│
-                                 ├─────────┤
-                                 └─────────┘
+                         ┌───────────────────────┐
+                         │ragit CLI / MCP reads  │
+                         ├───────────────────────┤
+                         └───────────────────────┘
                                       |
                        ┌────────────────────────────┐
                        │Command Layer               │
@@ -57,7 +57,7 @@ The runtime structure below shows how `ragit` connects the CLI, command layer, c
 └────────────────────┘
 ```
 
-- `ragit CLI` is the single entrypoint. Every user or agent workflow starts by dispatching a command through the command layer.
+- `ragit` is the full command entrypoint. `ragit-mcp` is a separate stdio entrypoint limited to fixed-repository `status`, `query`, and `context pack` reads.
 - `Git commit / HEAD` binds manifest selection, so retrieval and recall stay reproducible at a specific repository state.
 - `.ragit control plane` stores configuration and tracked knowledge state, while `.ragit/store` holds the local vector index for `documents` and `chunks`.
 - User-facing outputs are produced from the same runtime core: `query hits`, `context pack`, and `recall packet`.
@@ -166,7 +166,7 @@ pnpm ragit --help
 
 Inside this repository checkout, run CLI commands with `pnpm ragit <command>`.
 
-For the published CLI:
+For the published package:
 
 ```bash
 npm install -g ragit
@@ -175,7 +175,7 @@ bun add -g ragit
 npx ragit --help
 ```
 
-When the package is installed globally, use `ragit <command>`.
+When the package is installed globally, use `ragit <command>` for the full CLI or `ragit-mcp` for the read-only MCP server.
 
 `pnpm build` is optional for repository-local usage.
 Run it only when you need to generate `dist/` artifacts or verify the packaged CLI entrypoint.
@@ -183,6 +183,33 @@ Run it only when you need to generate `dist/` artifacts or verify the packaged C
 ```bash
 pnpm build
 ```
+
+## Read-only MCP
+
+Start one stdio process for one repository:
+
+```bash
+ragit-mcp --cwd /absolute/path/to/repository
+```
+
+A representative MCP client configuration is:
+
+```json
+{
+  "mcpServers": {
+    "ragit": {
+      "command": "ragit-mcp",
+      "args": ["--cwd", "/absolute/path/to/repository"]
+    }
+  }
+}
+```
+
+The process exposes exactly `ragit_status`, `ragit_query`, and `ragit_context_pack`. The repository is resolved once at startup; tool inputs cannot switch it. Transport is stdio only, with no HTTP listener, auto-ingest, or write-capable tool.
+
+Every tool call preserves repository-owned files, including `.ragit`. Embedding-cache reads are readonly. Local-placeholder and loopback Ollama may compute a missing embedding without caching it; OpenAI and non-loopback Ollama require complete cache hits and otherwise fail before provider execution with `MCP_REMOTE_EMBEDDING_CACHE_MISS`. Populate a remote cache with the equivalent CLI read outside MCP, or use the CLI to run `ragit ingest --all` when the exact snapshot is not indexed.
+
+`ragit-mcp` inherits the same Node.js and native-platform matrix listed above. See the [English](https://rhiokim.github.io/ragit/en/docs/mcp-readonly/) or [Korean](https://rhiokim.github.io/ragit/ko/docs/mcp-readonly/) workflow guide for bounded inputs and recovery behavior.
 
 ## Documentation (Fumadocs + GitHub Pages)
 
