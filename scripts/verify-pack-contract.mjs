@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 const rootDir = process.cwd();
 const requiredFiles = new Set([
@@ -8,6 +10,8 @@ const requiredFiles = new Set([
   "dist/cli.js",
   "dist/index.d.ts",
   "dist/index.js",
+  "dist/mcp.d.ts",
+  "dist/mcp.js",
   "package.json",
 ]);
 const forbiddenPrefixes = [".github/", ".ragit/", "apps/", "docs/", "src/", "test/", "testbed/"];
@@ -20,6 +24,11 @@ const output = execFileSync("npm", ["pack", "--dry-run", "--json"], {
 const [packSummary] = JSON.parse(output);
 if (!packSummary || !Array.isArray(packSummary.files)) {
   throw new Error("npm pack --dry-run 결과를 해석하지 못했습니다.");
+}
+
+const packageJson = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8"));
+if (packageJson.bin?.["ragit-mcp"] !== "dist/mcp.js") {
+  throw new Error("package.json must map ragit-mcp to dist/mcp.js.");
 }
 
 const filePaths = packSummary.files.map((entry) => entry.path);
