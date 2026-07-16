@@ -19,6 +19,8 @@ RAGit 저장소 자체를 개발하고 있다면 이 문서보다 <a href="/ko/d
 
 Node 24는 두 지원 대상 모두에서 검증합니다. 고정된 zvec 0.2.1 런타임은 Linux x64와 Windows x64를 지원하지 않으며, 미지원 대상에서는 native binding을 로드하기 전에 지원 매트릭스와 함께 실패합니다.
 
+이 문서는 RAGit `2.0.0`을 기준으로 합니다. `1.1.2`에서 업그레이드하면 Node.js 최소 버전이 `20.19.0`에서 올라가고, 검증된 native matrix는 위의 ARM64 두 대상으로 좁아집니다. 기존 `1.1.2` 저장소는 release reopen-and-query gate로 검증하며, `2.0.0`에서 새 쓰기를 수행한 뒤 downgrade에 의존하려면 먼저 `.ragit`을 백업하십시오.
+
 ## 설치 경로 선택
 
 ### Published CLI
