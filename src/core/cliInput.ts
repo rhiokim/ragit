@@ -24,7 +24,7 @@ const ensureInputPathInsideRepo = (cwd: string, inputPath: string): string => {
   return resolved;
 };
 
-const scanControlCharacters = (value: unknown, trail: string): void => {
+export const assertNoControlCharacters = (value: unknown, trail: string): void => {
   if (typeof value === "string") {
     if (DISALLOWED_CONTROL_CHAR_PATTERN.test(value)) {
       throw new Error(`${trail} 값에 허용되지 않는 control character가 포함되어 있습니다.`);
@@ -32,12 +32,12 @@ const scanControlCharacters = (value: unknown, trail: string): void => {
     return;
   }
   if (Array.isArray(value)) {
-    value.forEach((entry, index) => scanControlCharacters(entry, `${trail}[${index}]`));
+    value.forEach((entry, index) => assertNoControlCharacters(entry, `${trail}[${index}]`));
     return;
   }
   if (value && typeof value === "object") {
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      scanControlCharacters(entry, `${trail}.${key}`);
+      assertNoControlCharacters(entry, `${trail}.${key}`);
     }
   }
 };
@@ -97,7 +97,6 @@ export const readJsonInput = async (cwd: string, input: string, label: string): 
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`${label} JSON 입력을 파싱할 수 없습니다: ${message}`);
   }
-  scanControlCharacters(parsed, label);
+  assertNoControlCharacters(parsed, label);
   return parsed;
 };
-
