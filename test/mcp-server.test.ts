@@ -119,7 +119,9 @@ describe("read-only MCP server contract", () => {
       data: { kind: "context" },
       warnings: ["context warning"],
     });
-    expect(dependencies.status).toHaveBeenCalledWith(FIXED_CWD);
+    expect(dependencies.status).toHaveBeenCalledWith(FIXED_CWD, {
+      preserveRepositoryBytes: true,
+    });
     expect(dependencies.query).toHaveBeenCalledWith(
       FIXED_CWD,
       { question: "restore auth", topK: 3, at: undefined, scope: undefined, explain: true },
