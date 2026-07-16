@@ -39,6 +39,7 @@ type CacheEntryRecord = {
 };
 
 export type EmbeddingCacheMode = "readwrite" | "readonly" | "disabled";
+export type EmbeddingProviderOnCacheMiss = "allow" | "deny";
 
 export interface EmbeddingBatchPolicy {
   maxItems: number;
@@ -69,6 +70,7 @@ export interface EmbeddingCacheSummary {
 export interface EmbeddingExecutionOptions {
   cwd?: string;
   cacheMode?: EmbeddingCacheMode;
+  providerOnCacheMiss?: EmbeddingProviderOnCacheMiss;
 }
 
 type EmbeddingCacheContext = {
@@ -144,6 +146,20 @@ export class EmbeddingProviderError extends Error {
     this.model = params.model;
     this.retryable = params.retryable;
     this.retryAfterMs = params.retryAfterMs;
+  }
+}
+
+export class EmbeddingCacheMissError extends Error {
+  readonly provider: EmbeddingProvider;
+  readonly model: string;
+  readonly missingCount: number;
+
+  constructor(profile: EmbeddingProfile, missingCount: number) {
+    super("read-only embedding cache does not contain every requested input");
+    this.name = "EmbeddingCacheMissError";
+    this.provider = profile.provider;
+    this.model = profile.model;
+    this.missingCount = missingCount;
   }
 }
 
@@ -896,6 +912,7 @@ export const embedTexts = async (
   const results = new Array<number[]>(texts.length);
   const pendingRequests: PendingRequest[] = [];
   const waiters = new Map<string, Promise<number[]>>();
+  const deniedMisses = new Set<string>();
 
   for (const [index, text] of texts.entries()) {
     const normalizedText = normalizeEmbeddingCacheText(text);
@@ -913,6 +930,11 @@ export const embedTexts = async (
         void touchCacheEntry(context, cached);
         continue;
       }
+    }
+
+    if (options.providerOnCacheMiss === "deny") {
+      deniedMisses.add(key);
+      continue;
     }
 
     const inflight = inflightEmbeddings.get(key);
@@ -943,6 +965,10 @@ export const embedTexts = async (
       deferred,
       fresh: true,
     });
+  }
+
+  if (deniedMisses.size > 0) {
+    throw new EmbeddingCacheMissError(profile, deniedMisses.size);
   }
 
   const freshRequests = pendingRequests.filter((request) => request.fresh);
