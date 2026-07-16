@@ -1,12 +1,17 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const rootDir = process.cwd();
 const installDir = await mkdtemp(path.join(os.tmpdir(), "ragit-pack-install-"));
 const repositoryDir = await mkdtemp(path.join(os.tmpdir(), "ragit-pack-repo-"));
 let tarballPath = null;
+let mcpClient = null;
 
 const assertEqual = (actual, expected, label) => {
   if (actual !== expected) {
@@ -29,6 +34,40 @@ const git = (args) =>
     stdio: "pipe",
   }).trim();
 
+const snapshotTree = async (cwd, relative = "") => {
+  const result = {};
+  const directory = path.join(cwd, relative);
+  const entries = await readdir(directory, { withFileTypes: true });
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!relative && entry.name === ".git") continue;
+    const child = relative ? `${relative}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      Object.assign(result, await snapshotTree(cwd, child));
+    } else if (entry.isFile()) {
+      result[child] = createHash("sha256")
+        .update(await readFile(path.join(cwd, child)))
+        .digest("hex");
+    }
+  }
+  return result;
+};
+
+const callPreservingBytes = async (call) => {
+  const before = await snapshotTree(repositoryDir);
+  const result = await call();
+  const after = await snapshotTree(repositoryDir);
+  if (JSON.stringify(after) !== JSON.stringify(before)) {
+    throw new Error("packed MCP call changed repository-owned bytes.");
+  }
+  return result;
+};
+
+const assertMcpSuccess = (result, tool) => {
+  if (result.isError || result.structuredContent?.ok !== true) {
+    throw new Error(`packed MCP ${tool} call failed: ${JSON.stringify(result)}`);
+  }
+};
+
 try {
   const output = execFileSync("npm", ["pack", "--json"], {
     cwd: rootDir,
@@ -47,6 +86,8 @@ try {
   });
 
   const binPath = path.join(installDir, "node_modules", ".bin", "ragit");
+  const mcpBinPath = path.join(installDir, "node_modules", ".bin", "ragit-mcp");
+  await access(mcpBinPath, constants.X_OK);
   const version = execFileSync(binPath, ["--version"], {
     cwd: rootDir,
     encoding: "utf8",
@@ -179,8 +220,50 @@ try {
     "restored query snapshot.resolvedSha",
   );
 
-  console.log(`packed CLI smoke test verified (${packSummary.version}; strict branch isolation)`);
+  const stderrChunks = [];
+  const mcpTransport = new StdioClientTransport({
+    command: mcpBinPath,
+    args: ["--cwd", repositoryDir],
+    cwd: rootDir,
+    stderr: "pipe",
+  });
+  mcpTransport.stderr?.on("data", (chunk) => stderrChunks.push(String(chunk)));
+  mcpClient = new Client({ name: "ragit-packed-smoke", version: "1.0.0" });
+  await mcpClient.connect(mcpTransport);
+
+  const listed = await callPreservingBytes(() => mcpClient.listTools());
+  const toolNames = listed.tools.map((tool) => tool.name);
+  if (JSON.stringify(toolNames) !== JSON.stringify(["ragit_status", "ragit_query", "ragit_context_pack"])) {
+    throw new Error(`packed MCP tool list mismatch: ${JSON.stringify(toolNames)}`);
+  }
+
+  const mcpStatus = await callPreservingBytes(() =>
+    mcpClient.callTool({ name: "ragit_status", arguments: {} }));
+  assertMcpSuccess(mcpStatus, "ragit_status");
+
+  const mcpQuery = await callPreservingBytes(() =>
+    mcpClient.callTool({
+      name: "ragit_query",
+      arguments: { question: "packed snapshot contract", topK: 3 },
+    }));
+  assertMcpSuccess(mcpQuery, "ragit_query");
+
+  const mcpContext = await callPreservingBytes(() =>
+    mcpClient.callTool({
+      name: "ragit_context_pack",
+      arguments: { goal: "packed snapshot contract", budget: 120 },
+    }));
+  assertMcpSuccess(mcpContext, "ragit_context_pack");
+
+  await mcpClient.close();
+  mcpClient = null;
+  assertEqual(stderrChunks.join(""), "", "packed MCP stderr");
+
+  console.log(`packed CLI and MCP smoke verified (${packSummary.version}; strict branch isolation; byte-preserving reads)`);
 } finally {
+  if (mcpClient) {
+    await mcpClient.close().catch(() => undefined);
+  }
   if (tarballPath) {
     await rm(tarballPath, { force: true });
   }
