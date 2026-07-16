@@ -1,3 +1,7 @@
+import { constants } from "node:fs";
+import { cp, mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   listArtifactRecords,
   loadArtifactRecord,
@@ -7,6 +11,7 @@ import {
 import { loadConfig } from "./config.js";
 import { isRagitOperationalError, RagitOperationalError, type RagitErrorCode } from "./errors.js";
 import {
+  bootstrapCanonicalStoreAtPath,
   closeCanonicalStore,
   openCanonicalStoreWithContract,
   type CanonicalStore,
@@ -27,6 +32,7 @@ import {
   RetrievalHit,
   RetrievalScope,
   SnapshotManifest,
+  type EmbeddingProfile,
 } from "./types.js";
 import {
   cosineSimilarity,
@@ -35,10 +41,15 @@ import {
   resolveEmbeddingProfile,
   toEmbeddingContract,
   zvecCosineDistanceToSimilarity,
+  type EmbeddingCacheMode,
+  type EmbeddingExecutionOptions,
+  type EmbeddingProviderOnCacheMiss,
 } from "./embedding.js";
 import { toRepoPath } from "./identity.js";
+import { resolveRagitPaths } from "./project.js";
 import {
   canUseRemoteEmbedding,
+  classifyEmbeddingEgress,
   mergeRedactionSummaries,
   sanitizeKnowledgeText,
   sanitizeStructuredValue,
@@ -78,6 +89,7 @@ export interface QueryOptions {
   topK?: number;
   at?: string;
   scope?: RetrievalScope;
+  executionPolicy?: RetrievalExecutionPolicy;
 }
 
 export interface QueryResult {
@@ -101,7 +113,18 @@ export interface UnifiedRetrievalRequest {
   scope?: RetrievalScope;
   includeSnapshot?: boolean;
   artifactOptions?: UnifiedArtifactRetrievalOptions;
+  executionPolicy?: RetrievalExecutionPolicy;
 }
+
+export interface RetrievalExecutionPolicy {
+  embeddingCacheMode?: EmbeddingCacheMode;
+  remoteProviderOnCacheMiss?: EmbeddingProviderOnCacheMiss;
+}
+
+export const READ_ONLY_RETRIEVAL_POLICY: Readonly<RetrievalExecutionPolicy> = {
+  embeddingCacheMode: "readonly",
+  remoteProviderOnCacheMiss: "deny",
+};
 
 export interface UnifiedRetrievalResult {
   snapshotSha: string | null;
@@ -114,8 +137,54 @@ export interface UnifiedRetrievalResult {
 interface ArtifactSemanticContext {
   queryEmbedding: number[];
   embeddingProfile: ReturnType<typeof resolveEmbeddingProfile>;
+  embeddingOptions: EmbeddingExecutionOptions;
   config: Awaited<ReturnType<typeof loadConfig>>;
 }
+
+const embeddingOptionsForRetrieval = (
+  cwd: string,
+  profile: EmbeddingProfile,
+  policy?: RetrievalExecutionPolicy,
+): EmbeddingExecutionOptions => ({
+  cwd,
+  cacheMode: policy?.embeddingCacheMode,
+  providerOnCacheMiss:
+    policy?.remoteProviderOnCacheMiss === "deny" && classifyEmbeddingEgress(profile) === "remote"
+      ? "deny"
+      : "allow",
+});
+
+const openStoreForRetrieval = async (
+  cwd: string,
+  profile: EmbeddingProfile,
+  policy?: RetrievalExecutionPolicy,
+): Promise<{ store: CanonicalStore; isolatedRoot: string | null }> => {
+  const contract = toEmbeddingContract(profile);
+  if (policy?.embeddingCacheMode !== "readonly") {
+    return {
+      store: await openCanonicalStoreWithContract(cwd, contract, true),
+      isolatedRoot: null,
+    };
+  }
+
+  // zvec 0.2.1 can rotate RocksDB metadata even when opened read-only, so query a
+  // copy-on-write clone to keep every repository-owned byte unchanged.
+  const isolatedRoot = await mkdtemp(path.join(os.tmpdir(), "ragit-readonly-store-"));
+  const isolatedStoreDir = path.join(isolatedRoot, "store");
+  try {
+    await cp(resolveRagitPaths(cwd).storeDir, isolatedStoreDir, {
+      recursive: true,
+      mode: constants.COPYFILE_FICLONE,
+    });
+    return {
+      store: await bootstrapCanonicalStoreAtPath(cwd, contract, true, isolatedStoreDir),
+      isolatedRoot,
+    };
+  } catch (error) {
+    await rm(isolatedRoot, { recursive: true, force: true });
+    throw error;
+  }
+};
 
 const DEGRADABLE_RECALL_CODES = new Set<RagitErrorCode>([
   "SNAPSHOT_NOT_INDEXED",
@@ -360,7 +429,7 @@ const buildArtifactHits = async (
     ? await embedTexts(
         candidates.map((candidate) => candidate.text),
         semanticContext.embeddingProfile,
-        { cwd },
+        semanticContext.embeddingOptions,
       )
     : [];
   return candidates.map((candidate, index) => {
@@ -519,6 +588,7 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
   let retrievalRoot = cwd;
   let selection: SnapshotSelection | null = null;
   let store: CanonicalStore | null = null;
+  let isolatedStoreRoot: string | null = null;
   let snapshotSha: string | null = null;
   let snapshot = unavailableSnapshotMetadata(request.at);
   let degradedError: RagitOperationalError | null = null;
@@ -551,11 +621,9 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
 
   if (selection !== null && embeddingProfile !== null) {
     try {
-      store = await openCanonicalStoreWithContract(
-        retrievalRoot,
-        toEmbeddingContract(embeddingProfile),
-        true,
-      );
+      const opened = await openStoreForRetrieval(retrievalRoot, embeddingProfile, request.executionPolicy);
+      store = opened.store;
+      isolatedStoreRoot = opened.isolatedRoot;
       snapshotSha = selection.snapshotSha;
     } catch (error) {
       const mapped = snapshotStoreUnavailable(selection, error);
@@ -570,13 +638,20 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
   try {
     const topK = request.topK ?? config.retrieval.top_k;
     const sanitizedQuery = sanitizeKnowledgeText(request.query, "retrieval.query", "query");
-    const semanticContext: ArtifactSemanticContext | null = degradedError === null && embeddingProfile !== null
-      ? {
-          queryEmbedding: await embedText(sanitizedQuery.text, embeddingProfile, { cwd: retrievalRoot }),
-          embeddingProfile,
-          config,
-        }
-      : null;
+    let semanticContext: ArtifactSemanticContext | null = null;
+    if (degradedError === null && embeddingProfile !== null) {
+      const embeddingOptions = embeddingOptionsForRetrieval(
+        retrievalRoot,
+        embeddingProfile,
+        request.executionPolicy,
+      );
+      semanticContext = {
+        queryEmbedding: await embedText(sanitizedQuery.text, embeddingProfile, embeddingOptions),
+        embeddingProfile,
+        embeddingOptions,
+        config,
+      };
+    }
     const hits: RetrievalHit[] = [];
 
     if (selection !== null && store !== null && semanticContext !== null) {
@@ -637,7 +712,13 @@ export const runUnifiedRetrieval = async (cwd: string, request: UnifiedRetrieval
       redactionSummary: mergeRedactionSummaries(sanitizedQuery.summary, sanitizedHits.summary),
     };
   } finally {
-    if (store !== null) closeCanonicalStore(store);
+    try {
+      if (store !== null) closeCanonicalStore(store);
+    } finally {
+      if (isolatedStoreRoot !== null) {
+        await rm(isolatedStoreRoot, { recursive: true, force: true });
+      }
+    }
   }
 };
 
@@ -649,6 +730,7 @@ export const searchKnowledge = async (cwd: string, query: string, options: Query
     scope: options.scope,
     includeSnapshot: true,
     artifactOptions: resolveArtifactOptionsForScope(options.scope),
+    executionPolicy: options.executionPolicy,
   });
   if (!result.snapshotSha) {
     throw new Error("사용 가능한 snapshot이 없습니다.");

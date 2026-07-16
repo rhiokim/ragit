@@ -3,13 +3,18 @@ import { ContextPackSelectionSummary, selectContextHits } from "./context-select
 import { formatQueryResultText, projectRetrievalHits } from "./output.js";
 import { RedactionSummary, RetrievalHit } from "./types.js";
 import { mergeRedactionSummaries, sanitizeKnowledgeText } from "./security.js";
-import { runUnifiedRetrieval, UnifiedArtifactRetrievalOptions } from "./retrieval.js";
+import {
+  runUnifiedRetrieval,
+  type RetrievalExecutionPolicy,
+  type UnifiedArtifactRetrievalOptions,
+} from "./retrieval.js";
 import type { SnapshotMetadata } from "./snapshot.js";
 
 export interface ContextPackOptions {
   budget?: number;
   at?: string;
   scope?: "durable" | "session" | "harness" | "evidence" | "all";
+  executionPolicy?: RetrievalExecutionPolicy;
 }
 
 export interface ContextPackResult {
@@ -48,6 +53,7 @@ export const packContext = async (
     scope: options.scope,
     includeSnapshot: true,
     artifactOptions: resolveArtifactOptionsForScope(options.scope),
+    executionPolicy: options.executionPolicy,
   });
   if (!result.snapshotSha) {
     throw new Error("사용 가능한 snapshot이 없습니다.");
