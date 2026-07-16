@@ -1,4 +1,6 @@
-import { readdir } from "node:fs/promises";
+import { constants } from "node:fs";
+import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { countArtifactState } from "../core/artifacts.js";
 import { defaultConfig, loadConfig, setConfigValue, writeConfig } from "../core/config.js";
@@ -26,9 +28,11 @@ import {
 } from "../core/security.js";
 import {
   bootstrapCanonicalStore,
+  bootstrapCanonicalStoreAtPath,
   closeCanonicalStore,
   hasLegacyJsonStore,
   readCanonicalStoreMeta,
+  type CanonicalStore,
 } from "../core/store.js";
 import { formatZvecPlatformSupport, getRagitRuntimeSupport } from "../core/runtime.js";
 import { inspectStoreWriteLock } from "../core/store-write-lock.js";
@@ -198,7 +202,47 @@ const loadStatusConfig = async (cwd: string): Promise<Awaited<ReturnType<typeof 
   }
 };
 
-export const runStatus = async (cwd: string): Promise<StatusResult> => {
+export interface StatusExecutionOptions {
+  preserveRepositoryBytes?: boolean;
+}
+
+const openStatusStore = async (
+  cwd: string,
+  profile: ReturnType<typeof resolveEmbeddingProfile>,
+  preserveRepositoryBytes: boolean,
+): Promise<{ store: CanonicalStore; isolatedRoot: string | null }> => {
+  const embedding = toEmbeddingContract(profile);
+  if (!preserveRepositoryBytes) {
+    return {
+      store: await bootstrapCanonicalStore(cwd, embedding, true),
+      isolatedRoot: null,
+    };
+  }
+
+  // zvec 0.2.1 may rotate RocksDB metadata even when opened read-only. MCP
+  // status therefore inspects a copy-on-write clone and leaves the repository
+  // store byte-identical.
+  const isolatedRoot = await mkdtemp(path.join(os.tmpdir(), "ragit-readonly-status-"));
+  const isolatedStoreDir = path.join(isolatedRoot, "store");
+  try {
+    await cp(resolveRagitPaths(cwd).storeDir, isolatedStoreDir, {
+      recursive: true,
+      mode: constants.COPYFILE_FICLONE,
+    });
+    return {
+      store: await bootstrapCanonicalStoreAtPath(cwd, embedding, true, isolatedStoreDir),
+      isolatedRoot,
+    };
+  } catch (error) {
+    await rm(isolatedRoot, { recursive: true, force: true });
+    throw error;
+  }
+};
+
+export const runStatus = async (
+  cwd: string,
+  options: StatusExecutionOptions = {},
+): Promise<StatusResult> => {
   const context = await resolveRepositoryContext(cwd);
   cwd = context.gitRoot;
   const config = await loadStatusConfig(cwd);
@@ -235,7 +279,11 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
   let schemaVersion: number | null = null;
   let stats: Record<string, unknown> | null = null;
   try {
-    const store = await bootstrapCanonicalStore(cwd, toEmbeddingContract(configuredProfile), true);
+    const { store, isolatedRoot } = await openStatusStore(
+      cwd,
+      configuredProfile,
+      options.preserveRepositoryBytes ?? false,
+    );
     try {
       zvecStatus = "loaded";
       collections = [store.meta.collections.documents, store.meta.collections.chunks];
@@ -245,7 +293,13 @@ export const runStatus = async (cwd: string): Promise<StatusResult> => {
         chunks: store.chunks.stats,
       };
     } finally {
-      closeCanonicalStore(store);
+      try {
+        closeCanonicalStore(store);
+      } finally {
+        if (isolatedRoot !== null) {
+          await rm(isolatedRoot, { recursive: true, force: true });
+        }
+      }
     }
   } catch {
     zvecStatus = "missing";

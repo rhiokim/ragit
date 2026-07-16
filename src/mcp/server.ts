@@ -7,6 +7,7 @@ import {
 import {
   readCommandExecutor,
   type ReadCommandOptions,
+  type StatusReadCommandOptions,
 } from "../core/readCommands.js";
 import { READ_ONLY_RETRIEVAL_POLICY } from "../core/retrieval.js";
 import { RAGIT_VERSION } from "../core/version.js";
@@ -28,13 +29,13 @@ export interface McpReadExecutionResult {
 }
 
 export interface McpReadDependencies {
-  status(cwd: string): Promise<McpReadExecutionResult>;
+  status(cwd: string, options?: StatusReadCommandOptions): Promise<McpReadExecutionResult>;
   query(cwd: string, value: unknown, options?: ReadCommandOptions): Promise<McpReadExecutionResult>;
   contextPack(cwd: string, value: unknown, options?: ReadCommandOptions): Promise<McpReadExecutionResult>;
 }
 
 const defaultMcpReadDependencies: McpReadDependencies = {
-  status: (cwd) => readCommandExecutor.status(cwd),
+  status: (cwd, options) => readCommandExecutor.status(cwd, options),
   query: (cwd, value, options) => readCommandExecutor.query(cwd, value, options),
   contextPack: (cwd, value, options) => readCommandExecutor.contextPack(cwd, value, options),
 };
@@ -64,7 +65,7 @@ export const executeRagitMcpTool = async ({
       return invalidInputToolResult(tool, cwd);
     }
     try {
-      const executed = await dependencies.status(cwd);
+      const executed = await dependencies.status(cwd, { preserveRepositoryBytes: true });
       return successToolResult(tool, cwd, executed.data, executed.warnings);
     } catch (error) {
       return executionFailureToolResult(tool, cwd, error);

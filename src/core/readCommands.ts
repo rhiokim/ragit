@@ -1,4 +1,7 @@
-import { runStatus } from "../commands/bootstrap.js";
+import {
+  runStatus,
+  type StatusExecutionOptions,
+} from "../commands/bootstrap.js";
 import { normalizeCliView } from "./cliContract.js";
 import {
   normalizeContextPackCommandInput,
@@ -23,6 +26,8 @@ export interface ReadCommandOptions {
   executionPolicy?: RetrievalExecutionPolicy;
 }
 
+export type StatusReadCommandOptions = StatusExecutionOptions;
+
 const defaultReadCommandDependencies: ReadCommandDependencies = {
   runStatus,
   searchKnowledge,
@@ -32,8 +37,10 @@ const defaultReadCommandDependencies: ReadCommandDependencies = {
 export const createReadCommandExecutor = (
   dependencies: ReadCommandDependencies = defaultReadCommandDependencies,
 ) => ({
-  status: async (cwd: string) => ({
-    data: await dependencies.runStatus(cwd),
+  status: async (cwd: string, options?: StatusReadCommandOptions) => ({
+    data: options === undefined
+      ? await dependencies.runStatus(cwd)
+      : await dependencies.runStatus(cwd, options),
     warnings: [] as string[],
   }),
 
