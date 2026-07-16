@@ -215,6 +215,18 @@ Recall packets should restore active work instead of replaying raw logs.`,
       expect(queryOutput.ok).toBe(true);
       expect(queryOutput.version).toBeTruthy();
       expect(queryOutput.cwd).toBe(git(nestedQueryCwd, ["rev-parse", "--show-toplevel"]));
+      expect(Object.keys(queryOutput.data).sort()).toEqual([
+        "explain",
+        "hits",
+        "query",
+        "redactionSummary",
+        "scope",
+        "snapshot",
+        "snapshotSha",
+        "warnings",
+      ]);
+      expect(queryOutput.data.query).toBe("restore active work");
+      expect(queryOutput.data.scope).toBe("durable");
       expect(queryOutput.data.snapshotSha).toBe(headSha);
       expect(queryOutput.data.snapshot).toMatchObject({
         requestedRef: "HEAD",
@@ -261,6 +273,18 @@ Recall packets should restore active work instead of replaying raw logs.`,
       );
       expect(contextOutput.command).toBe("context pack");
       expect(contextOutput.ok).toBe(true);
+      expect(Object.keys(contextOutput.data).sort()).toEqual([
+        "budget",
+        "goal",
+        "hits",
+        "redactionSummary",
+        "selectedHits",
+        "selection",
+        "snapshot",
+        "snapshotSha",
+        "usedTokens",
+        "warnings",
+      ]);
       expect(contextOutput.data.goal).toBe("resume auth flow");
       expect(contextOutput.data.snapshotSha).toBe(headSha);
       expect(contextOutput.data.snapshot.resolvedSha).toBe(headSha);
@@ -420,6 +444,7 @@ Recall packets should restore active work instead of replaying raw logs.`,
       const statusOutput = JSON.parse(runCli(["status", "--cwd", temp, "--format", "json"]));
       expect(statusOutput.command).toBe("status");
       expect(statusOutput.ok).toBe(true);
+      expect(statusOutput.warnings).toEqual([]);
       expect(statusOutput.data.snapshot).toMatchObject({
         requestedRef: "HEAD",
         resolvedSha: headSha,
