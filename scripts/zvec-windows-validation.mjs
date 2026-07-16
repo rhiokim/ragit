@@ -14,7 +14,9 @@ const rootDir = process.cwd();
 const artifactDir = path.resolve(process.env.VALIDATION_ARTIFACT_DIR ?? path.join(rootDir, "validation-artifacts"));
 const candidateVersion = "0.5.0";
 const baselineVersion = "2.0.0";
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const npm = process.platform === "win32"
+  ? { file: process.execPath, argsPrefix: [path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")] }
+  : { file: "npm", argsPrefix: [] };
 
 const assert = (condition, message) => {
   if (!condition) throw new Error(message);
@@ -49,6 +51,8 @@ const runInstalled = (executable, args, options = {}) =>
 
 const commandInstalled = (executable, args, options = {}) =>
   command(executable.file, [...executable.argsPrefix, ...args], options);
+
+const runNpm = (args, options = {}) => mustRun(npm.file, [...npm.argsPrefix, ...args], options);
 
 const treeHash = async (directory, relative = "") => {
   const result = {};
@@ -95,7 +99,7 @@ const createLegacyFixture = async () => {
   try {
     await rm(repositoryDir, { recursive: true, force: true });
     await mkdir(artifactDir, { recursive: true });
-    mustRun(npm, ["install", "--prefix", installDir, "--no-audit", "--no-fund", `ragit@${baselineVersion}`]);
+    runNpm(["install", "--prefix", installDir, "--no-audit", "--no-fund", `ragit@${baselineVersion}`]);
     const zvec = await resolvedZvec(installDir);
     assert(zvec.version === "0.2.1", `baseline must resolve @zvec/zvec@0.2.1, resolved ${zvec.version}`);
     report.baseline.resolved = zvec;
@@ -146,9 +150,9 @@ const createValidationCandidate = async (workDir, report) => {
   );
   assert(patchedRuntime !== originalRuntime, "validation candidate did not patch the packed target list");
   await writeFile(runtimePath, patchedRuntime, "utf8");
-  const packed = JSON.parse(mustRun(npm, ["pack", "--json"], { cwd: stageDir }));
+  const packed = JSON.parse(runNpm(["pack", "--json"], { cwd: stageDir }));
   const tarball = path.join(stageDir, packed[0].filename);
-  mustRun(npm, ["install", "--prefix", installDir, "--no-audit", "--no-fund", tarball]);
+  runNpm(["install", "--prefix", installDir, "--no-audit", "--no-fund", tarball]);
   const zvec = await resolvedZvec(installDir);
   assert(zvec.version === candidateVersion, `packed candidate must resolve @zvec/zvec@${candidateVersion}, resolved ${zvec.version}`);
   report.validationCandidate = {
