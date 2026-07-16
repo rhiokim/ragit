@@ -1,9 +1,10 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "../src/core/config.js";
 import {
+  EmbeddingCacheMissError,
   embedTexts,
   readEmbeddingCacheSummary,
   resolveEmbeddingCacheNamespaceId,
@@ -11,6 +12,8 @@ import {
 } from "../src/core/embedding.js";
 
 const tempDirs: string[] = [];
+const ORIGINAL_FETCH = globalThis.fetch;
+const ORIGINAL_OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const makeTempDir = async (prefix: string): Promise<string> => {
   const temp = await mkdtemp(path.join(os.tmpdir(), prefix));
@@ -19,10 +22,111 @@ const makeTempDir = async (prefix: string): Promise<string> => {
 };
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  globalThis.fetch = ORIGINAL_FETCH;
+  if (ORIGINAL_OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = ORIGINAL_OPENAI_API_KEY;
   await Promise.all(tempDirs.splice(0, tempDirs.length).map((target) => rm(target, { recursive: true, force: true })));
 });
 
+const snapshotTree = async (cwd: string, relative = ""): Promise<Record<string, string>> => {
+  const result: Record<string, string> = {};
+  const directory = path.join(cwd, relative);
+  const entries = await readdir(directory, { withFileTypes: true });
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const child = relative ? `${relative}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      Object.assign(result, await snapshotTree(cwd, child));
+    } else {
+      result[child] = await readFile(path.join(cwd, child), "utf8");
+    }
+  }
+  return result;
+};
+
+const createOpenAiProfile = () => {
+  const config = defaultConfig();
+  config.embedding.provider = "openai";
+  return resolveEmbeddingProfile(config);
+};
+
+const installOpenAiFetch = (dimensions: number) => {
+  process.env.OPENAI_API_KEY = "test-key";
+  const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as { input: string[] | string };
+    const inputs = Array.isArray(body.input) ? body.input : [body.input];
+    return new Response(
+      JSON.stringify({
+        data: inputs.map((_text, index) => ({ index, embedding: Array(dimensions).fill((index + 1) / 10) })),
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  });
+  globalThis.fetch = fetchSpy as typeof fetch;
+  return fetchSpy;
+};
+
 describe("embedding cache contract", () => {
+  it("fails a denied remote cache miss before provider execution or cache creation", async () => {
+    const temp = await makeTempDir("ragit-embedding-cache-denied-");
+    const profile = createOpenAiProfile();
+    const fetchSpy = installOpenAiFetch(profile.dimensions);
+
+    await expect(
+      embedTexts(["uncached"], profile, {
+        cwd: temp,
+        cacheMode: "readonly",
+        providerOnCacheMiss: "deny",
+      }),
+    ).rejects.toMatchObject({
+      name: "EmbeddingCacheMissError",
+      provider: "openai",
+      model: "text-embedding-3-small",
+      missingCount: 1,
+    } satisfies Partial<EmbeddingCacheMissError>);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await expect(access(path.join(temp, ".ragit"))).rejects.toThrow();
+  });
+
+  it("fails a partially cached remote batch atomically without changing cache bytes", async () => {
+    const temp = await makeTempDir("ragit-embedding-cache-partial-");
+    const profile = createOpenAiProfile();
+    const fetchSpy = installOpenAiFetch(profile.dimensions);
+    await embedTexts(["cached"], profile, { cwd: temp });
+    const before = await snapshotTree(temp);
+    fetchSpy.mockClear();
+
+    await expect(
+      embedTexts(["cached", "uncached"], profile, {
+        cwd: temp,
+        cacheMode: "readonly",
+        providerOnCacheMiss: "deny",
+      }),
+    ).rejects.toMatchObject({
+      name: "EmbeddingCacheMissError",
+      provider: "openai",
+      missingCount: 1,
+    } satisfies Partial<EmbeddingCacheMissError>);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(await snapshotTree(temp)).toEqual(before);
+  });
+
+  it("allows a local provider miss in readonly mode without creating a cache", async () => {
+    const temp = await makeTempDir("ragit-embedding-cache-local-readonly-");
+    const profile = resolveEmbeddingProfile(defaultConfig());
+
+    const vectors = await embedTexts(["local cache miss"], profile, {
+      cwd: temp,
+      cacheMode: "readonly",
+      providerOnCacheMiss: "allow",
+    });
+
+    expect(vectors[0]).toHaveLength(profile.dimensions);
+    await expect(access(path.join(temp, ".ragit"))).rejects.toThrow();
+  });
+
   it("changes the cache namespace when the provider profile changes", () => {
     const openAiSmallConfig = defaultConfig();
     openAiSmallConfig.embedding.provider = "openai";
