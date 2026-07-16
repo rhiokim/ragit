@@ -1,6 +1,9 @@
 name: zvec-windows-validation
 
 on:
+  push:
+    branches:
+      - research/zvec-windows-validation
   workflow_dispatch:
 
 permissions:
