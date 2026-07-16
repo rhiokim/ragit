@@ -2,6 +2,7 @@
 
 **Design direction:** Approved
 **Written-spec review:** Approved
+**Implementation status:** Verification
 **Workstream:** D
 **Approved approach:** Fixed-repository, in-process stdio adapter
 **Baseline:** `origin/main` at `19d9708`, package `ragit@1.1.2`
@@ -219,7 +220,7 @@ The miss check occurs after all requested cache lookups but before any provider 
 
 The policy is propagated to both the query embedding and artifact/evidence candidate embeddings. No nested retrieval path may silently return to the existing read-write default.
 
-Status does not invoke an embedding provider. It retains its existing read-only config, manifest, store-meta, cache-summary, security-state, lock, and recovery inspection paths.
+Status does not invoke an embedding provider. It retains its existing read-only config, manifest, store-meta, cache-summary, security-state, lock, and recovery inspection paths. Because zvec 0.2.1 can rotate RocksDB metadata even when opened read-only, MCP status inspects a temporary copy-on-write store clone and removes it after the call; the canonical repository store is never opened by this path.
 
 ## Filesystem Invariant
 

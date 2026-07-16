@@ -3,6 +3,7 @@
   "pages": [
     "getting-started",
     "init-guide",
-    "memory-model"
+    "memory-model",
+    "mcp-readonly"
   ]
 }

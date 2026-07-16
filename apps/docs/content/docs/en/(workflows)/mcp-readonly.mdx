@@ -1,0 +1,95 @@
+---
+title: Read-only MCP
+description: Connect an MCP client to one RAGit repository without exposing write paths
+---
+
+RAGit's MCP executable gives a local agent bounded access to commit-bound status and retrieval. It is intentionally smaller than the CLI: one process serves one repository over stdio and exposes no command that writes repository state.
+
+## Requirements
+
+- An initialized Git repository
+- An exact RAGit snapshot for query and context-pack calls
+- Node.js 22.14 or newer
+- A supported native target: macOS ARM64 or Linux ARM64
+- The published `ragit` package installed where the MCP client can resolve `ragit-mcp`
+
+Node 24 is covered on both supported targets. Linux x64 and Windows x64 are not supported by the pinned zvec 0.2.1 runtime. `ragit-mcp` uses the same early runtime guard as the CLI.
+
+## Start One Server Per Repository
+
+Run the executable with an absolute repository path:
+
+```bash
+ragit-mcp --cwd /absolute/path/to/repository
+```
+
+When `--cwd` is omitted, RAGit resolves the process working directory once at startup. Tool inputs never accept a repository path, so a running process cannot switch workspaces.
+
+A representative MCP client configuration is:
+
+```json
+{
+  "mcpServers": {
+    "ragit": {
+      "command": "ragit-mcp",
+      "args": ["--cwd", "/absolute/path/to/repository"]
+    }
+  }
+}
+```
+
+The transport is stdio only. There is no HTTP or SSE listener, remote transport, authentication surface, startup banner, or per-call workspace selection. Configure another process when a client needs another repository.
+
+## Available Tools
+
+The server lists exactly three tools:
+
+| Tool | Required input | Bounds and optional input |
+| --- | --- | --- |
+| `ragit_status` | none; pass `{}` | No additional fields |
+| `ragit_query` | `question` | `topK` 1–50; optional `at`, `scope`, `view`, and `explain` |
+| `ragit_context_pack` | `goal` | `budget` 1–32,000; optional `at`, `scope`, and `view` |
+
+`scope` accepts `durable`, `session`, `harness`, `evidence`, or `all`. `view` accepts `minimal`, `default`, or `full`. Inputs are strict: unknown fields, fractional bounds, empty required strings, and control characters are rejected with a structured `MCP_INVALID_INPUT` error.
+
+The query and context-pack results reuse the CLI's snapshot selection, masking, citation, view, and projection contracts. Successful results and failures both include identical JSON text and structured content.
+
+## Read-only Guarantee
+
+Every successful or failing tool call preserves all repository-owned regular-file paths and bytes, including `.ragit`. The server cannot reach ingest, repair, memory mutation, artifact mutation, migration, hook, configuration mutation, or security-purge commands.
+
+The guarantee includes these behaviors:
+
+- `ragit_status` does not initialize an uninitialized repository or call an embedding provider.
+- Status inspects a temporary copy-on-write store clone because zvec 0.2.1 can rotate RocksDB metadata even in read-only mode.
+- Query and context pack open an isolated store clone and leave the canonical zvec store unchanged.
+- Embedding-cache entries and namespace manifests are read but never created, touched, or updated.
+- The server does not auto-ingest, warm caches, write reports, or fall back to a write path.
+
+The MCP annotations mark all three tools read-only, non-destructive, idempotent, and closed-world. Those annotations describe the same behavior enforced by the runtime and filesystem tests.
+
+## Embedding Cache Behavior
+
+Provider behavior on a cache miss depends on whether the configured provider can send data beyond the machine:
+
+| Provider target | MCP cache miss behavior |
+| --- | --- |
+| `local-placeholder` | Compute locally; do not cache. Development and regression use only. |
+| Loopback Ollama | Call the loopback server; do not cache. |
+| OpenAI | Fail before any provider request unless every requested embedding is already cached. |
+| Non-loopback Ollama | Fail before any provider request unless every requested embedding is already cached. |
+
+A partially cached remote batch fails as a unit with `MCP_REMOTE_EMBEDDING_CACHE_MISS`. The error does not include the private query text. If remote-provider use is intended, run the equivalent CLI query outside MCP to populate the cache under the normal security policy, then retry the MCP call.
+
+Loopback Ollama and local-placeholder misses remain write-free, so the same uncached input may be recomputed on later calls.
+
+## Recovery
+
+MCP does not repair repository state. Use the full CLI outside the MCP process when a write is required:
+
+- `SNAPSHOT_NOT_INDEXED`: review and commit the intended knowledge state, then run `ragit ingest --all`.
+- `MCP_REMOTE_EMBEDDING_CACHE_MISS`: run the equivalent CLI query to populate an allowed remote cache, then retry.
+- `SNAPSHOT_MANIFEST_INVALID` or `SNAPSHOT_STORE_UNAVAILABLE`: run `ragit doctor --format json` and follow its recovery guidance.
+- `MCP_INTERNAL_ERROR`: inspect the MCP client's captured stderr and run `ragit doctor` before retrying.
+
+Do not add `cwd` to a tool call, point the server at a second repository, or expect it to perform the recovery command. Restart a dedicated `ragit-mcp` process if the repository binding must change.
