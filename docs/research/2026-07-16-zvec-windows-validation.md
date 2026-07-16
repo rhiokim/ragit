@@ -4,7 +4,7 @@
 - 날짜: 2026-07-16 (Asia/Seoul)
 - 후보: `@zvec/zvec@0.5.0` exact
 - 기준 fixture: npm `ragit@2.0.0` + 정확히 resolve된 `@zvec/zvec@0.2.1`
-- 상태: Actions 실행 전. 아래 표의 PASS/FAIL은 authoritative workflow artifact가 생긴 뒤에만 기입한다.
+- 상태: **No-Go**. 2026-07-16 completed Windows x64 run에서 native import는 두 Node lane 모두 통과했지만, 실제 packed RAGit candidate가 init/read path 전에 zvec 0.5.0 API incompatibility로 실패했다.
 
 ## 범위와 harness 경계
 
@@ -35,17 +35,17 @@ Workflow: `.github/workflows/zvec-windows-validation.yml` (`workflow_dispatch` o
 
 ## 필수 matrix와 판정
 
-| Evidence | Node 22.14 Windows x64 | Node 24 Windows x64 | 판정 규칙 |
+| Evidence | Node 22.14 Windows x64 | Node 24 Windows x64 | 판정 |
 | --- | --- | --- | --- |
-| clean install, CJS/ESM native import, resolved package | PENDING | PENDING | `@zvec/zvec` resolved version이 exact `0.5.0`이어야 함 |
-| packed candidate CLI + MCP: init, ingest, query, context, status | PENDING | PENDING | temporary candidate가 native candidate를 실제 resolve하고 flow가 성공해야 함 |
-| published RAGit 2.0.0 / zvec 0.2.1 store reopen | PENDING | PENDING | schema meta, query/context hit, status를 기록 |
-| canonical store tree hash, CLI/MCP read paths | PENDING | PENDING | `.ragit/store/**` path/content SHA-256가 동일해야 함 |
-| Windows spaces/Korean/long path | PENDING | PENDING | fresh와 legacy repo 모두에서 사용 |
-| close 후 rename/delete | PENDING | PENDING | closed CLI process 뒤 disposable store copy를 rename/delete |
-| active writer exclusion + reader availability | PENDING | PENDING | live lock에서 writer는 `STORE_WRITE_BUSY`, reader는 성공 |
-| deterministic rebuild | PENDING | PENDING | disposable legacy copy에서 store 삭제 후 `repair --apply --action store-rebuild` 및 query |
-| C:/D: cross-drive | PENDING | PENDING | runner가 두 번째 filesystem drive를 노출할 때만 실행; 아니면 NOT TESTED |
+| clean install, CJS/ESM native import, resolved package | PASS | PASS | both reports resolve exact `0.5.0` and load CJS + ESM |
+| packed candidate CLI + MCP: init, ingest, query, context, status | FAIL | FAIL | `init` fails: `Cannot assign to read only property 'querySync' of object '#<Collection>'` |
+| published RAGit 2.0.0 / zvec 0.2.1 store reopen | FAIL | FAIL | candidate `status` reaches the same error before schema/data/query can be read |
+| canonical store tree hash, CLI/MCP read paths | NOT TESTED | NOT TESTED | failed commands left the copied tree unchanged, but no successful candidate read occurred |
+| Windows spaces/Korean/long path | FAIL | FAIL | candidate `init` in the space/Korean/long-path repository hits the same API error |
+| close 후 rename/delete | NOT TESTED | NOT TESTED | blocked because `status` cannot open the disposable copy |
+| active writer exclusion + reader availability | NOT TESTED | NOT TESTED | reader cannot reach the lock assertion because query has the same API error |
+| deterministic rebuild | FAIL | FAIL | rebuild invocation fails with the same `querySync` property error |
+| C:/D: cross-drive | FAIL | FAIL | hosted runner exposed `D:` and ran the case; candidate query fails with the same API error |
 
 ## Artifact contract
 
@@ -68,10 +68,18 @@ PASS는 Windows package의 native import 또는 candidate compatibility 일부�
 
 ## Authoritative runs
 
-실행 후 다음을 채운다.
+### Immutable pointers
 
-- Commit/blob: PENDING
-- Actions run: PENDING
-- Artifact URLs: PENDING
-- Observed mutation files: PENDING
-- PASS / FAIL / NOT TESTED summary and Go/No-Go: PENDING
+- Harness commit: [`96df35dc2a5089a29f008c4acf2e861686aecfdd`](https://github.com/rhiokim/ragit/commit/96df35dc2a5089a29f008c4acf2e861686aecfdd)
+- Evidence run: [29475743471](https://github.com/rhiokim/ragit/actions/runs/29475743471) — completed `failure`, intentionally because the support-critical assertions failed.
+- Fixture job: [create-ragit-2.0.0-zvec-0.2.1-fixture](https://github.com/rhiokim/ragit/actions/runs/29475743471/job/87548212398)
+- Windows jobs: [Node 22.14](https://github.com/rhiokim/ragit/actions/runs/29475743471/job/87548301633), [Node 24](https://github.com/rhiokim/ragit/actions/runs/29475743471/job/87548301597)
+- Artifacts: [legacy fixture](https://github.com/rhiokim/ragit/actions/runs/29475743471/artifacts/8366474703), [Node 22.14 report](https://github.com/rhiokim/ragit/actions/runs/29475743471/artifacts/8366515355), [Node 24 report](https://github.com/rhiokim/ragit/actions/runs/29475743471/artifacts/8366500393).
+
+### Observed result and decision input
+
+The macOS fixture job created a committed published `ragit@2.0.0` store with resolved `@zvec/zvec@0.2.1`; the report includes its whole `.ragit/store/**` SHA-256 tree and query citation IDs. On both Windows x64 lanes, the temporary packed RAGit candidate resolved `@zvec/zvec@0.5.0` from its candidate install root (not nested `0.2.1`) and both CJS and ESM imports succeeded.
+
+The first real RAGit operation failed in both lanes: `init` reported `Cannot assign to read only property 'querySync' of object '#<Collection>'`. Candidate `status`, query, rebuild, MCP startup/read, and the `D:` cross-drive query repeated the same incompatibility or closed as a consequence. The copied canonical legacy tree was unchanged after those failed CLI attempts; that is not evidence of successful read-only preservation and is recorded as NOT TESTED.
+
+**Decision: No-Go for RAGit Windows x64 support and for a zvec 0.5.0 dependency upgrade as-is.** Before reconsidering, implementation must adapt RAGit's collection method instrumentation to the 0.5.0 collection object contract, then rerun the complete packed CLI/MCP, legacy-store preservation, cleanup/lock, rebuild, and C:/D: matrix. The candidate native package alone is viable on both tested Node versions; the RAGit integration is not.
