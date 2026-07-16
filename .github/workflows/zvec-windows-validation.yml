@@ -1,0 +1,72 @@
+name: zvec-windows-validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-fixture:
+    name: create-ragit-2.0.0-zvec-0.2.1-fixture
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create published baseline fixture
+        env:
+          VALIDATION_ARTIFACT_DIR: ${{ github.workspace }}/validation-artifacts
+        run: node scripts/zvec-windows-validation.mjs create-legacy
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ragit-2.0.0-zvec-0.2.1-store-fixture
+          path: validation-artifacts
+          include-hidden-files: true
+          if-no-files-found: error
+
+  windows:
+    name: windows-x64-node-${{ matrix.node }}
+    needs: legacy-fixture
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22.14.0, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: actions/download-artifact@v4
+        with:
+          name: ragit-2.0.0-zvec-0.2.1-store-fixture
+          path: legacy-fixture
+      - name: Detect a second filesystem drive
+        id: drives
+        shell: pwsh
+        run: |
+          $drive = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -ne 'C:\' } | Select-Object -First 1
+          if ($null -ne $drive) {
+            "cross_drive_root=$($drive.Root)ragit-zvec-validation" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+      - name: Validate packed candidate and legacy fixture
+        env:
+          VALIDATION_ARTIFACT_DIR: ${{ github.workspace }}/validation-artifacts
+          LEGACY_FIXTURE_DIR: ${{ github.workspace }}/legacy-fixture/legacy-repository
+          VALIDATION_CROSS_DRIVE_ROOT: ${{ steps.drives.outputs.cross_drive_root }}
+        run: node scripts/zvec-windows-validation.mjs validate-windows
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zvec-windows-validation-node-${{ matrix.node }}
+          path: validation-artifacts
+          if-no-files-found: warn
