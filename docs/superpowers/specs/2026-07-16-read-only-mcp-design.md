@@ -6,6 +6,7 @@
 **Approved approach:** Fixed-repository, in-process stdio adapter
 **Baseline:** `origin/main` at `19d9708`, package `ragit@1.1.2`
 **Date:** 2026-07-16
+**Implementation plan:** docs/superpowers/plans/2026-07-16-read-only-mcp.md
 
 ## Outcome
 
