@@ -2,7 +2,7 @@
 
 **Design direction:** Approved
 **Written-spec review:** Approved
-**Implementation status:** Verification
+**Implementation status:** Complete
 **Workstream:** D
 **Approved approach:** Fixed-repository, in-process stdio adapter
 **Baseline:** `origin/main` at `19d9708`, package `ragit@1.1.2`
@@ -277,6 +277,23 @@ Add bilingual user guidance that includes:
 - local Ollama behavior versus cached-only remote-provider behavior;
 - recovery guidance for an unindexed snapshot or remote cache miss;
 - the supported Node and native-platform matrix inherited from workstream C.
+
+## Verification Evidence
+
+All workstream D gates passed on 2026-07-16 from `feat/read-only-mcp` on Node `v22.22.3`, `darwin/arm64`.
+
+| Gate | Command and result |
+| --- | --- |
+| Focused D | `pnpm vitest run test/embedding-cache.test.ts test/retrieval-readonly.integration.test.ts test/read-commands.test.ts test/mcp-server.test.ts test/mcp-protocol.integration.test.ts test/cli.contract.test.ts --pool=forks --no-isolate --maxWorkers=1 --no-file-parallelism --teardownTimeout=30000` — 6 files, 41 tests passed |
+| Full regression | `pnpm test` — 63 files, 421 tests passed |
+| Retrieval quality | `pnpm benchmark:retrieval:verify --output /tmp/ragit-d-readonly-retrieval.json` — 3 repositories, 108 cases, all fixed thresholds and ranked-path checks passed |
+| Retrieval report | SHA-256 `74d93c36c59c4a3657961b594a10a596772f900897e7ce560b319ed962c4b91a`; the report remained outside the repository |
+| Build/runtime | `pnpm build`, `pnpm runtime:verify`, and `pnpm build:verify` passed; both executable entries retain the runtime guard, shebang, and executable bit |
+| Package | `pnpm pack:verify` passed with 17 allowed files; `pnpm pack:smoke` passed installed CLI and MCP strict-branch and byte-preserving reads; `pnpm pack:upgrade-smoke` reopened a 1.1.2 store with the 1.1.2 candidate |
+| Documentation | `pnpm docs:build` generated 351 static pages; command docs verified 35 leaves; internal links verified 120 HTML files; i18n aligned 72 English and 72 Korean files; search indexes passed |
+| Scope audit | `git diff --check` passed and the worktree was clean; package stayed `1.1.2`, SDK `1.29.0`, zod `^3.25.76`, and zvec `0.2.1`; no benchmark, publish-workflow, runtime allow-list, retrieval-weight, threshold, provider-support, or native-target file changed |
+
+The source protocol test and the installed-tarball smoke both listed exactly `ragit_status`, `ragit_query`, and `ragit_context_pack`. Calls around status, query, context pack, invalid input, and operational failure preserved the repository byte map. Remote cache misses failed before provider execution, and the MCP source subtree exposed no generic or mutating command registry.
 
 ## Exit Criteria
 
