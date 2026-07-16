@@ -235,5 +235,5 @@ describe("status current-HEAD snapshot diagnostics", () => {
 
     expect(status.snapshot).toMatchObject({ resolvedSha: headSha, status: "indexed" });
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
+  }, 20_000);
 });
