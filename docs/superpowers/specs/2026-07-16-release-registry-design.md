@@ -1,6 +1,6 @@
 # RAGit 2.0.0 Release and Registry Verification Design
 
-**Status:** Approved — local candidate gates passed; PR and registry gates pending
+**Status:** Complete — release, provenance, and clean public-registry gates passed
 **Release owner:** Sol Max
 **Bounded implementation worker:** Terra
 **Baseline:** `origin/main` at `f22e02d`, package `ragit@1.1.2`
@@ -158,4 +158,17 @@ The local release candidate at `6ecba48` passed on 2026-07-16 with Node `v22.22.
 | npm dry-run | `ragit@2.0.0`, 17 files, both bins mode `0755`, shasum `1ab008a5b4e1240db7b3881d7e48817f6c1d7028`, integrity `sha512-NZk6ShIjnM+/ZCvZP268H2oNfOwXh9lSLZv2opgK3ZRbCtlmqK6T4zmBNn/2zCY3AWZ15e883BESNz+giqUp4g==` |
 | Scope | Only version and release/readme/onboarding/design/plan/note files changed; lockfile, runtime, workflows, benchmark data/thresholds, providers, zvec, native targets, and MCP scope remained unchanged |
 
-These are candidate gates, not registry acceptance. Pull-request distribution, tag publishing, public provenance, and clean registry installation remain mandatory.
+## Public Registry Acceptance
+
+The candidate gates were followed by all mandatory external gates on 2026-07-16:
+
+| Invariant | Accepted evidence |
+| --- | --- |
+| Source identity | Release PR [#30](https://github.com/rhiokim/ragit/pull/30), merge SHA `58d5d127c23111119e4395f98df957709b0b3bfe`, tag and GitHub release [`v2.0.0`](https://github.com/rhiokim/ragit/releases/tag/v2.0.0) |
+| Distribution matrix | Node `22.14.0` and 24 on macOS ARM64 and Linux ARM64 all passed in [run 29466554145](https://github.com/rhiokim/ragit/actions/runs/29466554145) |
+| Trusted Publishing | Tag-triggered [run 29466921111](https://github.com/rhiokim/ragit/actions/runs/29466921111) published from the exact release SHA using GitHub OIDC |
+| npm registry | `ragit@2.0.0` is `latest`; 17 files; shasum `1ab008a5b4e1240db7b3881d7e48817f6c1d7028`; unpacked size `786892`; registry signature present |
+| Provenance | Subject, SHA-512 digest, repository, tag ref, workflow path, source commit, GitHub-hosted builder, and transparency-log entry all match the release contract |
+| Installed behavior | A clean registry install, independent of the checkout, passed both-bin permissions, CLI lifecycle, exact three-tool MCP protocol, and repository-byte invariance on `darwin/arm64` |
+
+Workstream E therefore satisfies its exit condition. No provider claim, native target, retrieval threshold, package payload, or MCP tool scope was widened during registry acceptance.
