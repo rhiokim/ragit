@@ -4,6 +4,7 @@
 **Baseline:** `origin/main` at `f22e02d`
 **Candidate version:** `2.0.0`
 **Previous release:** `v1.1.2`
+**Status:** Local candidate gates passed; PR, publish, and registry gates pending
 
 ## 1. Freeze the release contract
 

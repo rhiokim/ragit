@@ -1,6 +1,6 @@
 # RAGit 2.0.0 Release and Registry Verification Design
 
-**Status:** Approved
+**Status:** Approved — local candidate gates passed; PR and registry gates pending
 **Release owner:** Sol Max
 **Bounded implementation worker:** Terra
 **Baseline:** `origin/main` at `f22e02d`, package `ragit@1.1.2`
@@ -141,3 +141,21 @@ The repository currently has no configured local Git signing key and previous re
 ## Exit
 
 Workstream E is complete only when the merged commit, `v2.0.0`, GitHub release, npm `2.0.0` metadata, Sigstore/SLSA provenance, and clean installed smoke all agree and pass.
+
+## Candidate Evidence
+
+The local release candidate at `6ecba48` passed on 2026-07-16 with Node `v22.22.3` on `darwin/arm64`:
+
+| Gate | Evidence |
+| --- | --- |
+| Focused B1-D | 13 files, 132 tests passed, including MCP protocol byte invariants and remote cache-miss denial |
+| Full suite | 63 files, 421 tests passed in 285.04 seconds |
+| Deterministic retrieval | 3 repositories, 108 cases, all fixed thresholds passed; report SHA-256 `137f087c7df77f7faf561f432cac437f7d76559884e75e0487556682895050ab` |
+| Ollama retrieval | `nomic-embed-text`, 108 cases; Recall@10 `1.0`, MRR@10 `0.9423`, nDCG@10 `0.9497`, p95 `183.27ms`; report SHA-256 `742e9b3ebc213305b11e28b0f24f2c453310f0a824845adeb8269dc778f84239` |
+| Build/runtime | 25 build files; CLI and MCP executable bits; runtime and build contracts passed |
+| Package | 17-file pack contract; packed CLI/MCP strict-branch and byte-preserving smoke passed; `1.1.2 -> 2.0.0` store reopen passed |
+| Documentation | 351 pages built; 35 command leaves, 120 HTML files, 72 English/72 Korean files, and search aliases verified |
+| npm dry-run | `ragit@2.0.0`, 17 files, both bins mode `0755`, shasum `1ab008a5b4e1240db7b3881d7e48817f6c1d7028`, integrity `sha512-NZk6ShIjnM+/ZCvZP268H2oNfOwXh9lSLZv2opgK3ZRbCtlmqK6T4zmBNn/2zCY3AWZ15e883BESNz+giqUp4g==` |
+| Scope | Only version and release/readme/onboarding/design/plan/note files changed; lockfile, runtime, workflows, benchmark data/thresholds, providers, zvec, native targets, and MCP scope remained unchanged |
+
+These are candidate gates, not registry acceptance. Pull-request distribution, tag publishing, public provenance, and clean registry installation remain mandatory.
