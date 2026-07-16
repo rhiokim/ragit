@@ -80,10 +80,19 @@ const packageVersion = async (packageJsonPath) => JSON.parse(await readFile(pack
 
 const resolvedZvec = async (installDir) => {
   const requireFromInstall = createRequire(path.join(installDir, "package.json"));
-  const packageJsonPath = requireFromInstall.resolve("@zvec/zvec/package.json");
   const entryPath = requireFromInstall.resolve("@zvec/zvec");
-  const manifest = JSON.parse(await readFile(packageJsonPath, "utf8"));
-  return { packageJsonPath, entryPath, version: manifest.version };
+  let directory = path.dirname(entryPath);
+  for (let depth = 0; depth < 8; depth += 1) {
+    const packageJsonPath = path.join(directory, "package.json");
+    try {
+      const manifest = JSON.parse(await readFile(packageJsonPath, "utf8"));
+      if (manifest.name === "@zvec/zvec") return { packageJsonPath, entryPath, version: manifest.version };
+    } catch {}
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  throw new Error(`could not find @zvec/zvec package.json from exported entry ${entryPath}`);
 };
 
 const createLegacyFixture = async () => {
